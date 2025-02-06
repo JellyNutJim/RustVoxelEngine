@@ -13,7 +13,9 @@
 // original triangle example.
 
 #![allow(dead_code, unused_imports)]
-use vulkano::{device::Features as DeviceFeatures, pipeline::graphics::vertex_input::VertexInputState};
+use vulkano::{buffer::allocator::{SubbufferAllocator, SubbufferAllocatorCreateInfo}, device::Features as DeviceFeatures, pipeline::{graphics::vertex_input::VertexInputState, Pipeline}};
+use vulkano::pipeline::PipelineBindPoint;
+    use vulkano::descriptor_set::{{allocator::{StandardDescriptorSetAllocator, StandardDescriptorSetAllocatorCreateInfo}, DescriptorSet, WriteDescriptorSet}, PersistentDescriptorSet};
 
 use std::{error::Error, sync::Arc, time::Instant};
 use vulkano::{
@@ -71,9 +73,10 @@ struct App {
     device: Arc<Device>,
     queue: Arc<Queue>,
     command_buffer_allocator: Arc<StandardCommandBufferAllocator>,
+    descriptor_set_allocator: Arc<StandardDescriptorSetAllocator>,
 
-    camera_buffer: Subbuffer<[u32]>,
-    voxel_buffer: Subbuffer<[u32]>,
+    voxel_buffer: Subbuffer<[[[u8; 32]; 32]]>,
+    camera_buffer: SubbufferAllocator,
 
     rcx: Option<RenderContext>,
 }
@@ -167,7 +170,7 @@ impl App {
                     .enumerate()
                     .position(|(i, q)| {
 
-                        q.queue_flags.intersects(QueueFlags::COMPUTE)
+                        q.queue_flags.intersects(QueueFlags::GRAPHICS)
                             
                     })
                     .map(|i| (p, i as u32))
@@ -223,17 +226,24 @@ impl App {
 
         let queue = queues.next().unwrap();
         let memory_allocator = Arc::new(StandardMemoryAllocator::new_default(device.clone()));
-
         
-        // Before we can start creating and recording command buffers, we need a way of allocating
-        // them. Vulkano provides a command buffer allocator, which manages raw Vulkan command
-        // pools underneath and provides a safe interface for them.
+        // Alocators
+        let descriptor_set_allocator = Arc::new(StandardDescriptorSetAllocator::new(
+            device.clone(),
+            StandardDescriptorSetAllocatorCreateInfo {
+                set_count: 1, // Adjust based on your needs
+                ..Default::default()
+            },
+        ));
+
         let command_buffer_allocator = Arc::new(StandardCommandBufferAllocator::new(
             device.clone(),
             Default::default(),
         ));
 
-        let voxel_iter = 0..65536u32;
+        // Set up buffers
+
+        let voxel_iter = [[[0u8; 32]; 32]; 32];
         let voxel_buffer = Buffer::from_iter(
             memory_allocator.clone(),
             BufferCreateInfo {
@@ -249,22 +259,15 @@ impl App {
         )
         .expect("failed to create buffer");
 
-        let camera_iter = 0..65536u32;
-        let camera_buffer = Buffer::from_iter(
+        let camera_buffer = SubbufferAllocator::new(
             memory_allocator.clone(),
-            BufferCreateInfo {
-                usage: BufferUsage::STORAGE_BUFFER,
-                ..Default::default()
-            },
-            AllocationCreateInfo {
+            SubbufferAllocatorCreateInfo {
+                buffer_usage: BufferUsage::UNIFORM_BUFFER,
                 memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
                     | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
                 ..Default::default()
             },
-            camera_iter,
-        )
-        .expect("failed to create buffer");
-
+        );
 
         let rcx = None;
 
@@ -273,6 +276,7 @@ impl App {
             device,
             queue,
             command_buffer_allocator,
+            descriptor_set_allocator,
             voxel_buffer,
             camera_buffer,
             rcx,
@@ -367,10 +371,7 @@ impl ApplicationHandler for App {
 
             let layout = PipelineLayout::new(
                 self.device.clone(),
-                // Since we only have one pipeline in this example, and thus one pipeline layout,
-                // we automatically generate the creation info for it from the resources used in
-                // the shaders. In a real application, you would specify this information manually
-                // so that you can re-use one layout in multiple pipelines.
+
                 PipelineDescriptorSetLayoutCreateInfo::from_stages(&stages)
                     .into_pipeline_layout_create_info(self.device.clone())
                     .unwrap(),
@@ -500,6 +501,30 @@ impl ApplicationHandler for App {
                     rcx.recreate_swapchain = false;
                 }
 
+                // PROCESS BUFFERS:
+
+
+                let camera_subbuffer = {
+                    //let camera = Camera {camera_pos: [0.0, 0.0, 0.0], look_at: [0.0, 0.0, -1.0], up: [0.0, 1.0, 0.0], fov: 90.0, aspect_ratio: 16.0/9.0 };
+                    // Add conversion to 2d data
+
+                    let camera = [10.0, 0.0, 0.0, 0.0, 0.0, -1.0, 0.0, 1.0, 0.0, 90.0, 16.0/9.0];
+
+                    let subbuffer = self.camera_buffer.allocate_sized().unwrap();
+                    *subbuffer.write().unwrap() = camera;
+                    subbuffer
+
+                };
+
+                let layout = &rcx.pipeline.layout().set_layouts()[0];
+                let descriptor_set = PersistentDescriptorSet::new(
+                    &self.descriptor_set_allocator,
+                    layout.clone(),
+                    [WriteDescriptorSet::buffer(0, camera_subbuffer)],
+                    [],
+                )
+                .unwrap();
+
                 // Aquire next sqapchain image
                 let (image_index, suboptimal, acquire_future) = match acquire_next_image(
                     rcx.swapchain.clone(),
@@ -556,6 +581,7 @@ impl ApplicationHandler for App {
                     .unwrap()
                     .bind_pipeline_graphics(rcx.pipeline.clone())
                     .unwrap()
+                    .bind_descriptor_sets(PipelineBindPoint::Graphics, rcx.pipeline.layout().clone(), 0, descriptor_set).unwrap()
                     .draw(3, 1, 0, 0)
                     .unwrap();
                 
