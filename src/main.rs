@@ -1,5 +1,5 @@
 #![allow(dead_code, unused_imports)]
-use vulkano::{buffer::allocator::{SubbufferAllocator, SubbufferAllocatorCreateInfo}, descriptor_set::layout, device::Features as DeviceFeatures, pipeline::{graphics::vertex_input::VertexInputState, Pipeline}};
+use vulkano::{buffer::allocator::{SubbufferAllocator, SubbufferAllocatorCreateInfo}, descriptor_set::layout, device::Features as DeviceFeatures, pipeline::{graphics::vertex_input::VertexInputState, ComputePipeline, Pipeline}};
 use vulkano::pipeline::PipelineBindPoint;
 use vulkano::descriptor_set::{{allocator::{StandardDescriptorSetAllocator, StandardDescriptorSetAllocatorCreateInfo}, DescriptorSet, WriteDescriptorSet}, PersistentDescriptorSet};
 
@@ -7,6 +7,8 @@ use vulkano::descriptor_set::layout::DescriptorType;
 use vulkano::pipeline::layout::PipelineLayoutCreateInfo;
 use vulkano::descriptor_set::layout::{DescriptorSetLayout, DescriptorSetLayoutCreateInfo};
 use vulkano::shader::ShaderStages;
+
+use vulkano::pipeline::compute::ComputePipelineCreateInfo;
 
 use vulkano::descriptor_set::layout::{
     DescriptorSetLayoutBinding,
@@ -74,7 +76,7 @@ struct App {
     command_buffer_allocator: Arc<StandardCommandBufferAllocator>,
     descriptor_set_allocator: Arc<StandardDescriptorSetAllocator>,
 
-    voxel_buffer: Subbuffer<[[[u32; 32]; 32]]>,
+    voxel_buffer: Subbuffer<[u32]>,
     camera_buffer: SubbufferAllocator,
 
     rcx: Option<RenderContext>,
@@ -85,7 +87,7 @@ struct RenderContext {
     swapchain: Arc<Swapchain>,
     attachment_image_views: Vec<Arc<ImageView>>,
 
-    pipeline: Arc<GraphicsPipeline>,
+    compute_pipeline: Arc<ComputePipeline>,
     viewport: Viewport,
     recreate_swapchain: bool,
     previous_frame_end: Option<Box<dyn GpuFuture>>,
@@ -108,11 +110,12 @@ struct AppState {
 
 impl App {
     fn new(event_loop: &EventLoop<()>) -> Self {
+
+        // Ready extensions
         let library = VulkanLibrary::new().unwrap();
- 
         let required_extensions = Surface::required_extensions(event_loop);
 
-        // Now creating the instance.
+        // Create the instance.
         let instance = Instance::new(
             library,
             InstanceCreateInfo {
@@ -131,7 +134,7 @@ impl App {
             ..DeviceExtensions::empty()
         };
 
-        // Select physical device
+        // Select physical device -> Ideally a discrete gpu, will allow selection at a later date
         let (physical_device, queue_family_index) = instance
             .enumerate_physical_devices()
             .unwrap()
@@ -217,8 +220,15 @@ impl App {
         ));
 
         // Set up buffers
+        let chunk_count = 1;
+        let chunk_size = 32 * 32 * 32;
 
-        let voxel_data: Vec<[[u32; 32]; 32]> = vec![[[0u32; 32]; 32]; 32];
+        let mut voxel_data= vec![0; chunk_size * chunk_count];
+
+        voxel_data[1 * (32 * 32) + 1 * 32 + 10] = 1;
+        voxel_data[1 * (32 * 32) + 1 * 32 + 12] = 1;
+        voxel_data[1 * (32 * 32) + 1 * 32 + 14] = 1;
+
 
         let voxel_buffer = Buffer::from_iter(
             memory_allocator.clone(),
@@ -285,6 +295,7 @@ impl ApplicationHandler for App {
                 .unwrap()[0];
 
             // Please take a look at the docs for the meaning of the parameters we didn't mention.
+            let image_format = vulkano::format::Format::R8G8B8A8_UNORM;
             Swapchain::new(
                 self.device.clone(),
                 surface,
@@ -293,7 +304,7 @@ impl ApplicationHandler for App {
 
                     image_format,
                     image_extent: window_size.into(),
-                    image_usage: ImageUsage::COLOR_ATTACHMENT,
+                    image_usage: ImageUsage::COLOR_ATTACHMENT | ImageUsage::STORAGE,
 
                     composite_alpha: surface_capabilities
                         .supported_composite_alpha
@@ -310,106 +321,75 @@ impl ApplicationHandler for App {
         let attachment_image_views = window_size_dependent_setup(&images);
 
         // Shader
-        mod vs {
-            vulkano_shaders::shader! {
-                ty: "vertex",
-                path: "src/shaders/vertex.glsl"
-            }
-        }
 
-        mod fs {
+        mod cs {
             vulkano_shaders::shader! {
-                ty: "fragment",
-                path: "src/shaders/fragment.glsl"
+                ty: "compute",
+                path: "src/shaders/compute.glsl"
             } 
         }
 
+        let shader = cs::load(self.device.clone()).expect("failed to create shader module");
 
-        let pipeline = {
+        let cs = shader.entry_point("main").unwrap();
+        let stage = PipelineShaderStageCreateInfo::new(cs);
 
-            let vs = vs::load(self.device.clone())
-                .unwrap()
-                .entry_point("main")
-                .unwrap();
-            let fs = fs::load(self.device.clone())
-                .unwrap()
-                .entry_point("main")
-                .unwrap();
-
-            // Make a list of the shader stages that the pipeline will have.
-            let stages = [
-                PipelineShaderStageCreateInfo::new(vs),
-                PipelineShaderStageCreateInfo::new(fs),
-            ];
-
-
-            let layout = {
-                let bindings = [
-                    (
-                        0,
-                        DescriptorSetLayoutBinding {
-                            stages: ShaderStages::FRAGMENT,
-                            ..DescriptorSetLayoutBinding::descriptor_type(
-                                DescriptorType::UniformBuffer,
-                            )
-                        }
-                    ),
-                    (
-                        1,
-                        DescriptorSetLayoutBinding {
-                            stages: ShaderStages::FRAGMENT,
-                            ..DescriptorSetLayoutBinding::descriptor_type(
-                                DescriptorType::StorageBuffer,
-                            )
-                        }
-                    )
-                ].into();
-            
-                DescriptorSetLayout::new(
-                    self.device.clone(),
-                    DescriptorSetLayoutCreateInfo {
-                        bindings,
-                        ..Default::default()
-                    },
-                ).unwrap()
-            };
-            
-            let layout = PipelineLayout::new(
+        let layout = {
+            let bindings = [
+                (
+                    0,
+                    DescriptorSetLayoutBinding {
+                        stages: ShaderStages::COMPUTE,
+                        ..DescriptorSetLayoutBinding::descriptor_type(
+                            DescriptorType::UniformBuffer,
+                        )
+                    }
+                ),
+                (
+                    1,
+                    DescriptorSetLayoutBinding {
+                        stages: ShaderStages::COMPUTE,
+                        ..DescriptorSetLayoutBinding::descriptor_type(
+                            DescriptorType::StorageBuffer,
+                        )
+                    }
+                ),
+                (
+                    2,
+                    DescriptorSetLayoutBinding {
+                        stages: ShaderStages::COMPUTE,
+                        ..DescriptorSetLayoutBinding::descriptor_type(
+                            DescriptorType::StorageImage,
+                        )
+                    }
+                )
+            ].into();
+        
+            DescriptorSetLayout::new(
                 self.device.clone(),
-                PipelineLayoutCreateInfo {
-                    set_layouts: vec![layout],
+                DescriptorSetLayoutCreateInfo {
+                    bindings,
                     ..Default::default()
                 },
-            ).unwrap();
-
-
-            let subpass = PipelineRenderingCreateInfo {
-                color_attachment_formats: vec![Some(swapchain.image_format())],
-                ..Default::default()
-            };
-
-            // Finally, create the pipeline.
-            GraphicsPipeline::new(
-                self.device.clone(),
-                None,
-                GraphicsPipelineCreateInfo {
-                    stages: stages.into_iter().collect(),
-                    vertex_input_state: Some(VertexInputState::default()),
-                    input_assembly_state: Some(InputAssemblyState::default()),
-                    viewport_state: Some(ViewportState::default()),
-                    rasterization_state: Some(RasterizationState::default()),
-                    multisample_state: Some(MultisampleState::default()),
-                    color_blend_state: Some(ColorBlendState::with_attachment_states(
-                        subpass.color_attachment_formats.len() as u32,
-                        ColorBlendAttachmentState::default(),
-                    )),
-                    dynamic_state: [DynamicState::Viewport].into_iter().collect(),
-                    subpass: Some(subpass.into()),
-                    ..GraphicsPipelineCreateInfo::layout(layout)
-                },
-            )
-            .unwrap()
+            ).unwrap()
         };
+        
+        let pipeline_layout = PipelineLayout::new(
+            self.device.clone(),
+            PipelineLayoutCreateInfo {
+                set_layouts: vec![layout],
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        let compute_pipeline = ComputePipeline::new(
+            self.device.clone(),
+            None,
+            ComputePipelineCreateInfo::stage_layout(stage, pipeline_layout),
+        )
+        .unwrap();
+
 
         // Dynamic viewports allow us to recreate just the viewport when the window is resized.
         // Otherwise we would have to recreate the whole pipeline.
@@ -421,14 +401,13 @@ impl ApplicationHandler for App {
 
 
         let recreate_swapchain = false;
-
         let previous_frame_end = Some(sync::now(self.device.clone()).boxed());
 
         self.rcx = Some(RenderContext {
             window,
             swapchain,
             attachment_image_views,
-            pipeline,
+            compute_pipeline,
             viewport,
             recreate_swapchain,
             previous_frame_end,
@@ -452,9 +431,8 @@ impl ApplicationHandler for App {
             }
             WindowEvent::RedrawRequested => {
                 let window_size = rcx.window.inner_size();
-
-                // Do not draw the frame when the screen size is zero. On Windows, this can occur
-                // when minimizing the application.
+                
+                // Dont draw frame when minimised
                 if window_size.width == 0 || window_size.height == 0 {
                     return;
                 }
@@ -462,26 +440,20 @@ impl ApplicationHandler for App {
                 // Free finished resources
                 rcx.previous_frame_end.as_mut().unwrap().cleanup_finished();
 
-                // Whenever the window resizes we need to recreate everything dependent on the
-                // window size. In this example that includes the swapchain, the framebuffers and
-                // the dynamic state viewport.
+                // Recreate everything upon screen resize
                 if rcx.recreate_swapchain {
                     let (new_swapchain, new_images) = rcx
                         .swapchain
                         .recreate(SwapchainCreateInfo {
                             image_extent: window_size.into(),
+                            image_format: rcx.swapchain.image_format(), // Maintain the same format
                             ..rcx.swapchain.create_info()
                         })
                         .expect("failed to recreate swapchain");
-
+                
                     rcx.swapchain = new_swapchain;
-
-                    // Now that we have new swapchain images, we must create new image views from
-                    // them as well.
                     rcx.attachment_image_views = window_size_dependent_setup(&new_images);
-
                     rcx.viewport.extent = window_size.into();
-
                     rcx.recreate_swapchain = false;
                 }
 
@@ -492,10 +464,10 @@ impl ApplicationHandler for App {
                     //let camera = Camera {camera_pos: [0.0, 0.0, 0.0], look_at: [0.0, 0.0, -1.0], up: [0.0, 1.0, 0.0], fov: 90.0, aspect_ratio: 16.0/9.0 };
                     // Add conversion to 2d data
                     let window_size = rcx.window.inner_size();
-                    let look_from = Vec3 {x: 3.0, y: 3.0, z: 0.0};
-                    let look_at = Vec3 {x: 3.0, y: 3.0, z: -1.0};
+                    let look_from = Vec3 {x: 0.0, y: 0.0, z: 1.0};
+                    let look_at = Vec3 {x: 0.0, y: 0.0, z: 1.0};
                     let v_up = Vec3 {x: 0.0, y: 1.0, z: 0.0};
-                    let fov = 120;
+                    let fov = 90;
 
 
                     let focal_length = (look_from - look_at).magnitude();
@@ -516,7 +488,6 @@ impl ApplicationHandler for App {
                     let pixel00_loc = viewport_upper_left + (pixel_delta_u + pixel_delta_v) * 0.5;
                     
                     //println!("{:?} {:?} {:?}", pixel00_loc, pixel_delta_u, pixel_delta_v);
-
                     //println!("{} {} {}", pixel00_loc.x as f32, pixel00_loc.y as f32, pixel00_loc.z as f32);
                     //println!("{} {}", window_size.width, window_size.height);
                     
@@ -534,20 +505,6 @@ impl ApplicationHandler for App {
                     subbuffer
 
                 };
-
-                let layout = &rcx.pipeline.layout().set_layouts()[0];
-                //println!("Layout bindings: {:?}", layout.bindings());
-
-                let descriptor_set = PersistentDescriptorSet::new(
-                    &self.descriptor_set_allocator,
-                    layout.clone(),
-                    [
-                        WriteDescriptorSet::buffer(0, uniform_camera_subbuffer), 
-                        WriteDescriptorSet::buffer(1, self.voxel_buffer.clone()),
-                        ],
-                    [],
-                )
-                .unwrap();
 
                 // Aquire next sqapchain image
                 let (image_index, suboptimal, acquire_future) = match acquire_next_image(
@@ -568,6 +525,21 @@ impl ApplicationHandler for App {
                     rcx.recreate_swapchain = true;
                 }
 
+                let layout = &rcx.compute_pipeline.layout().set_layouts()[0];
+                //println!("Layout bindings: {:?}", layout.bindings());
+
+                let descriptor_set = PersistentDescriptorSet::new(
+                    &self.descriptor_set_allocator,
+                    layout.clone(),
+                    [
+                        WriteDescriptorSet::buffer(0, uniform_camera_subbuffer), 
+                        WriteDescriptorSet::buffer(1, self.voxel_buffer.clone()),
+                        WriteDescriptorSet::image_view(2, rcx.attachment_image_views[image_index as usize].clone()),
+                    ],
+                    [],
+                )
+                .unwrap();
+
                 // record command buffer
                 let mut builder = AutoCommandBufferBuilder::primary(
                     &self.command_buffer_allocator,  // Add & here
@@ -577,11 +549,26 @@ impl ApplicationHandler for App {
                 .unwrap();
 
                 builder
+                    .bind_pipeline_compute(rcx.compute_pipeline.clone())
+                    .unwrap()
+                    .bind_descriptor_sets(
+                        PipelineBindPoint::Compute, 
+                        rcx.compute_pipeline.layout().clone(), 
+                        0, 
+                        descriptor_set.clone()
+                    )
+                    .unwrap()
+                    .dispatch([window_size.width + 15 /  16, window_size.height + 15 / 16, 1])
+                    .unwrap();
+                    
+                // We add a draw command.
+
+                builder
                     .begin_rendering(RenderingInfo {
                         color_attachments: vec![Some(RenderingAttachmentInfo {
-                            load_op: AttachmentLoadOp::Clear,
+                            load_op: AttachmentLoadOp::Load, // Load the compute shader output
                             store_op: AttachmentStoreOp::Store,
-                            clear_value: Some([0.0, 0.0, 1.0, 1.0].into()),
+                            clear_value: None, // No clear, as we're loading the computed image
                             ..RenderingAttachmentInfo::image_view(
                                 rcx.attachment_image_views[image_index as usize].clone(),
                             )
@@ -589,24 +576,8 @@ impl ApplicationHandler for App {
                         ..Default::default()
                     })
                     .unwrap()
-                    // We are now inside the first subpass of the render pass.
-                    //
-                    // TODO: Document state setting and how it affects subsequent draw commands.
-                    .set_viewport(0, [rcx.viewport.clone()].into_iter().collect())
-                    .unwrap()
-                    .bind_pipeline_graphics(rcx.pipeline.clone())
-                    .unwrap()
-                    .bind_descriptor_sets(PipelineBindPoint::Graphics, rcx.pipeline.layout().clone(), 0, descriptor_set).unwrap()
-                    .draw(3, 1, 0, 0)
-                    .unwrap();
-                
-                // We add a draw command.
-
-                builder
-                    // We leave the render pass.
                     .end_rendering()
                     .unwrap();
-
                 // Finish recording the command buffer by calling `end`.
                 let command_buffer = builder.build().unwrap();
 
