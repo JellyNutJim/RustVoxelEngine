@@ -1,17 +1,3 @@
-// Welcome to the triangle example!
-//
-// This is the only example that is entirely detailed. All the other examples avoid code
-// duplication by using helper functions.
-//
-// This example assumes that you are already more or less familiar with graphics programming and
-// that you want to learn Vulkan. This means that for example it won't go into details about what a
-// vertex or a shader is.
-//
-// This version of the triangle example is written using dynamic rendering instead of render pass
-// and framebuffer objects. If your device does not support Vulkan 1.3 or the
-// `khr_dynamic_rendering` extension, or if you want to see how to support older versions, see the
-// original triangle example.
-
 #![allow(dead_code, unused_imports)]
 use vulkano::{buffer::allocator::{SubbufferAllocator, SubbufferAllocatorCreateInfo}, descriptor_set::layout, device::Features as DeviceFeatures, pipeline::{graphics::vertex_input::VertexInputState, Pipeline}};
 use vulkano::pipeline::PipelineBindPoint;
@@ -26,6 +12,9 @@ use vulkano::descriptor_set::layout::{
     DescriptorSetLayoutBinding,
     DescriptorBindingFlags
 };
+
+mod vec3;
+use vec3::Vec3;
 
 use std::{error::Error, sync::Arc, time::Instant};
 use vulkano::{
@@ -85,7 +74,7 @@ struct App {
     command_buffer_allocator: Arc<StandardCommandBufferAllocator>,
     descriptor_set_allocator: Arc<StandardDescriptorSetAllocator>,
 
-    voxel_buffer: Subbuffer<[u32]>,
+    voxel_buffer: Subbuffer<[[[u32; 32]; 32]]>,
     camera_buffer: SubbufferAllocator,
 
     rcx: Option<RenderContext>,
@@ -104,12 +93,12 @@ struct RenderContext {
 
 #[repr(C)]
 #[derive(BufferContents, Debug, Clone, Copy)]
-struct Camera {
-    camera_pos: [f32; 3],
+struct Camera_Buffer_Data {
+    origin: [f32; 3],
     look_at: [f32; 3],
-    up: [f32; 3],
-    aspect_ratio: f32,
-    fov: f32,
+    pixel00_loc: [f32; 3],
+    pixel_delta_u: [f32; 3],
+    pixel_delta_v: [f32; 3]
 }
 
 struct AppState {
@@ -229,7 +218,7 @@ impl App {
 
         // Set up buffers
 
-        let voxel_data: Vec<u32> = vec![0; 32 * 32 * 32];
+        let voxel_data: Vec<[[u32; 32]; 32]> = vec![[[0u32; 32]; 32]; 32];
 
         let voxel_buffer = Buffer::from_iter(
             memory_allocator.clone(),
@@ -502,13 +491,42 @@ impl ApplicationHandler for App {
                 let uniform_camera_subbuffer = {
                     //let camera = Camera {camera_pos: [0.0, 0.0, 0.0], look_at: [0.0, 0.0, -1.0], up: [0.0, 1.0, 0.0], fov: 90.0, aspect_ratio: 16.0/9.0 };
                     // Add conversion to 2d data
+                    let window_size = rcx.window.inner_size();
+                    let look_from = Vec3 {x: 3.0, y: 3.0, z: 0.0};
+                    let look_at = Vec3 {x: 3.0, y: 3.0, z: -1.0};
+                    let v_up = Vec3 {x: 0.0, y: 1.0, z: 0.0};
+                    let fov = 120;
 
-                    let camera = Camera {
-                        camera_pos: [00.0, 0.0, 0.0],
-                        look_at: [0.0, 0.0, -1.0],
-                        up: [0.0, 1.0, 0.0],
-                        aspect_ratio: 16.0/9.0,
-                        fov: 90.0,
+
+                    let focal_length = (look_from - look_at).magnitude();
+                    let viewport_height = 2.0;
+                    let viewport_width = viewport_height * (window_size.width as f64 / window_size.height as f64);
+
+                    let w = (look_from - look_at).norm();
+                    let u = v_up.cross(w).norm();
+                    let v = w.cross(u);
+
+                    let viewport_u = u * viewport_width;
+                    let viewport_v = -v * viewport_height;
+
+                    let pixel_delta_u = viewport_u / window_size.width as f64;
+                    let pixel_delta_v = viewport_v/ window_size.height as f64;
+
+                    let viewport_upper_left = look_from - (w * focal_length) - viewport_u/2.0 - viewport_v/2.0;
+                    let pixel00_loc = viewport_upper_left + (pixel_delta_u + pixel_delta_v) * 0.5;
+                    
+                    //println!("{:?} {:?} {:?}", pixel00_loc, pixel_delta_u, pixel_delta_v);
+
+                    //println!("{} {} {}", pixel00_loc.x as f32, pixel00_loc.y as f32, pixel00_loc.z as f32);
+                    //println!("{} {}", window_size.width, window_size.height);
+                    
+
+                    let camera = Camera_Buffer_Data {
+                        origin: [look_from.x as f32, look_from.y as f32, look_from.z as f32],
+                        look_at: [look_at.x as f32, look_at.y as f32, look_at.z as f32],
+                        pixel00_loc: [pixel00_loc.x as f32, pixel00_loc.y as f32, pixel00_loc.z as f32],
+                        pixel_delta_u: [pixel_delta_u.x as f32, pixel_delta_u.y as f32, pixel_delta_u.z as f32],
+                        pixel_delta_v: [pixel_delta_v.x as f32, pixel_delta_v.y as f32, pixel_delta_v.z as f32],
                      };
 
                     let subbuffer = self.camera_buffer.allocate_sized().unwrap();
