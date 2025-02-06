@@ -13,9 +13,19 @@
 // original triangle example.
 
 #![allow(dead_code, unused_imports)]
-use vulkano::{buffer::allocator::{SubbufferAllocator, SubbufferAllocatorCreateInfo}, device::Features as DeviceFeatures, pipeline::{graphics::vertex_input::VertexInputState, Pipeline}};
+use vulkano::{buffer::allocator::{SubbufferAllocator, SubbufferAllocatorCreateInfo}, descriptor_set::layout, device::Features as DeviceFeatures, pipeline::{graphics::vertex_input::VertexInputState, Pipeline}};
 use vulkano::pipeline::PipelineBindPoint;
-    use vulkano::descriptor_set::{{allocator::{StandardDescriptorSetAllocator, StandardDescriptorSetAllocatorCreateInfo}, DescriptorSet, WriteDescriptorSet}, PersistentDescriptorSet};
+use vulkano::descriptor_set::{{allocator::{StandardDescriptorSetAllocator, StandardDescriptorSetAllocatorCreateInfo}, DescriptorSet, WriteDescriptorSet}, PersistentDescriptorSet};
+
+use vulkano::descriptor_set::layout::DescriptorType;
+use vulkano::pipeline::layout::PipelineLayoutCreateInfo;
+use vulkano::descriptor_set::layout::{DescriptorSetLayout, DescriptorSetLayoutCreateInfo};
+use vulkano::shader::ShaderStages;
+
+use vulkano::descriptor_set::layout::{
+    DescriptorSetLayoutBinding,
+    DescriptorBindingFlags
+};
 
 use std::{error::Error, sync::Arc, time::Instant};
 use vulkano::{
@@ -75,7 +85,7 @@ struct App {
     command_buffer_allocator: Arc<StandardCommandBufferAllocator>,
     descriptor_set_allocator: Arc<StandardDescriptorSetAllocator>,
 
-    voxel_buffer: Subbuffer<[[[u8; 32]; 32]]>,
+    voxel_buffer: Subbuffer<[u32]>,
     camera_buffer: SubbufferAllocator,
 
     rcx: Option<RenderContext>,
@@ -92,13 +102,14 @@ struct RenderContext {
     previous_frame_end: Option<Box<dyn GpuFuture>>,
 }
 
-
+#[repr(C)]
+#[derive(BufferContents, Debug, Clone, Copy)]
 struct Camera {
-    camera_pos: [f64; 3],
-    look_at: [f64; 3],
-    up: [f64; 3],
-    aspect_ratio: f64,
-    fov: f64,
+    camera_pos: [f32; 3],
+    look_at: [f32; 3],
+    up: [f32; 3],
+    aspect_ratio: f32,
+    fov: f32,
 }
 
 struct AppState {
@@ -204,7 +215,9 @@ impl App {
         let descriptor_set_allocator = Arc::new(StandardDescriptorSetAllocator::new(
             device.clone(),
             StandardDescriptorSetAllocatorCreateInfo {
-                set_count: 1, // Adjust based on your needs
+                set_count: 10, // Adjust based on your needs
+                update_after_bind: false,
+                
                 ..Default::default()
             },
         ));
@@ -216,7 +229,8 @@ impl App {
 
         // Set up buffers
 
-        let voxel_iter = [[[0u8; 32]; 32]; 32];
+        let voxel_data: Vec<u32> = vec![0; 32 * 32 * 32];
+
         let voxel_buffer = Buffer::from_iter(
             memory_allocator.clone(),
             BufferCreateInfo {
@@ -228,7 +242,7 @@ impl App {
                     | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
                 ..Default::default()
             },
-            voxel_iter,
+            voxel_data,
         )
         .expect("failed to create buffer");
 
@@ -340,22 +354,47 @@ impl ApplicationHandler for App {
             ];
 
 
+            let layout = {
+                let bindings = [
+                    (
+                        0,
+                        DescriptorSetLayoutBinding {
+                            stages: ShaderStages::FRAGMENT,
+                            ..DescriptorSetLayoutBinding::descriptor_type(
+                                DescriptorType::UniformBuffer,
+                            )
+                        }
+                    ),
+                    (
+                        1,
+                        DescriptorSetLayoutBinding {
+                            stages: ShaderStages::FRAGMENT,
+                            ..DescriptorSetLayoutBinding::descriptor_type(
+                                DescriptorType::StorageBuffer,
+                            )
+                        }
+                    )
+                ].into();
+            
+                DescriptorSetLayout::new(
+                    self.device.clone(),
+                    DescriptorSetLayoutCreateInfo {
+                        bindings,
+                        ..Default::default()
+                    },
+                ).unwrap()
+            };
+            
             let layout = PipelineLayout::new(
                 self.device.clone(),
+                PipelineLayoutCreateInfo {
+                    set_layouts: vec![layout],
+                    ..Default::default()
+                },
+            ).unwrap();
 
-                PipelineDescriptorSetLayoutCreateInfo::from_stages(&stages)
-                    .into_pipeline_layout_create_info(self.device.clone())
-                    .unwrap(),
-            )
-            .unwrap();
 
-            // We describe the formats of attachment images where the colors, depth and/or stencil
-            // information will be written. The pipeline will only be usable with this particular
-            // configuration of the attachment images.
             let subpass = PipelineRenderingCreateInfo {
-                // We specify a single color attachment that will be rendered to. When we begin
-                // rendering, we will specify a swapchain image to be used as this attachment, so
-                // here we set its format to be the same format as the swapchain.
                 color_attachment_formats: vec![Some(swapchain.image_format())],
                 ..Default::default()
             };
@@ -460,26 +499,37 @@ impl ApplicationHandler for App {
                 // PROCESS BUFFERS:
 
 
-                // let camera_subbuffer = {
-                //     //let camera = Camera {camera_pos: [0.0, 0.0, 0.0], look_at: [0.0, 0.0, -1.0], up: [0.0, 1.0, 0.0], fov: 90.0, aspect_ratio: 16.0/9.0 };
-                //     // Add conversion to 2d data
+                let uniform_camera_subbuffer = {
+                    //let camera = Camera {camera_pos: [0.0, 0.0, 0.0], look_at: [0.0, 0.0, -1.0], up: [0.0, 1.0, 0.0], fov: 90.0, aspect_ratio: 16.0/9.0 };
+                    // Add conversion to 2d data
 
-                //     let camera = [10.0, 0.0, 0.0, 0.0, 0.0, -1.0, 0.0, 1.0, 0.0, 90.0, 16.0/9.0];
+                    let camera = Camera {
+                        camera_pos: [00.0, 0.0, 0.0],
+                        look_at: [0.0, 0.0, -1.0],
+                        up: [0.0, 1.0, 0.0],
+                        aspect_ratio: 16.0/9.0,
+                        fov: 90.0,
+                     };
 
-                //     let subbuffer = self.camera_buffer.allocate_sized().unwrap();
-                //     *subbuffer.write().unwrap() = camera;
-                //     subbuffer
+                    let subbuffer = self.camera_buffer.allocate_sized().unwrap();
+                    *subbuffer.write().unwrap() = camera;
+                    subbuffer
 
-                // };
+                };
 
-                // let layout = &rcx.pipeline.layout().set_layouts()[0];
-                // let descriptor_set = PersistentDescriptorSet::new(
-                //     &self.descriptor_set_allocator,
-                //     layout.clone(),
-                //     [WriteDescriptorSet::buffer(0, camera_subbuffer)],
-                //     [],
-                // )
-                // .unwrap();
+                let layout = &rcx.pipeline.layout().set_layouts()[0];
+                //println!("Layout bindings: {:?}", layout.bindings());
+
+                let descriptor_set = PersistentDescriptorSet::new(
+                    &self.descriptor_set_allocator,
+                    layout.clone(),
+                    [
+                        WriteDescriptorSet::buffer(0, uniform_camera_subbuffer), 
+                        WriteDescriptorSet::buffer(1, self.voxel_buffer.clone()),
+                        ],
+                    [],
+                )
+                .unwrap();
 
                 // Aquire next sqapchain image
                 let (image_index, suboptimal, acquire_future) = match acquire_next_image(
@@ -528,7 +578,7 @@ impl ApplicationHandler for App {
                     .unwrap()
                     .bind_pipeline_graphics(rcx.pipeline.clone())
                     .unwrap()
-                    //.bind_descriptor_sets(PipelineBindPoint::Graphics, rcx.pipeline.layout().clone(), 0, descriptor_set).unwrap()
+                    .bind_descriptor_sets(PipelineBindPoint::Graphics, rcx.pipeline.layout().clone(), 0, descriptor_set).unwrap()
                     .draw(3, 1, 0, 0)
                     .unwrap();
                 
