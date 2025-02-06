@@ -96,11 +96,7 @@ struct RenderContext {
 #[repr(C)]
 #[derive(BufferContents, Debug, Clone, Copy)]
 struct Camera_Buffer_Data {
-    origin: [f32; 3],
-    look_at: [f32; 3],
-    pixel00_loc: [f32; 3],
-    pixel_delta_u: [f32; 3],
-    pixel_delta_v: [f32; 3]
+    data: [f32; 15],
 }
 
 struct AppState {
@@ -464,8 +460,8 @@ impl ApplicationHandler for App {
                     //let camera = Camera {camera_pos: [0.0, 0.0, 0.0], look_at: [0.0, 0.0, -1.0], up: [0.0, 1.0, 0.0], fov: 90.0, aspect_ratio: 16.0/9.0 };
                     // Add conversion to 2d data
                     let window_size = rcx.window.inner_size();
-                    let look_from = Vec3 {x: 0.0, y: 0.0, z: 1.0};
-                    let look_at = Vec3 {x: 0.0, y: 0.0, z: 1.0};
+                    let look_from = Vec3 {x: 0.0, y: 1.0, z: 0.0};
+                    let look_at = Vec3 {x: 1.0, y: 0.0, z: 1.0};
                     let v_up = Vec3 {x: 0.0, y: 1.0, z: 0.0};
                     let fov = 90;
 
@@ -482,7 +478,7 @@ impl ApplicationHandler for App {
                     let viewport_v = -v * viewport_height;
 
                     let pixel_delta_u = viewport_u / window_size.width as f64;
-                    let pixel_delta_v = viewport_v/ window_size.height as f64;
+                    let pixel_delta_v = viewport_v / window_size.height as f64;
 
                     let viewport_upper_left = look_from - (w * focal_length) - viewport_u/2.0 - viewport_v/2.0;
                     let pixel00_loc = viewport_upper_left + (pixel_delta_u + pixel_delta_v) * 0.5;
@@ -490,18 +486,21 @@ impl ApplicationHandler for App {
                     //println!("{:?} {:?} {:?}", pixel00_loc, pixel_delta_u, pixel_delta_v);
                     //println!("{} {} {}", pixel00_loc.x as f32, pixel00_loc.y as f32, pixel00_loc.z as f32);
                     //println!("{} {}", window_size.width, window_size.height);
+
+
+                    let camera_data: [f32; 15] = [
+                        look_from.x as f32, look_from.y as f32, look_from.z as f32,
+                        look_at.x as f32, look_at.y as f32, look_at.z as f32,
+                        pixel00_loc.x as f32, pixel00_loc.y as f32, pixel00_loc.z as f32,
+                        pixel_delta_u.x as f32, pixel_delta_u.y as f32, pixel_delta_u.z as f32,
+                        pixel_delta_v.x as f32, pixel_delta_v.y as f32, pixel_delta_v.z as f32,
+                    ];
                     
 
-                    let camera = Camera_Buffer_Data {
-                        origin: [look_from.x as f32, look_from.y as f32, look_from.z as f32],
-                        look_at: [look_at.x as f32, look_at.y as f32, look_at.z as f32],
-                        pixel00_loc: [pixel00_loc.x as f32, pixel00_loc.y as f32, pixel00_loc.z as f32],
-                        pixel_delta_u: [pixel_delta_u.x as f32, pixel_delta_u.y as f32, pixel_delta_u.z as f32],
-                        pixel_delta_v: [pixel_delta_v.x as f32, pixel_delta_v.y as f32, pixel_delta_v.z as f32],
-                     };
+                    println!("{:?}", camera_data);
 
                     let subbuffer = self.camera_buffer.allocate_sized().unwrap();
-                    *subbuffer.write().unwrap() = camera;
+                    *subbuffer.write().unwrap() = camera_data;
                     subbuffer
 
                 };
