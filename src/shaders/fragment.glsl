@@ -9,7 +9,5 @@ layout(set = 0, binding = 0) uniform camera_subbuffer {
 
 
 void main() {
-    // Use UV coordinates for your pixel-based rendering
-    // You can add your own logic here based on pixel position
-    f_color = vec4(uv.x, uv.y, 0.0, 1.0);
+    f_color = vec4(uv.x, uv.y, uv.x, 1.0);
 }

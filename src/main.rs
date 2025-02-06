@@ -106,26 +106,6 @@ struct AppState {
     last_frame: Instant,
 }
 
-mod cs {
-    vulkano_shaders::shader!{
-        ty: "compute",
-        src: r"
-            #version 460
-
-            layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
-
-            layout(set = 0, binding = 0) buffer Data {
-                uint data[];
-            } buf;
-
-            void main() {
-                uint idx = gl_GlobalInvocationID.x;
-                buf.data[idx] *= 12;
-            }
-        ",
-    }
-}
-
 impl App {
     fn new(event_loop: &EventLoop<()>) -> Self {
         let library = VulkanLibrary::new().unwrap();
@@ -156,7 +136,6 @@ impl App {
             .enumerate_physical_devices()
             .unwrap()
             .filter(|p| {
-                // For this example, we require at least Vulkan 1.3, or a device that has the
                 // `khr_dynamic_rendering` extension available.
                 p.api_version() >= Version::V1_3 || p.supported_extensions().khr_dynamic_rendering
             })
@@ -199,15 +178,10 @@ impl App {
             device_extensions.khr_dynamic_rendering = true;
         }
 
-        // Now initializing the device. This is probably the most important object of Vulkan.
-        //
-        // An iterator of created queues is returned by the function alongside the device.
+        // initiliase device and queues
         let (device, mut queues) = Device::new(
-            // Which physical device to connect to.
             physical_device,
             DeviceCreateInfo {
-                // The list of queues that we are going to use. Here we only use one queue, from
-                // the previously chosen queue family.
                 queue_create_infos: vec![QueueCreateInfo {
                     queue_family_index,
                     ..Default::default()
@@ -223,11 +197,10 @@ impl App {
         )
         .unwrap();
 
-
         let queue = queues.next().unwrap();
         let memory_allocator = Arc::new(StandardMemoryAllocator::new_default(device.clone()));
         
-        // Alocators
+        // Allocators
         let descriptor_set_allocator = Arc::new(StandardDescriptorSetAllocator::new(
             device.clone(),
             StandardDescriptorSetAllocatorCreateInfo {
@@ -295,15 +268,13 @@ impl ApplicationHandler for App {
         let window_size = window.inner_size();
 
         let (swapchain, images) = {
-            // Querying the capabilities of the surface. When we create the swapchain we can only
-            // pass values that are allowed by the capabilities.
+            // Querying the capabilities of the surface
             let surface_capabilities = self
                 .device
                 .physical_device()
                 .surface_capabilities(&surface, Default::default())
                 .unwrap();
 
-            // Choosing the internal format that the images will have.
             let (image_format, _) = self
                 .device
                 .physical_device()
@@ -395,30 +366,15 @@ impl ApplicationHandler for App {
                 None,
                 GraphicsPipelineCreateInfo {
                     stages: stages.into_iter().collect(),
-                    // How vertex data is read from the vertex buffers into the vertex shader.
                     vertex_input_state: Some(VertexInputState::default()),
-                    // How vertices are arranged into primitive shapes. The default primitive shape
-                    // is a triangle.
                     input_assembly_state: Some(InputAssemblyState::default()),
-                    // How primitives are transformed and clipped to fit the framebuffer. We use a
-                    // resizable viewport, set to draw over the entire window.
                     viewport_state: Some(ViewportState::default()),
-                    // How polygons are culled and converted into a raster of pixels. The default
-                    // value does not perform any culling.
                     rasterization_state: Some(RasterizationState::default()),
-                    // How multiple fragment shader samples are converted to a single pixel value.
-                    // The default value does not perform any multisampling.
                     multisample_state: Some(MultisampleState::default()),
-                    // How pixel values are combined with the values already present in the
-                    // framebuffer. The default value overwrites the old value with the new one,
-                    // without any blending.
                     color_blend_state: Some(ColorBlendState::with_attachment_states(
                         subpass.color_attachment_formats.len() as u32,
                         ColorBlendAttachmentState::default(),
                     )),
-                    // Dynamic states allows us to specify parts of the pipeline settings when
-                    // recording the command buffer, before we perform drawing. Here, we specify
-                    // that the viewport should be dynamic.
                     dynamic_state: [DynamicState::Viewport].into_iter().collect(),
                     subpass: Some(subpass.into()),
                     ..GraphicsPipelineCreateInfo::layout(layout)
@@ -504,26 +460,26 @@ impl ApplicationHandler for App {
                 // PROCESS BUFFERS:
 
 
-                let camera_subbuffer = {
-                    //let camera = Camera {camera_pos: [0.0, 0.0, 0.0], look_at: [0.0, 0.0, -1.0], up: [0.0, 1.0, 0.0], fov: 90.0, aspect_ratio: 16.0/9.0 };
-                    // Add conversion to 2d data
+                // let camera_subbuffer = {
+                //     //let camera = Camera {camera_pos: [0.0, 0.0, 0.0], look_at: [0.0, 0.0, -1.0], up: [0.0, 1.0, 0.0], fov: 90.0, aspect_ratio: 16.0/9.0 };
+                //     // Add conversion to 2d data
 
-                    let camera = [10.0, 0.0, 0.0, 0.0, 0.0, -1.0, 0.0, 1.0, 0.0, 90.0, 16.0/9.0];
+                //     let camera = [10.0, 0.0, 0.0, 0.0, 0.0, -1.0, 0.0, 1.0, 0.0, 90.0, 16.0/9.0];
 
-                    let subbuffer = self.camera_buffer.allocate_sized().unwrap();
-                    *subbuffer.write().unwrap() = camera;
-                    subbuffer
+                //     let subbuffer = self.camera_buffer.allocate_sized().unwrap();
+                //     *subbuffer.write().unwrap() = camera;
+                //     subbuffer
 
-                };
+                // };
 
-                let layout = &rcx.pipeline.layout().set_layouts()[0];
-                let descriptor_set = PersistentDescriptorSet::new(
-                    &self.descriptor_set_allocator,
-                    layout.clone(),
-                    [WriteDescriptorSet::buffer(0, camera_subbuffer)],
-                    [],
-                )
-                .unwrap();
+                // let layout = &rcx.pipeline.layout().set_layouts()[0];
+                // let descriptor_set = PersistentDescriptorSet::new(
+                //     &self.descriptor_set_allocator,
+                //     layout.clone(),
+                //     [WriteDescriptorSet::buffer(0, camera_subbuffer)],
+                //     [],
+                // )
+                // .unwrap();
 
                 // Aquire next sqapchain image
                 let (image_index, suboptimal, acquire_future) = match acquire_next_image(
@@ -554,20 +510,11 @@ impl ApplicationHandler for App {
 
                 builder
                     .begin_rendering(RenderingInfo {
-                        // As before, we specify one color attachment, but now we specify the image
-                        // view to use as well as how it should be used.
                         color_attachments: vec![Some(RenderingAttachmentInfo {
                             load_op: AttachmentLoadOp::Clear,
                             store_op: AttachmentStoreOp::Store,
-                            // The value to clear the attachment with. Here we clear it with a blue
-                            // color.
-                            //
-                            // Only attachments that have `AttachmentLoadOp::Clear` are provided
-                            // with clear values, any others should use `None` as the clear value.
                             clear_value: Some([0.0, 0.0, 1.0, 1.0].into()),
                             ..RenderingAttachmentInfo::image_view(
-                                // We specify image view corresponding to the currently acquired
-                                // swapchain image, to use for this attachment.
                                 rcx.attachment_image_views[image_index as usize].clone(),
                             )
                         })],
@@ -581,7 +528,7 @@ impl ApplicationHandler for App {
                     .unwrap()
                     .bind_pipeline_graphics(rcx.pipeline.clone())
                     .unwrap()
-                    .bind_descriptor_sets(PipelineBindPoint::Graphics, rcx.pipeline.layout().clone(), 0, descriptor_set).unwrap()
+                    //.bind_descriptor_sets(PipelineBindPoint::Graphics, rcx.pipeline.layout().clone(), 0, descriptor_set).unwrap()
                     .draw(3, 1, 0, 0)
                     .unwrap();
                 
@@ -602,14 +549,7 @@ impl ApplicationHandler for App {
                     .join(acquire_future)
                     .then_execute(self.queue.clone(), command_buffer)
                     .unwrap()
-                    // The color output is now expected to contain our triangle. But in order to
-                    // show it on the screen, we have to *present* the image by calling
-                    // `then_swapchain_present`.
-                    //
-                    // This function does not actually present the image immediately. Instead it
-                    // submits a present command at the end of the queue. This means that it will
-                    // only be presented once the GPU has finished executing the command buffer
-                    // that draws the triangle.
+
                     .then_swapchain_present(
                         self.queue.clone(),
                         SwapchainPresentInfo::swapchain_image_index(
