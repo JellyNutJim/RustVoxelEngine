@@ -95,8 +95,13 @@ struct RenderContext {
 
 #[repr(C)]
 #[derive(BufferContents, Debug, Clone, Copy)]
-struct Camera_Buffer_Data {
-    data: [f32; 15],
+#[repr(align(16))] 
+struct CameraBufferData {
+    origin: [f32; 4],
+    look_at: [f32; 4],
+    pixel00_loc: [f32; 4],
+    pixel_delta_u: [f32; 4],
+    pixel_delta_v: [f32; 4],
 }
 
 struct AppState {
@@ -225,6 +230,14 @@ impl App {
         voxel_data[1 * (32 * 32) + 1 * 32 + 12] = 1;
         voxel_data[1 * (32 * 32) + 1 * 32 + 14] = 1;
 
+        voxel_data[10 * (32 * 32) + 1 * 32 + 10] = 1;
+        voxel_data[10 * (32 * 32) + 2 * 32 + 12] = 1;
+        voxel_data[10 * (32 * 32) + 3 * 32 + 14] = 1;
+
+        voxel_data[10 * (32 * 32) + 3 * 32 + 16] = 1;
+        voxel_data[10 * (32 * 32) + 2 * 32 + 18] = 1;
+        voxel_data[10 * (32 * 32) + 1 * 32 + 20] = 1;
+
 
         let voxel_buffer = Buffer::from_iter(
             memory_allocator.clone(),
@@ -240,7 +253,7 @@ impl App {
             voxel_data,
         )
         .expect("failed to create buffer");
-
+    
         let camera_buffer = SubbufferAllocator::new(
             memory_allocator.clone(),
             SubbufferAllocatorCreateInfo {
@@ -457,11 +470,10 @@ impl ApplicationHandler for App {
 
 
                 let uniform_camera_subbuffer = {
-                    //let camera = Camera {camera_pos: [0.0, 0.0, 0.0], look_at: [0.0, 0.0, -1.0], up: [0.0, 1.0, 0.0], fov: 90.0, aspect_ratio: 16.0/9.0 };
-                    // Add conversion to 2d data
                     let window_size = rcx.window.inner_size();
-                    let look_from = Vec3 {x: 0.0, y: 1.0, z: 0.0};
-                    let look_at = Vec3 {x: 1.0, y: 0.0, z: 1.0};
+                    let look_from = Vec3 {x: 0.0, y: 0.0, z: 1.0};
+                    let look_at = Vec3 {x: 0.0, y: 0.0, z: -1.0};
+
                     let v_up = Vec3 {x: 0.0, y: 1.0, z: 0.0};
                     let fov = 90;
 
@@ -488,23 +500,23 @@ impl ApplicationHandler for App {
                     //println!("{} {}", window_size.width, window_size.height);
 
 
-                    let camera_data: [f32; 15] = [
-                        look_from.x as f32, look_from.y as f32, look_from.z as f32,
-                        look_at.x as f32, look_at.y as f32, look_at.z as f32,
-                        pixel00_loc.x as f32, pixel00_loc.y as f32, pixel00_loc.z as f32,
-                        pixel_delta_u.x as f32, pixel_delta_u.y as f32, pixel_delta_u.z as f32,
-                        pixel_delta_v.x as f32, pixel_delta_v.y as f32, pixel_delta_v.z as f32,
-                    ];
+                    let c: CameraBufferData = CameraBufferData {
+                        origin: [look_from.x as f32, look_from.y as f32, look_from.z as f32, 1.0],
+                        look_at: [look_at.x as f32, look_at.y as f32, look_at.z as f32, 1.0],
+                        pixel00_loc: [ pixel00_loc.x as f32, pixel00_loc.y as f32, pixel00_loc.z as f32, 1.0],
+                        pixel_delta_u:[pixel_delta_u.x as f32, pixel_delta_u.y as f32, pixel_delta_u.z as f32, 1.0],
+                        pixel_delta_v: [pixel_delta_v.x as f32, pixel_delta_v.y as f32, pixel_delta_v.z as f32, 1.0],
+                    };
                     
 
-                    println!("{:?}", camera_data);
+                    //println!("{:?}", c);
 
                     let subbuffer = self.camera_buffer.allocate_sized().unwrap();
-                    *subbuffer.write().unwrap() = camera_data;
+                    *subbuffer.write().unwrap() = c;
                     subbuffer
 
                 };
-
+                
                 // Aquire next sqapchain image
                 let (image_index, suboptimal, acquire_future) = match acquire_next_image(
                     rcx.swapchain.clone(),
