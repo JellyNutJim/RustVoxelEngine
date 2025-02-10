@@ -15,9 +15,6 @@ use vulkano::descriptor_set::layout::{
     DescriptorBindingFlags 
 };
 
-mod vec3;
-use vec3::Vec3;
-
 use std::{error::Error, os::windows::process, sync::{mpsc::channel, Arc}, time::Instant, f64::consts::PI};
 
 
@@ -62,6 +59,9 @@ use winit::{
 };
 
 mod asset_load;
+mod types;
+
+use types::Vec3;
 use asset_load::*;
 
 fn main() -> Result<(), impl Error> {
@@ -114,10 +114,6 @@ struct CameraLocation {
     direction: Vec3,
 }
 
-struct AppState {
-    rotation: f64,
-    last_frame: Instant,
-}
 
 impl App {
     fn new(event_loop: &EventLoop<()>) -> Self {
@@ -274,24 +270,17 @@ impl App {
             },
         );
 
-        // Set custom cursor image
-
-
-
 
         #[allow(unused_mut)]
+        // Default values
         let mut camera_location = CameraLocation {location: Vec3 {x: 0.0, y: 0.0, z: 1.0}, direction: Vec3::new(), h_angle: 0.0, v_angle: 0.0};
         let rcx = None;
 
-        // let img = image::load_from_memory(bytes).unwrap().to_rgba8();
-        // let samples = img.into_flat_samples();
-        // let (_, w, h) = samples.extents();
-        // let (w, h) = (w as u16, h as u16);
-        // let source = CustomCursor::from_rgba(rgba, w, h, w / 2, h / 2).unwrap();
+        let p = Vec3::new();
+        let mut a = Vec3::from(1.0, 2.0, 3.0);
+        a += p;
 
-        // if let Ok(custom_cursor) = event_loop.create_custom_cursor(source) {
-        //     window.set_cursor(custom_cursor.clone().into());
-        // }
+        println!("{:?}", a);
 
 
         App {
@@ -320,15 +309,10 @@ impl ApplicationHandler for App {
         
         // Lock cursor to center
         window.set_cursor_grab(CursorGrabMode::Confined);
-        // let samples = get_rbga8_img_samples("H:/Year 3 Project/RustVoxelEngine/assets/cross.png");
-        // let w = samples.1;
-        // let h = samples.2;
-        // let source = CustomCursor::from_rgba(samples.0, w, h, w / 2, h / 2).unwrap();
-        
-        // let custom_cursor = event_loop.create_custom_cursor(source);
-        // window.set_cursor(custom_cursor.clone());
 
-        window.set_cursor_position(LogicalPosition::new(window_size.width as f64 / 2.0, window_size.height as f64 / 2.0)).expect("Cursor Error");
+        // Cusor cant currenlty be hidden -> change cursor image using custom cursor
+
+        window.set_cursor_position(PhysicalPosition::new(window_size.width as f64 / 2.0, window_size.height as f64 / 2.0)).expect("Cursor Error");
         
         // CURRENTLY BROKEN ON WINDOWS DISABLESM MOVE MOVEMENT EVEN DETECTION CAN USE USE DEVICE EVENT INSTEAD IF NEEDED
         //window.set_cursor_visible(false);
@@ -509,16 +493,17 @@ impl ApplicationHandler for App {
                     self.camera_location.h_angle = (self.camera_location.h_angle + x_change * 0.001) % (PI*2.0);
                     self.camera_location.v_angle = (self.camera_location.v_angle + (y_change * -0.001)).clamp(-PI/2.02, PI/2.02); 
 
-                    // Convert angles to direction vector
+                    // Convert spherical angles to direction vector
                     self.camera_location.direction = Vec3 {
                         x: self.camera_location.h_angle.cos() * self.camera_location.v_angle.cos(),
                         y: self.camera_location.v_angle.sin(),
                         z: self.camera_location.h_angle.sin() * self.camera_location.v_angle.cos()
                     };
 
+
                     //println!("{} {}",self.camera_location.h_angle, self.camera_location.v_angle );
 
-                    rcx.window.set_cursor_position(LogicalPosition::new(rcx.window.inner_size().width as f64 / 2.0, rcx.window.inner_size().height as f64 / 2.0)).expect("Cursor Error");
+                    rcx.window.set_cursor_position(PhysicalPosition::new(rcx.window.inner_size().width as f64 / 2.0, rcx.window.inner_size().height as f64 / 2.0)).expect("Cursor Error");
             }
             WindowEvent::RedrawRequested => {
                 let window_size = rcx.window.inner_size();
