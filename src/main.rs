@@ -18,7 +18,7 @@ use vulkano::descriptor_set::layout::{
 mod vec3;
 use vec3::Vec3;
 
-use std::{error::Error, sync::{mpsc::channel, Arc}, time::Instant};
+use std::{error::Error, os::windows::process, sync::{mpsc::channel, Arc}, time::Instant};
 use vulkano::{
     buffer::{Buffer, BufferContents, BufferCreateInfo, BufferUsage, Subbuffer},
     command_buffer::{
@@ -54,7 +54,7 @@ use vulkano::{
     Validated, Version, VulkanError, VulkanLibrary,
 };
 use winit::{
-    application::ApplicationHandler, dpi::{LogicalPosition, PhysicalPosition}, event::WindowEvent, event_loop::{ActiveEventLoop, EventLoop}, window::{self, Cursor, CursorGrabMode, CustomCursor, Window, WindowId}
+    application::ApplicationHandler, dpi::{LogicalPosition, PhysicalPosition}, event::WindowEvent, event_loop::{ActiveEventLoop, EventLoop}, keyboard::{KeyCode, PhysicalKey}, window::{self, Cursor, CursorGrabMode, CustomCursor, Window, WindowId}
 
 };
 
@@ -471,7 +471,6 @@ impl ApplicationHandler for App {
     ) {
         let rcx = self.rcx.as_mut().unwrap();
         let w_size = rcx.window.inner_size();
-        let mut dir = Vec3::new();
 
         match event {
             WindowEvent::CloseRequested => {
@@ -481,26 +480,14 @@ impl ApplicationHandler for App {
                 rcx.recreate_swapchain = true;
             }
             WindowEvent::KeyboardInput { device_id, event, is_synthetic } => {
-                println!("{}", event.logical_key.to_text().unwrap());
 
-                if event.logical_key.to_text().unwrap() == "w" {
-                    self.camera_location.location.z -= 0.2;
-                    self.camera_location.direction.z -= 0.2;
-                }
-
-                if event.logical_key.to_text().unwrap() == "s" {
-                    self.camera_location.location.z += 0.2;
-                    self.camera_location.direction.z += 0.2;
-                }
-
-                if event.logical_key.to_text().unwrap() == "a" {
-                    self.camera_location.location.x += -0.2;
-                    self.camera_location.direction.x += -0.2;
-                }
-
-                if event.logical_key.to_text().unwrap() == "d" {
-                    self.camera_location.location.x += 0.2;
-                    self.camera_location.direction.x += 0.2;
+                match event.physical_key {
+                    PhysicalKey::Code(KeyCode::KeyW) => { self.camera_location.location.z -= 0.2 }
+                    PhysicalKey::Code(KeyCode::KeyS) => { self.camera_location.location.z += 0.2 }
+                    PhysicalKey::Code(KeyCode::KeyA) => { self.camera_location.location.x -= 0.2 }
+                    PhysicalKey::Code(KeyCode::KeyD) => { self.camera_location.location.x += 0.2 }
+                    PhysicalKey::Code(KeyCode::Escape) => { std::process::exit(0) }
+                    _ =>  { print!("Unknown Key")}
                 }
 
 
@@ -512,8 +499,8 @@ impl ApplicationHandler for App {
 
                     //println!("{}", x_change, y_change);
 
-                    let v = Vec3 {x: 0.01 * x_change, y: 0.01 * y_change, z: -1.0};
-                    //dir += v;
+                    let v = Vec3 {x: 0.01 * x_change, y: -0.01 * y_change, z: 0.0};
+                    self.camera_location.direction = self.camera_location.direction + v;
                     println!("{:?}", v);
 
                     rcx.window.set_cursor_position(LogicalPosition::new(rcx.window.inner_size().width as f64 / 2.0, rcx.window.inner_size().height as f64 / 2.0)).expect("Cursor Error");
@@ -552,7 +539,7 @@ impl ApplicationHandler for App {
                 let uniform_camera_subbuffer = {
                     let window_size = rcx.window.inner_size();
                     let look_from = self.camera_location.location;
-                    let look_at = self.camera_location.direction + dir;
+                    let look_at = self.camera_location.location + self.camera_location.direction;
 
                     let v_up = Vec3 {x: 0.0, y: 1.0, z: 0.0};
                     let fov = 90;
