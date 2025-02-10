@@ -487,8 +487,8 @@ impl ApplicationHandler for App {
             WindowEvent::KeyboardInput { device_id, event, is_synthetic } => {
 
                 match event.physical_key {
-                    PhysicalKey::Code(KeyCode::KeyW) => { self.camera_location.location.z -= 0.2 }
-                    PhysicalKey::Code(KeyCode::KeyS) => { self.camera_location.location.z += 0.2 }
+                    PhysicalKey::Code(KeyCode::KeyW) => { self.camera_location.location = self.camera_location.location + self.camera_location.direction * Vec3 {x: 0.1, y: 0.1, z: 0.1} }
+                    PhysicalKey::Code(KeyCode::KeyS) => { self.camera_location.location = self.camera_location.location - self.camera_location.direction * Vec3 {x: 0.1, y: 0.1, z: 0.1} }
                     PhysicalKey::Code(KeyCode::KeyA) => { self.camera_location.location.x -= 0.2 }
                     PhysicalKey::Code(KeyCode::KeyD) => { self.camera_location.location.x += 0.2 }
                     PhysicalKey::Code(KeyCode::Escape) => { std::process::exit(0) }
@@ -516,7 +516,7 @@ impl ApplicationHandler for App {
                         z: self.camera_location.h_angle.sin() * self.camera_location.v_angle.cos()
                     };
 
-                    println!("{} {}",self.camera_location.h_angle, self.camera_location.v_angle );
+                    //println!("{} {}",self.camera_location.h_angle, self.camera_location.v_angle );
 
                     rcx.window.set_cursor_position(LogicalPosition::new(rcx.window.inner_size().width as f64 / 2.0, rcx.window.inner_size().height as f64 / 2.0)).expect("Cursor Error");
             }
