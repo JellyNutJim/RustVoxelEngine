@@ -4,7 +4,6 @@ layout(local_size_x = 16, local_size_y = 1, local_size_z = 1) in;
 
 layout(set = 0, binding = 0) uniform camera_subbuffer {
     vec3 origin;
-    vec3 look_at;
     vec3 pixel00_loc;
     vec3 pixel_delta_u;
     vec3 pixel_delta_v;
@@ -34,7 +33,6 @@ void main() {
     ivec2 pixel_coords = ivec2(gl_GlobalInvocationID.xy);
 
     vec3 origin = c.origin;
-    vec3 look_at = c.look_at;
     vec3 pixel00_loc = c.pixel00_loc;
     vec3 pixel_delta_u = c.pixel_delta_u;
     vec3 pixel_delta_v = c.pixel_delta_v;

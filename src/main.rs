@@ -12,13 +12,13 @@ use vulkano::pipeline::compute::ComputePipelineCreateInfo;
 
 use vulkano::descriptor_set::layout::{
     DescriptorSetLayoutBinding,
-    DescriptorBindingFlags
+    DescriptorBindingFlags 
 };
 
 mod vec3;
 use vec3::Vec3;
 
-use std::{error::Error, sync::Arc, time::Instant};
+use std::{error::Error, sync::{mpsc::channel, Arc}, time::Instant};
 use vulkano::{
     buffer::{Buffer, BufferContents, BufferCreateInfo, BufferUsage, Subbuffer},
     command_buffer::{
@@ -54,12 +54,12 @@ use vulkano::{
     Validated, Version, VulkanError, VulkanLibrary,
 };
 use winit::{
-    application::ApplicationHandler,
-    event::WindowEvent,
-    event_loop::{ActiveEventLoop, EventLoop},
-    window::{Window, WindowId},
+    application::ApplicationHandler, dpi::{LogicalPosition, PhysicalPosition}, event::WindowEvent, event_loop::{ActiveEventLoop, EventLoop}, window::{self, Cursor, CursorGrabMode, CustomCursor, Window, WindowId}
+
 };
 
+mod asset_load;
+use asset_load::*;
 
 fn main() -> Result<(), impl Error> {
     // Create window
@@ -99,7 +99,6 @@ struct RenderContext {
 #[repr(align(16))] 
 struct CameraBufferData {
     origin: [f32; 4],
-    look_at: [f32; 4],
     pixel00_loc: [f32; 4],
     pixel_delta_u: [f32; 4],
     pixel_delta_v: [f32; 4],
@@ -270,8 +269,25 @@ impl App {
             },
         );
 
-        let rcx = None;
+        // Set custom cursor image
+
+
+
+
+        #[allow(unused_mut)]
         let mut camera_location = CameraLocation {location: Vec3 {x: 0.0, y: 0.0, z: 1.0}, direction: Vec3 {x: 0.0, y: 0.0, z: -1.0}};
+        let rcx = None;
+
+        // let img = image::load_from_memory(bytes).unwrap().to_rgba8();
+        // let samples = img.into_flat_samples();
+        // let (_, w, h) = samples.extents();
+        // let (w, h) = (w as u16, h as u16);
+        // let source = CustomCursor::from_rgba(rgba, w, h, w / 2, h / 2).unwrap();
+
+        // if let Ok(custom_cursor) = event_loop.create_custom_cursor(source) {
+        //     window.set_cursor(custom_cursor.clone().into());
+        // }
+
 
         App {
             instance,
@@ -296,7 +312,23 @@ impl ApplicationHandler for App {
         );
         let surface = Surface::from_window(self.instance.clone(), window.clone()).unwrap();
         let window_size = window.inner_size();
+        
+        // Lock cursor to center
+        window.set_cursor_grab(CursorGrabMode::Confined);
+        // let samples = get_rbga8_img_samples("H:/Year 3 Project/RustVoxelEngine/assets/cross.png");
+        // let w = samples.1;
+        // let h = samples.2;
+        // let source = CustomCursor::from_rgba(samples.0, w, h, w / 2, h / 2).unwrap();
+        
+        // let custom_cursor = event_loop.create_custom_cursor(source);
+        // window.set_cursor(custom_cursor.clone());
 
+        window.set_cursor_position(LogicalPosition::new(window_size.width as f64 / 2.0, window_size.height as f64 / 2.0)).expect("Cursor Error");
+        
+        // CURRENTLY BROKEN ON WINDOWS DISABLESM MOVE MOVEMENT EVEN DETECTION CAN USE USE DEVICE EVENT INSTEAD IF NEEDED
+        //window.set_cursor_visible(false);
+
+        
         let (swapchain, images) = {
             // Querying the capabilities of the surface
             let surface_capabilities = self
@@ -438,6 +470,8 @@ impl ApplicationHandler for App {
         event: WindowEvent,
     ) {
         let rcx = self.rcx.as_mut().unwrap();
+        let w_size = rcx.window.inner_size();
+        let mut dir = Vec3::new();
 
         match event {
             WindowEvent::CloseRequested => {
@@ -470,6 +504,19 @@ impl ApplicationHandler for App {
                 }
 
 
+            }
+            WindowEvent::CursorMoved { device_id, position } => {
+                    //println!("x: {}, y: {}", position.x, position.y);
+                    let x_change = position.x - (w_size.width as f64 / 2.0);
+                    let y_change = position.y - (w_size.height as f64 / 2.0);
+
+                    //println!("{}", x_change, y_change);
+
+                    let v = Vec3 {x: 0.01 * x_change, y: 0.01 * y_change, z: -1.0};
+                    //dir += v;
+                    println!("{:?}", v);
+
+                    rcx.window.set_cursor_position(LogicalPosition::new(rcx.window.inner_size().width as f64 / 2.0, rcx.window.inner_size().height as f64 / 2.0)).expect("Cursor Error");
             }
             WindowEvent::RedrawRequested => {
                 let window_size = rcx.window.inner_size();
@@ -505,7 +552,7 @@ impl ApplicationHandler for App {
                 let uniform_camera_subbuffer = {
                     let window_size = rcx.window.inner_size();
                     let look_from = self.camera_location.location;
-                    let look_at = self.camera_location.direction;
+                    let look_at = self.camera_location.direction + dir;
 
                     let v_up = Vec3 {x: 0.0, y: 1.0, z: 0.0};
                     let fov = 90;
@@ -535,7 +582,6 @@ impl ApplicationHandler for App {
 
                     let c: CameraBufferData = CameraBufferData {
                         origin: [look_from.x as f32, look_from.y as f32, look_from.z as f32, 1.0],
-                        look_at: [look_at.x as f32, look_at.y as f32, look_at.z as f32, 1.0],
                         pixel00_loc: [ pixel00_loc.x as f32, pixel00_loc.y as f32, pixel00_loc.z as f32, 1.0],
                         pixel_delta_u:[pixel_delta_u.x as f32, pixel_delta_u.y as f32, pixel_delta_u.z as f32, 1.0],
                         pixel_delta_v: [pixel_delta_v.x as f32, pixel_delta_v.y as f32, pixel_delta_v.z as f32, 1.0],
