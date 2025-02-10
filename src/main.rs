@@ -79,7 +79,8 @@ struct App {
     voxel_buffer: Subbuffer<[u32]>,
     camera_buffer: SubbufferAllocator,
 
-    rcx: Option<RenderContext>,
+    rcx: Option<RenderContext>, 
+    camera_location: CameraLocation,
 }
 
 struct RenderContext {
@@ -102,6 +103,11 @@ struct CameraBufferData {
     pixel00_loc: [f32; 4],
     pixel_delta_u: [f32; 4],
     pixel_delta_v: [f32; 4],
+}
+
+struct CameraLocation {
+    location: Vec3,
+    direction: Vec3
 }
 
 struct AppState {
@@ -265,6 +271,7 @@ impl App {
         );
 
         let rcx = None;
+        let mut camera_location = CameraLocation {location: Vec3 {x: 0.0, y: 0.0, z: 1.0}, direction: Vec3 {x: 0.0, y: 0.0, z: -1.0}};
 
         App {
             instance,
@@ -275,6 +282,7 @@ impl App {
             voxel_buffer,
             camera_buffer,
             rcx,
+            camera_location
         }
     }
 }
@@ -438,6 +446,31 @@ impl ApplicationHandler for App {
             WindowEvent::Resized(_) => {
                 rcx.recreate_swapchain = true;
             }
+            WindowEvent::KeyboardInput { device_id, event, is_synthetic } => {
+                println!("{}", event.logical_key.to_text().unwrap());
+
+                if event.logical_key.to_text().unwrap() == "w" {
+                    self.camera_location.location.z -= 0.2;
+                    self.camera_location.direction.z -= 0.2;
+                }
+
+                if event.logical_key.to_text().unwrap() == "s" {
+                    self.camera_location.location.z += 0.2;
+                    self.camera_location.direction.z += 0.2;
+                }
+
+                if event.logical_key.to_text().unwrap() == "a" {
+                    self.camera_location.location.x += -0.2;
+                    self.camera_location.direction.x += -0.2;
+                }
+
+                if event.logical_key.to_text().unwrap() == "d" {
+                    self.camera_location.location.x += 0.2;
+                    self.camera_location.direction.x += 0.2;
+                }
+
+
+            }
             WindowEvent::RedrawRequested => {
                 let window_size = rcx.window.inner_size();
                 
@@ -471,8 +504,8 @@ impl ApplicationHandler for App {
 
                 let uniform_camera_subbuffer = {
                     let window_size = rcx.window.inner_size();
-                    let look_from = Vec3 {x: 0.0, y: 0.0, z: 1.0};
-                    let look_at = Vec3 {x: 0.0, y: 0.0, z: -1.0};
+                    let look_from = self.camera_location.location;
+                    let look_at = self.camera_location.direction;
 
                     let v_up = Vec3 {x: 0.0, y: 1.0, z: 0.0};
                     let fov = 90;

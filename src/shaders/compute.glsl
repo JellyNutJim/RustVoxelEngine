@@ -63,7 +63,7 @@ void main() {
 
     uint hit_axis = 0;
 
-    while(length(world_pos) < 30.0) {
+    while(length(world_pos) < 100.0) {
 
         if (v_buf.voxels[uint(abs(world_pos.x))][uint(abs(world_pos.y))][uint(abs(world_pos.z))] == 1) {
 
