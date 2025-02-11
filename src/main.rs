@@ -1,7 +1,6 @@
-#![allow(dead_code, unused_imports)]
-use vulkano::{buffer::allocator::{SubbufferAllocator, SubbufferAllocatorCreateInfo}, descriptor_set::layout, device::Features as DeviceFeatures, pipeline::{graphics::vertex_input::VertexInputState, ComputePipeline, Pipeline}};
+use vulkano::{buffer::allocator::{SubbufferAllocator, SubbufferAllocatorCreateInfo}, device::Features as DeviceFeatures, pipeline::{ComputePipeline, Pipeline}};
 use vulkano::pipeline::PipelineBindPoint;
-use vulkano::descriptor_set::{{allocator::{StandardDescriptorSetAllocator, StandardDescriptorSetAllocatorCreateInfo}, DescriptorSet, WriteDescriptorSet}, PersistentDescriptorSet};
+use vulkano::descriptor_set::{{allocator::{StandardDescriptorSetAllocator, StandardDescriptorSetAllocatorCreateInfo}, WriteDescriptorSet}, PersistentDescriptorSet};
 
 use vulkano::descriptor_set::layout::DescriptorType;
 use vulkano::pipeline::layout::PipelineLayoutCreateInfo;
@@ -10,12 +9,9 @@ use vulkano::shader::ShaderStages;
 
 use vulkano::pipeline::compute::ComputePipelineCreateInfo;
 
-use vulkano::descriptor_set::layout::{
-    DescriptorSetLayoutBinding,
-    DescriptorBindingFlags 
-};
+use vulkano::descriptor_set::layout::DescriptorSetLayoutBinding;
 
-use std::{error::Error, os::windows::process, sync::{mpsc::channel, Arc}, time::Instant, f64::consts::PI};
+use std::{error::Error, sync::Arc, f64::consts::PI};
 
 
 
@@ -33,18 +29,8 @@ use vulkano::{
     instance::{Instance, InstanceCreateFlags, InstanceCreateInfo},
     memory::allocator::{AllocationCreateInfo, MemoryTypeFilter, StandardMemoryAllocator},
     pipeline::{
-        graphics::{
-            color_blend::{ColorBlendAttachmentState, ColorBlendState},
-            input_assembly::InputAssemblyState,
-            multisample::MultisampleState,
-            rasterization::RasterizationState,
-            subpass::PipelineRenderingCreateInfo,
-            vertex_input::{Vertex, VertexDefinition},
-            viewport::{Viewport, ViewportState},
-            GraphicsPipelineCreateInfo,
-        },
-        layout::PipelineDescriptorSetLayoutCreateInfo,
-        DynamicState, GraphicsPipeline, PipelineLayout, PipelineShaderStageCreateInfo,
+        graphics::viewport::Viewport,
+        PipelineLayout, PipelineShaderStageCreateInfo,
     },
     render_pass::{AttachmentLoadOp, AttachmentStoreOp},
     swapchain::{
@@ -54,7 +40,7 @@ use vulkano::{
     Validated, Version, VulkanError, VulkanLibrary,
 };
 use winit::{
-    application::ApplicationHandler, dpi::{LogicalPosition, PhysicalPosition}, event::WindowEvent, event_loop::{ActiveEventLoop, EventLoop}, keyboard::{KeyCode, PhysicalKey}, window::{self, Cursor, CursorGrabMode, CustomCursor, Window, WindowId}
+    application::ApplicationHandler, dpi::PhysicalPosition, event::WindowEvent, event_loop::{ActiveEventLoop, EventLoop}, keyboard::{KeyCode, PhysicalKey}, window::{CursorGrabMode, Window, WindowId}
 
 };
 
@@ -62,7 +48,6 @@ mod asset_load;
 mod types;
 
 use types::Vec3;
-use asset_load::*;
 
 fn main() -> Result<(), impl Error> {
     // Create window
@@ -157,7 +142,7 @@ impl App {
                 p.queue_family_properties()
                     .iter()
                     .enumerate()
-                    .position(|(i, q)| {
+                    .position(|(_i, q)| {
 
                         q.queue_flags.intersects(QueueFlags::GRAPHICS)
                             
@@ -273,7 +258,7 @@ impl App {
 
         #[allow(unused_mut)]
         // Default values
-        let mut camera_location = CameraLocation {location: Vec3 {x: 0.0, y: 0.0, z: 1.0}, direction: Vec3::new(), h_angle: 0.0, v_angle: 0.0};
+        let mut camera_location = CameraLocation {location: Vec3::new(), direction: Vec3::new(), h_angle: 0.0, v_angle: 0.0};
         let rcx = None;
 
         let p = Vec3::new();
@@ -307,11 +292,12 @@ impl ApplicationHandler for App {
         let surface = Surface::from_window(self.instance.clone(), window.clone()).unwrap();
         let window_size = window.inner_size();
         
-        // Lock cursor to center
-        window.set_cursor_grab(CursorGrabMode::Confined);
+        // Confine cursor
+        match window.set_cursor_grab(CursorGrabMode::Confined) {
+            _ => {}
+        }
 
-        // Cusor cant currenlty be hidden -> change cursor image using custom cursor
-
+        // Intially set cursor to centre of the screen
         window.set_cursor_position(PhysicalPosition::new(window_size.width as f64 / 2.0, window_size.height as f64 / 2.0)).expect("Cursor Error");
         
         // CURRENTLY BROKEN ON WINDOWS DISABLESM MOVE MOVEMENT EVEN DETECTION CAN USE USE DEVICE EVENT INSTEAD IF NEEDED
@@ -326,11 +312,12 @@ impl ApplicationHandler for App {
                 .surface_capabilities(&surface, Default::default())
                 .unwrap();
 
-            let (image_format, _) = self
-                .device
-                .physical_device()
-                .surface_formats(&surface, Default::default())
-                .unwrap()[0];
+            // Gets prefered image format from the surface, currently not using as im using a compute pipeline, will probaly come in use later
+            // let (image_format, _) = self
+            //     .device
+            //     .physical_device()
+            //     .surface_formats(&surface, Default::default())
+            //     .unwrap()[0];
 
             // Please take a look at the docs for the meaning of the parameters we didn't mention.
             let image_format = vulkano::format::Format::R8G8B8A8_UNORM;
@@ -468,8 +455,9 @@ impl ApplicationHandler for App {
             WindowEvent::Resized(_) => {
                 rcx.recreate_swapchain = true;
             }
+            #[allow(unused_variables)]
             WindowEvent::KeyboardInput { device_id, event, is_synthetic } => {
-
+                // Simple movement
                 match event.physical_key {
                     PhysicalKey::Code(KeyCode::KeyW) => { self.camera_location.location = self.camera_location.location + self.camera_location.direction * Vec3 {x: 0.1, y: 0.1, z: 0.1} }
                     PhysicalKey::Code(KeyCode::KeyS) => { self.camera_location.location = self.camera_location.location - self.camera_location.direction * Vec3 {x: 0.1, y: 0.1, z: 0.1} }
@@ -481,29 +469,31 @@ impl ApplicationHandler for App {
 
 
             }
+            #[allow(unused_variables)]
             WindowEvent::CursorMoved { device_id, position } => {
-                    let x_change = position.x - (w_size.width as f64 / 2.0);
-                    let y_change = position.y - (w_size.height as f64 / 2.0);
+                // Only apply rotation and mouse locking when window is in focus
+                if !rcx.window.has_focus() { 
+                    return
+                }
 
-                    //let v = Vec3 {x: 0.001 * x_change, y: -0.001 * y_change, z: 0.0};
-                    //self.camera_location.direction = self.camera_location.direction + v;   
+                // Get absolute pixel change from centre -> will need to change this as speed could be effected by resolution
+                let x_change = position.x - (w_size.width as f64 / 2.0);
+                let y_change = position.y - (w_size.height as f64 / 2.0);
 
+                // Currently resets horizontal axis when it equals 2 PI as fully rotation is 2 pi -> -pi to +pi 
+                self.camera_location.h_angle = (self.camera_location.h_angle + x_change * 0.001) % (PI*2.0);
+                self.camera_location.v_angle = (self.camera_location.v_angle + (y_change * -0.001)).clamp(-PI/2.02, PI/2.02); 
 
-                    // Currently resets horizontal axis when it equals 2 PI as fully rotation is 2 pi -> -pi to +pi 
-                    self.camera_location.h_angle = (self.camera_location.h_angle + x_change * 0.001) % (PI*2.0);
-                    self.camera_location.v_angle = (self.camera_location.v_angle + (y_change * -0.001)).clamp(-PI/2.02, PI/2.02); 
+                // Convert spherical angles to direction vector
+                self.camera_location.direction = Vec3 {
+                    x: self.camera_location.h_angle.cos() * self.camera_location.v_angle.cos(),
+                    y: self.camera_location.v_angle.sin(),
+                    z: self.camera_location.h_angle.sin() * self.camera_location.v_angle.cos()
+                };
 
-                    // Convert spherical angles to direction vector
-                    self.camera_location.direction = Vec3 {
-                        x: self.camera_location.h_angle.cos() * self.camera_location.v_angle.cos(),
-                        y: self.camera_location.v_angle.sin(),
-                        z: self.camera_location.h_angle.sin() * self.camera_location.v_angle.cos()
-                    };
-
-
-                    //println!("{} {}",self.camera_location.h_angle, self.camera_location.v_angle );
-
-                    rcx.window.set_cursor_position(PhysicalPosition::new(rcx.window.inner_size().width as f64 / 2.0, rcx.window.inner_size().height as f64 / 2.0)).expect("Cursor Error");
+                // Set cursor position to centre of the window
+                rcx.window.set_cursor_position(PhysicalPosition::new(rcx.window.inner_size().width as f64 / 2.0, rcx.window.inner_size().height as f64 / 2.0)).expect("Cursor Error");
+                
             }
             WindowEvent::RedrawRequested => {
                 let window_size = rcx.window.inner_size();
@@ -533,16 +523,14 @@ impl ApplicationHandler for App {
                     rcx.recreate_swapchain = false;
                 }
 
-                // PROCESS BUFFERS:
-
-
+                // Calculate camera buffer variables and set them to the buffer
                 let uniform_camera_subbuffer = {
                     let look_from = self.camera_location.location;
                     let look_distance = 1.0;
                     let look_at = self.camera_location.location + self.camera_location.direction * look_distance;
 
                     let v_up = Vec3 {x: 0.0, y: 1.0, z: 0.0};
-                    let fov = 90;
+                    //let fov = 90;
 
 
                     let focal_length = (look_from - look_at).magnitude();
@@ -561,10 +549,6 @@ impl ApplicationHandler for App {
 
                     let viewport_upper_left = look_from - (w * focal_length) - viewport_u/2.0 - viewport_v/2.0;
                     let pixel00_loc = viewport_upper_left + (pixel_delta_u + pixel_delta_v) * 0.5;
-                    
-                    //println!("{:?} {:?} {:?}", pixel00_loc, pixel_delta_u, pixel_delta_v);
-                    //println!("{} {} {}", pixel00_loc.x as f32, pixel00_loc.y as f32, pixel00_loc.z as f32);
-                    //println!("{} {}", window_size.width, window_size.height);
 
 
                     let c: CameraBufferData = CameraBufferData {
@@ -574,8 +558,6 @@ impl ApplicationHandler for App {
                         pixel_delta_v: [pixel_delta_v.x as f32, pixel_delta_v.y as f32, pixel_delta_v.z as f32, 1.0],
                     };
                     
-
-                    //println!("{:?}", c);
 
                     let subbuffer = self.camera_buffer.allocate_sized().unwrap();
                     *subbuffer.write().unwrap() = c;
@@ -605,6 +587,7 @@ impl ApplicationHandler for App {
                 let layout = &rcx.compute_pipeline.layout().set_layouts()[0];
                 //println!("Layout bindings: {:?}", layout.bindings());
 
+                // Create descriptor set for the buffers
                 let descriptor_set = PersistentDescriptorSet::new(
                     &self.descriptor_set_allocator,
                     layout.clone(),
@@ -638,7 +621,6 @@ impl ApplicationHandler for App {
                     .dispatch([window_size.width + 15 /  16, window_size.height + 15 / 16, 1])
                     .unwrap();
                     
-                // We add a draw command.
 
                 builder
                     .begin_rendering(RenderingInfo {
