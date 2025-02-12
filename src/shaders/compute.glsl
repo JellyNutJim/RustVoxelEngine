@@ -1,6 +1,6 @@
 #version 460
 
-layout(local_size_x = 16, local_size_y = 1, local_size_z = 1) in;
+layout(local_size_x = 8, local_size_y = 1, local_size_z = 1) in;
 
 layout(set = 0, binding = 0) uniform camera_subbuffer {
     vec3 origin;
@@ -28,6 +28,30 @@ float clamp(float num) {
     return num;
 }
 
+void take_step(ivec3 step, vec3 t_delta, inout vec3 t_max, inout uint hit_axis, inout vec3 world_pos) {
+    if(t_max.x < t_max.y) {
+        if(t_max.x < t_max.z) {
+            world_pos.x += step.x;
+            t_max.x += t_delta.x;
+            hit_axis = 0;
+        } else {
+            world_pos.z += step.z;
+            t_max.z += t_delta.z;
+            hit_axis = 2;
+        }
+    } 
+    else {
+        if(t_max.y < t_max.z) {
+            world_pos.y += step.y;
+            t_max.y += t_delta.y;
+            hit_axis = 1;
+        } else {
+            world_pos.z += step.z;
+            t_max.z += t_delta.z;
+            hit_axis = 2;
+        }
+    }
+}
 
 void main() {
     ivec2 pixel_coords = ivec2(gl_GlobalInvocationID.xy);
@@ -45,6 +69,7 @@ void main() {
     //imageStore(storageImage, pixel_coords, vec4(dir,1.0));
 
     vec3 world_pos = floor(origin);
+
     vec3 t_delta = abs(vec3(1.0) / dir);
 
     ivec3 step = ivec3(
@@ -53,17 +78,42 @@ void main() {
         dir.z < 0.0 ? -1 : 1
     );
 
-    vec3 t_max = vec3(
+    vec3 t_max_1 = vec3(
         (step.x > 0 ?  world_pos.x + 1.0 : world_pos.x) - origin.x,
         (step.y > 0 ?  world_pos.y + 1.0 : world_pos.y) - origin.y,
         (step.z > 0 ?  world_pos.z + 1.0 : world_pos.z) - origin.z
     ) / dir;
 
+    vec3 t_max = t_max_1;
+
     uint hit_axis = 0;
 
-    while(length(world_pos) < 300.0) {
+    // // Allign With Multiple of 2
+    // while ((int(world_pos.x) & 1) == 1 &&
+    //        (int(world_pos.y) & 1) == 1 &&
+    //        (int(world_pos.z) & 1) == 1) {
+    //     take_step(step, t_delta, t_max, hit_axis, world_pos);
+    // }
+    
 
-        if (v_buf.voxels[uint(abs(world_pos.x))][uint(abs(world_pos.y))][uint(abs(world_pos.z))] == 1) {
+    t_delta *= 2.0;
+    step *= 2;  
+
+    vec3 temp = floor(world_pos / 2.0) * 2.0;
+    vec3 t_max_2 = vec3(
+        (step.x > 0 ? temp.x + 2.0 : temp.x) - origin.x,
+        (step.y > 0 ? temp.y + 2.0 : temp.y) - origin.y,
+        (step.z > 0 ? temp.z + 2.0 : temp.z) - origin.z
+    ) / dir;
+
+    t_max = t_max_2;
+    uint steps = 0;
+
+    while(steps < 32) {
+
+        if ((int(world_pos.x) & 8) == 0 && 
+            (int(world_pos.y) & 8) == 0 && 
+            (int(world_pos.z) & 8) == 0) {
 
             vec3 normal;
 
@@ -75,29 +125,53 @@ void main() {
             imageStore(storageImage, pixel_coords, output_colour);
             return;
         }
-        
-        if(t_max.x < t_max.y) {
-            if(t_max.x < t_max.z) {
-                world_pos.x += step.x;
-                t_max.x += t_delta.x;
-                hit_axis = 0;
-            } else {
-                world_pos.z += step.z;
-                t_max.z += t_delta.z;
-                hit_axis = 2;
-            }
-        } 
-        else {
-            if(t_max.y < t_max.z) {
-                world_pos.y += step.y;
-                t_max.y += t_delta.y;
-                hit_axis = 1;
-            } else {
-                world_pos.z += step.z;
-                t_max.z += t_delta.z;
-                hit_axis = 2;
-            }
+        steps += 1;
+        take_step(step, t_delta, t_max, hit_axis, world_pos);
+    }
+
+    steps = 0;
+
+    // t_delta *= 2.0;
+    // step *= 2;  
+
+    // temp = floor(world_pos / 4.0) * 4.0;
+
+    // t_max = vec3(
+    //     (step.x > 0 ? temp.x + 4.0 : temp.x) - origin.x,
+    //     (step.y > 0 ? temp.y + 4.0 : temp.y) - origin.y,
+    //     (step.z > 0 ? temp.z + 4.0 : temp.z) - origin.z
+    // ) / dir;
+
+    t_delta /= 2.0;
+    step /= 2;  
+
+    // t_max = vec3(
+    //     (step.x > 0 ?  world_pos.x + 1.0 : world_pos.x) - origin.x,
+    //     (step.y > 0 ?  world_pos.y + 1.0 : world_pos.y) - origin.y,
+    //     (step.z > 0 ?  world_pos.z + 1.0 : world_pos.z) - origin.z
+    // ) / dir;
+
+    t_max = t_max_1 + (t_max - t_max_2);
+
+
+    while(steps < 32) {
+
+        if ((int(world_pos.x) & 8) == 0 && 
+            (int(world_pos.y) & 8) == 0 && 
+            (int(world_pos.z) & 8) == 0) {
+
+            vec3 normal;
+
+            if(hit_axis == 0) normal = vec3(-step.x, 0.0, 0.0);
+            else if(hit_axis == 1) normal = vec3(0.0, -step.y, 0.0);
+            else normal = vec3(0.0, 0.0, -step.z);
+
+            output_colour = vec4((normal + vec3(1.0)) * 0.5, 1.0);
+            imageStore(storageImage, pixel_coords, output_colour);
+            return;
         }
+        steps += 1;
+        take_step(step, t_delta, t_max, hit_axis, world_pos);
     }
     
 
