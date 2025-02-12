@@ -97,7 +97,6 @@ impl Div<f64> for Vec3 {
     }
 }
 
-
 impl Vec3 {
     pub fn new() -> Self {
         Vec3 { x: 0.0, y: 0.0, z: 0.0 }

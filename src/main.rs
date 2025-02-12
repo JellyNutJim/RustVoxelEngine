@@ -46,6 +46,7 @@ use winit::{
 
 mod asset_load;
 mod types;
+mod world;
 
 use types::Vec3;
 
@@ -217,17 +218,19 @@ impl App {
 
         let mut voxel_data= vec![0; chunk_size * chunk_count];
 
-        voxel_data[1 * (32 * 32) + 1 * 32 + 10] = 1;
-        voxel_data[1 * (32 * 32) + 1 * 32 + 12] = 1;
-        voxel_data[1 * (32 * 32) + 1 * 32 + 14] = 1;
+        // voxel_data[1 * (32 * 32) + 1 * 32 + 10] = 1;
+        // voxel_data[1 * (32 * 32) + 1 * 32 + 12] = 1;
+        // voxel_data[1 * (32 * 32) + 1 * 32 + 14] = 1;
 
-        voxel_data[10 * (32 * 32) + 1 * 32 + 10] = 1;
-        voxel_data[10 * (32 * 32) + 2 * 32 + 12] = 1;
-        voxel_data[10 * (32 * 32) + 3 * 32 + 14] = 1;
+        // voxel_data[10 * (32 * 32) + 1 * 32 + 10] = 1;
+        // voxel_data[10 * (32 * 32) + 2 * 32 + 12] = 1;
+        // voxel_data[10 * (32 * 32) + 3 * 32 + 14] = 1;
 
-        voxel_data[10 * (32 * 32) + 3 * 32 + 16] = 1;
-        voxel_data[10 * (32 * 32) + 2 * 32 + 18] = 1;
-        voxel_data[10 * (32 * 32) + 1 * 32 + 20] = 1;
+        // voxel_data[10 * (32 * 32) + 3 * 32 + 16] = 1;
+        // voxel_data[10 * (32 * 32) + 2 * 32 + 18] = 1;
+        // voxel_data[10 * (32 * 32) + 1 * 32 + 20] = 1;
+
+        voxel_data[0 * (32 * 32) + 0 * 32 + 0] = 1;
 
 
         let voxel_buffer = Buffer::from_iter(
@@ -526,6 +529,8 @@ impl ApplicationHandler for App {
                 // Calculate camera buffer variables and set them to the buffer
                 let uniform_camera_subbuffer = {
                     let look_from = self.camera_location.location;
+                    println!("{:?}", look_from);
+
                     let look_distance = 1.0;
                     let look_at = self.camera_location.location + self.camera_location.direction * look_distance;
 
