@@ -14,7 +14,6 @@ use vulkano::descriptor_set::layout::DescriptorSetLayoutBinding;
 use std::{error::Error, sync::Arc, f64::consts::PI};
 
 
-
 use vulkano::{
     buffer::{Buffer, BufferContents, BufferCreateInfo, BufferUsage, Subbuffer},
     command_buffer::{
@@ -91,6 +90,7 @@ struct CameraBufferData {
     pixel00_loc: [f32; 4],
     pixel_delta_u: [f32; 4],
     pixel_delta_v: [f32; 4],
+    world_positions: [f32; 8],
 }
 
 struct CameraLocation {
@@ -555,12 +555,27 @@ impl ApplicationHandler for App {
                     let viewport_upper_left = look_from - (w * focal_length) - viewport_u/2.0 - viewport_v/2.0;
                     let pixel00_loc = viewport_upper_left + (pixel_delta_u + pixel_delta_v) * 0.5;
 
+                    let world_position_1 = Vec3 {
+                        x: look_from.x.floor(),
+                        y: look_from.y.floor(),
+                        z: look_from.z.floor(),
+                    };
+
+                    let world_position_2 = Vec3 {
+                        x: (world_position_1.x / 2.0).floor() * 2.0,
+                        y: (world_position_1.y / 2.0).floor() * 2.0,
+                        z: (world_position_1.z / 2.0).floor() * 2.0,
+                    };
 
                     let c: CameraBufferData = CameraBufferData {
                         origin: [look_from.x as f32, look_from.y as f32, look_from.z as f32, 1.0],
                         pixel00_loc: [ pixel00_loc.x as f32, pixel00_loc.y as f32, pixel00_loc.z as f32, 1.0],
                         pixel_delta_u:[pixel_delta_u.x as f32, pixel_delta_u.y as f32, pixel_delta_u.z as f32, 1.0],
                         pixel_delta_v: [pixel_delta_v.x as f32, pixel_delta_v.y as f32, pixel_delta_v.z as f32, 1.0],
+                        world_positions: [
+                            world_position_1.x as f32, world_position_1.y as f32, world_position_1.z as f32, 1.0, 
+                            world_position_2.x as f32, world_position_2.y as f32, world_position_2.z as f32, 1.0,          
+                        ]
                     };
                     
 

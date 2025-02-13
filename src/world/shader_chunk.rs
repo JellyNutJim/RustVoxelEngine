@@ -134,21 +134,7 @@ impl ShaderChunk {
         panic!("No Voxel or subchunk could be found");
     }
 
-    // Format
-    // build one branch of the octree at a time
-    // From ground up
-
-    // Recursive
-    // Get octant,
-    // Check if its a leaf
-    // If it is, mark as such, and provide voxel_type [0, 0, 23]
-    // Else,
-
-
-    // [index1, index2, index3, index4, octal1, octal2, octal3, octal4]
-
-
-    // Convert 
+    // Convert entire octree to flat u32 vector
     pub fn flatten(&self) -> ([i32; 3], Vec<u32>){
         // Check if chunk has no depth
         if let ChunkContent::Leaf(voxel_data) = self.data {

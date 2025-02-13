@@ -7,6 +7,8 @@ layout(set = 0, binding = 0) uniform camera_subbuffer {
     vec3 pixel00_loc;
     vec3 pixel_delta_u;
     vec3 pixel_delta_v;
+    vec3 world_pos_1;
+    vec3 world_pos_2;
 } c;
 
 
@@ -68,7 +70,8 @@ void main() {
 
     //imageStore(storageImage, pixel_coords, vec4(dir,1.0));
 
-    vec3 world_pos = floor(origin);
+    //vec3 world_pos = floor(origin);
+    vec3 world_pos = c.world_pos_1;
 
     vec3 t_delta = abs(vec3(1.0) / dir);
 
@@ -86,20 +89,10 @@ void main() {
 
     vec3 t_max = t_max_1;
 
-    uint hit_axis = 0;
-
-    // // Allign With Multiple of 2
-    // while ((int(world_pos.x) & 1) == 1 &&
-    //        (int(world_pos.y) & 1) == 1 &&
-    //        (int(world_pos.z) & 1) == 1) {
-    //     take_step(step, t_delta, t_max, hit_axis, world_pos);
-    // }
-    
-
     t_delta *= 2.0;
     step *= 2;  
 
-    vec3 temp = floor(world_pos / 2.0) * 2.0;
+    vec3 temp = c.world_pos_2;
     vec3 t_max_2 = vec3(
         (step.x > 0 ? temp.x + 2.0 : temp.x) - origin.x,
         (step.y > 0 ? temp.y + 2.0 : temp.y) - origin.y,
@@ -109,6 +102,7 @@ void main() {
     t_max = t_max_2;
     uint steps = 0;
 
+    uint hit_axis = 0;
     while(steps < 32) {
 
         if ((int(world_pos.x) & 8) == 0 && 
@@ -134,24 +128,10 @@ void main() {
     // t_delta *= 2.0;
     // step *= 2;  
 
-    // temp = floor(world_pos / 4.0) * 4.0;
+    //t_delta /= 2.0;
+    //step /= 2;  
 
-    // t_max = vec3(
-    //     (step.x > 0 ? temp.x + 4.0 : temp.x) - origin.x,
-    //     (step.y > 0 ? temp.y + 4.0 : temp.y) - origin.y,
-    //     (step.z > 0 ? temp.z + 4.0 : temp.z) - origin.z
-    // ) / dir;
-
-    t_delta /= 2.0;
-    step /= 2;  
-
-    // t_max = vec3(
-    //     (step.x > 0 ?  world_pos.x + 1.0 : world_pos.x) - origin.x,
-    //     (step.y > 0 ?  world_pos.y + 1.0 : world_pos.y) - origin.y,
-    //     (step.z > 0 ?  world_pos.z + 1.0 : world_pos.z) - origin.z
-    // ) / dir;
-
-    t_max = t_max_1 + (t_max - t_max_2);
+    //t_max = t_max_1 + (t_max - t_max_2);
 
 
     while(steps < 32) {
