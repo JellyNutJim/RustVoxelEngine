@@ -13,7 +13,7 @@ pub struct ShaderGrid {
 impl ShaderGrid {
     
     // Finds the smallest chunk origin, sets that as the grid origin
-    fn get_origin(chunk_positions: &Vec<([i32; 3], u32)>) -> [i32; 3]{
+    pub fn get_origin(chunk_positions: &Vec<([i32; 3], u32)>) -> [i32; 3]{
         let mut origin = [0, 0, 0];
         let mut curr_min = MAX;
 
@@ -29,7 +29,7 @@ impl ShaderGrid {
     }
     
     // Assumes position is within the bounds of the grid
-    fn get_chunk_pos(&self, pos: &[i32; 3]) -> [u32; 3] {
+    pub fn get_chunk_pos(&self, pos: &[i32; 3]) -> [u32; 3] {
         [
             (pos[0] / 64 - self.origin[0]) as u32, 
             (pos[1] / 64 - self.origin[1]) as u32, 
@@ -37,9 +37,9 @@ impl ShaderGrid {
         ]
     }
 
-    fn new(width: u32, chunk_positions: &Vec<([i32; 3], u32)> ) -> Self {
+    pub fn new(width: u32, chunk_positions: &Vec<([i32; 3], u32)> ) -> Self {
         let origin = Self::get_origin(chunk_positions);
-        let grid = vec![];
+        let grid = vec![0; (width*width*width) as usize];
 
         let mut s = Self {
             origin,
@@ -48,14 +48,14 @@ impl ShaderGrid {
 
         for (pos, i) in chunk_positions {
             let chunk_pos = s.get_chunk_pos(pos);
-            let index = chunk_pos[0] + chunk_pos[1] + chunk_pos[2];
-            s.grid.insert(index as usize, *i); 
+            let index: u32 = chunk_pos[0] + chunk_pos[1] * width + chunk_pos[2] * width * width;
+            s.grid[index as usize] = *i; 
         }
 
         s
     }
 
-    fn from(chunks: &Vec<ShaderChunk>) -> (Self, Vec<u32>) {
+    pub fn from(chunks: &Vec<ShaderChunk>) -> (Self, Vec<u32>) {
         let mut pos_ind: Vec<([i32; 3], u32)> = Vec::new();
         let mut flat_data: Vec<u32> = Vec::new();
         let mut curr_index = 0;
@@ -71,4 +71,18 @@ impl ShaderGrid {
 
         (ShaderGrid::new(2, &pos_ind), flat_data)
     }
+
+    pub fn flatten(self) -> Vec<i32> {
+        let total_size = 3 + self.grid.len();
+        let mut flattened = Vec::with_capacity(total_size);
+
+        // Add origin values first
+        flattened.extend_from_slice(&self.origin);
+
+        // Add grid values (converting u32 to i32)
+        flattened.extend(self.grid.iter().map(|&x| x as i32));
+
+        flattened
+    }
 }
+

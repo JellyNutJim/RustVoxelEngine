@@ -26,7 +26,8 @@ struct OctantsData([ChunkContent; 8]);
 // 1 = 16
 // 2 = 8
 // 3 = 4
-// 4 = 2 aka Voxels!!!
+// 4 = 2 
+// 5 = 1 aka voxels!
 
 // Octants follow this format -> layer = y, up = x, right = z,
 // layer 1: 1 3
@@ -40,6 +41,13 @@ impl ShaderChunk {
         Self {
             pos,
             data: ChunkContent::Leaf(VoxelData(0)),
+        }
+    }
+
+    pub fn new_with_type(pos: [i32; 3], data: u32) -> Self {
+        Self {
+            pos,
+            data: ChunkContent::Leaf(VoxelData(data)),
         }
     }
     
@@ -80,13 +88,13 @@ impl ShaderChunk {
 
     // Insert a single voxel at the given position2 -> Voxels are just leaf nodes at a depth 4
     pub fn insert_voxel(&mut self, pos: [u32; 3], voxel_type: u32) {
-        self.insert_subchunk(pos, 4, voxel_type);
+        self.insert_subchunk(pos, 5, voxel_type);
     }
 
     // Create a subchunk of a specific type at a specific depth
     pub fn insert_subchunk(&mut self, pos: [u32; 3], depth: u32, voxel_type: u32) {
         #[cfg(debug_assertions)]
-        if depth > 5 { panic!("Depth out of range") }
+        if depth > 6 { panic!("Depth out of range") }
 
         let mut current = &mut self.data;       
 

@@ -47,6 +47,8 @@ mod asset_load;
 mod types;
 mod world;
 
+use world::{get_world, ShaderChunk, ShaderGrid};
+
 use types::Vec3;
 
 fn main() -> Result<(), impl Error> {
@@ -65,6 +67,7 @@ struct App {
     descriptor_set_allocator: Arc<StandardDescriptorSetAllocator>,
 
     voxel_buffer: Subbuffer<[u32]>,
+    world_meta_data_buffer: Subbuffer<[i32]>,
     camera_buffer: SubbufferAllocator,
 
     rcx: Option<RenderContext>, 
@@ -90,7 +93,7 @@ struct CameraBufferData {
     pixel00_loc: [f32; 4],
     pixel_delta_u: [f32; 4],
     pixel_delta_v: [f32; 4],
-    world_positions: [f32; 8],
+    world_positions: [f32; 28],
 }
 
 struct CameraLocation {
@@ -145,7 +148,7 @@ impl App {
                     .enumerate()
                     .position(|(_i, q)| {
 
-                        q.queue_flags.intersects(QueueFlags::GRAPHICS)
+                        q.queue_flags.intersects(QueueFlags::COMPUTE)
                             
                     })
                     .map(|i| (p, i as u32))
@@ -212,25 +215,14 @@ impl App {
             Default::default(),
         ));
 
-        // Set up buffers
-        let chunk_count = 1;
-        let chunk_size = 32 * 32 * 32;
 
-        let mut voxel_data= vec![0; chunk_size * chunk_count];
+        let world = get_world();
 
-        // voxel_data[1 * (32 * 32) + 1 * 32 + 10] = 1;
-        // voxel_data[1 * (32 * 32) + 1 * 32 + 12] = 1;
-        // voxel_data[1 * (32 * 32) + 1 * 32 + 14] = 1;
+        println!("{:?}", world.0);
+        println!("{:?}", world.0.clone().flatten());
+        println!("{:?}", world.1[0]);
+        println!("{:?}", world.1);
 
-        // voxel_data[10 * (32 * 32) + 1 * 32 + 10] = 1;
-        // voxel_data[10 * (32 * 32) + 2 * 32 + 12] = 1;
-        // voxel_data[10 * (32 * 32) + 3 * 32 + 14] = 1;
-
-        // voxel_data[10 * (32 * 32) + 3 * 32 + 16] = 1;
-        // voxel_data[10 * (32 * 32) + 2 * 32 + 18] = 1;
-        // voxel_data[10 * (32 * 32) + 1 * 32 + 20] = 1;
-
-        voxel_data[0 * (32 * 32) + 0 * 32 + 0] = 1;
 
 
         let voxel_buffer = Buffer::from_iter(
@@ -244,7 +236,24 @@ impl App {
                     | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
                 ..Default::default()
             },
-            voxel_data,
+            world.1,
+        )
+        .expect("failed to create buffer");
+
+        //println!("{:?}", world.0.flatten());
+
+        let world_meta_data_buffer = Buffer::from_iter(
+            memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::STORAGE_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            },
+            world.0.flatten(),
         )
         .expect("failed to create buffer");
     
@@ -278,6 +287,7 @@ impl App {
             command_buffer_allocator,
             descriptor_set_allocator,
             voxel_buffer,
+            world_meta_data_buffer,
             camera_buffer,
             rcx,
             camera_location
@@ -387,6 +397,15 @@ impl ApplicationHandler for App {
                     DescriptorSetLayoutBinding {
                         stages: ShaderStages::COMPUTE,
                         ..DescriptorSetLayoutBinding::descriptor_type(
+                            DescriptorType::StorageBuffer,
+                        )
+                    }
+                ),
+                (
+                    3,
+                    DescriptorSetLayoutBinding {
+                        stages: ShaderStages::COMPUTE,
+                        ..DescriptorSetLayoutBinding::descriptor_type(
                             DescriptorType::StorageImage,
                         )
                     }
@@ -461,11 +480,15 @@ impl ApplicationHandler for App {
             #[allow(unused_variables)]
             WindowEvent::KeyboardInput { device_id, event, is_synthetic } => {
                 // Simple movement
+
+                let dis = Vec3::from(0.25, 0.25, 0.25);
+                let up = Vec3::from(0.0, 1.0, 0.0);
+
                 match event.physical_key {
-                    PhysicalKey::Code(KeyCode::KeyW) => { self.camera_location.location = self.camera_location.location + self.camera_location.direction * Vec3 {x: 0.1, y: 0.1, z: 0.1} }
-                    PhysicalKey::Code(KeyCode::KeyS) => { self.camera_location.location = self.camera_location.location - self.camera_location.direction * Vec3 {x: 0.1, y: 0.1, z: 0.1} }
-                    PhysicalKey::Code(KeyCode::KeyA) => { self.camera_location.location.x -= 0.2 }
-                    PhysicalKey::Code(KeyCode::KeyD) => { self.camera_location.location.x += 0.2 }
+                    PhysicalKey::Code(KeyCode::KeyW) => { self.camera_location.location = self.camera_location.location + self.camera_location.direction * dis }
+                    PhysicalKey::Code(KeyCode::KeyS) => { self.camera_location.location = self.camera_location.location - self.camera_location.direction * dis }
+                    PhysicalKey::Code(KeyCode::KeyA) => { self.camera_location.location = self.camera_location.location - (self.camera_location.direction.cross(up)) * dis  }
+                    PhysicalKey::Code(KeyCode::KeyD) => { self.camera_location.location = self.camera_location.location + (self.camera_location.direction.cross(up)) * dis }
                     PhysicalKey::Code(KeyCode::Escape) => { std::process::exit(0) }
                     _ =>  { print!("Non-Assigned Key")}
                 }
@@ -529,7 +552,7 @@ impl ApplicationHandler for App {
                 // Calculate camera buffer variables and set them to the buffer
                 let uniform_camera_subbuffer = {
                     let look_from = self.camera_location.location;
-                    println!("{:?}", look_from);
+                    //println!("{:?}", look_from);
 
                     let look_distance = 1.0;
                     let look_at = self.camera_location.location + self.camera_location.direction * look_distance;
@@ -555,6 +578,8 @@ impl ApplicationHandler for App {
                     let viewport_upper_left = look_from - (w * focal_length) - viewport_u/2.0 - viewport_v/2.0;
                     let pixel00_loc = viewport_upper_left + (pixel_delta_u + pixel_delta_v) * 0.5;
 
+
+                    // Caculate world positions at different scales
                     let world_position_1 = Vec3 {
                         x: look_from.x.floor(),
                         y: look_from.y.floor(),
@@ -567,6 +592,38 @@ impl ApplicationHandler for App {
                         z: (world_position_1.z / 2.0).floor() * 2.0,
                     };
 
+                    let world_position_4 = Vec3 {
+                        x: (world_position_2.x / 4.0).floor() * 4.0,
+                        y: (world_position_2.y / 4.0).floor() * 4.0,
+                        z: (world_position_2.z / 4.0).floor() * 4.0,
+                    };
+
+                    let world_position_8 = Vec3 {
+                        x: (world_position_4.x / 8.0).floor() * 8.0,
+                        y: (world_position_4.y / 8.0).floor() * 8.0,
+                        z: (world_position_4.z / 8.0).floor() * 8.0,
+                    };
+
+                    let world_position_16 = Vec3 {
+                        x: (world_position_8.x / 16.0).floor() * 16.0,
+                        y: (world_position_8.y / 16.0).floor() * 16.0,
+                        z: (world_position_8.z / 16.0).floor() * 16.0,
+                    };
+
+                    let world_position_32 = Vec3 {
+                        x: (world_position_16.x / 32.0).floor() * 32.0,
+                        y: (world_position_16.y / 32.0).floor() * 32.0,
+                        z: (world_position_16.z / 32.0).floor() * 32.0,
+                    };
+
+                    let world_position_64 = Vec3 {
+                        x: (world_position_32.x / 64.0).floor() * 64.0,
+                        y: (world_position_32.y / 64.0).floor() * 64.0,
+                        z: (world_position_32.z / 64.0).floor() * 64.0,
+                    };
+
+                    //println!("{:?} {:?} {:?} {:?}", world_position_1, world_position_2, world_position_4 ,world_position_8);
+
                     let c: CameraBufferData = CameraBufferData {
                         origin: [look_from.x as f32, look_from.y as f32, look_from.z as f32, 1.0],
                         pixel00_loc: [ pixel00_loc.x as f32, pixel00_loc.y as f32, pixel00_loc.z as f32, 1.0],
@@ -574,9 +631,16 @@ impl ApplicationHandler for App {
                         pixel_delta_v: [pixel_delta_v.x as f32, pixel_delta_v.y as f32, pixel_delta_v.z as f32, 1.0],
                         world_positions: [
                             world_position_1.x as f32, world_position_1.y as f32, world_position_1.z as f32, 1.0, 
-                            world_position_2.x as f32, world_position_2.y as f32, world_position_2.z as f32, 1.0,          
+                            world_position_2.x as f32, world_position_2.y as f32, world_position_2.z as f32, 1.0,        
+                            world_position_4.x as f32, world_position_4.y as f32, world_position_4.z as f32, 1.0,     
+                            world_position_8.x as f32, world_position_8.y as f32, world_position_8.z as f32, 1.0,     
+                            world_position_16.x as f32, world_position_16.y as f32, world_position_16.z as f32, 1.0,     
+                            world_position_32.x as f32, world_position_32.y as f32, world_position_32.z as f32, 1.0,     
+                            world_position_64.x as f32, world_position_64.y as f32, world_position_64.z as f32, 1.0,       
                         ]
                     };
+
+                    //println!("{:?}", look_from);
                     
 
                     let subbuffer = self.camera_buffer.allocate_sized().unwrap();
@@ -614,7 +678,8 @@ impl ApplicationHandler for App {
                     [
                         WriteDescriptorSet::buffer(0, uniform_camera_subbuffer), 
                         WriteDescriptorSet::buffer(1, self.voxel_buffer.clone()),
-                        WriteDescriptorSet::image_view(2, rcx.attachment_image_views[image_index as usize].clone()),
+                        WriteDescriptorSet::buffer(2, self.world_meta_data_buffer.clone()),
+                        WriteDescriptorSet::image_view(3, rcx.attachment_image_views[image_index as usize].clone()),
                     ],
                     [],
                 )
