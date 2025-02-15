@@ -1,19 +1,22 @@
 use std::i32::MAX;
 use crate::world::ShaderChunk;
 
+use super::chunk;
+
 // Holds data to be placed in the voxel buffer
 // Origin will always be smaller than the current position
 #[repr(C)]
 #[derive(Debug, Clone)]
 pub struct ShaderGrid {
     origin: [i32; 3],  // Origin of the current grid = the origin of the chunk with the lowest positional value 
-    grid: Vec<u32>, // Contains indexes relating to chunk memory location
+    width: u32,
+    chunks: Vec<ShaderChunk>
 }
 
 impl ShaderGrid {
     
     // Finds the smallest chunk origin, sets that as the grid origin
-    pub fn get_origin(chunk_positions: &Vec<([i32; 3], u32)>) -> [i32; 3]{
+    fn get_origin_from_flat(chunk_positions: &Vec<([i32; 3], u32)>) -> [i32; 3]{
         let mut origin = [0, 0, 0];
         let mut curr_min = MAX;
 
@@ -21,6 +24,22 @@ impl ShaderGrid {
             let min: i32 = pos.0.iter().sum();
             if min < curr_min {
                 origin = pos.0;
+                curr_min = min;
+            }
+        }
+
+        origin
+    }
+
+    // Finds the smallest chunk origin, and sets that to the grid origin
+    fn get_origin_from_chunks(shader_chunks: &Vec<ShaderChunk>) -> [i32; 3] {
+        let mut origin = [0, 0, 0];
+        let mut curr_min = MAX;
+
+        for chunk in shader_chunks {
+            let min: i32 = chunk.get_origin().iter().sum();
+            if min < curr_min {
+                origin = chunk.get_origin();
                 curr_min = min;
             }
         }
@@ -37,52 +56,65 @@ impl ShaderGrid {
         ]
     }
 
-    pub fn new(width: u32, chunk_positions: &Vec<([i32; 3], u32)> ) -> Self {
-        let origin = Self::get_origin(chunk_positions);
-        let grid = vec![0; (width*width*width) as usize];
-
+    // Create grid with given origin and size
+    pub fn new(width: u32, origin: [i32; 3], ) -> Self {
         let mut s = Self {
-            origin,
-            grid
+            origin: origin,
+            width: width,
+            chunks: Vec::new(),
         };
 
-        for (pos, i) in chunk_positions {
-            let chunk_pos = s.get_chunk_pos(pos);
-            let index: u32 = chunk_pos[0] + chunk_pos[1] * width + chunk_pos[2] * width * width;
-            s.grid[index as usize] = *i; 
+        let width = width as i32;
+
+        // Fill grid with empty chunks
+        for x in 0..width {
+            for y in 0..width {
+                for z in 0..width {
+                    s.chunks.push(ShaderChunk::new([(64 * x) + origin[0], (64 * y) + origin[1], (64 * z) + origin[2]]));
+                }
+            }
         }
 
         s
     }
 
-    pub fn from(chunks: &Vec<ShaderChunk>) -> (Self, Vec<u32>) {
-        let mut pos_ind: Vec<([i32; 3], u32)> = Vec::new();
-        let mut flat_data: Vec<u32> = Vec::new();
-        let mut curr_index = 0;
+    // Create grid with existing chunks and width
+    pub fn from(chunks: Vec<ShaderChunk>, width: u32) -> Self {
+        #[cfg(debug_assertions)]
+        if chunks.len() > width.pow(3) as usize { panic!("Chunk depth out of range") }
 
-        // Convert to function in grid
-        for chunk in chunks {
-            let mut flat = chunk.flatten();
-            pos_ind.push((flat.0, curr_index));
-
-            curr_index += flat.1.len() as u32;
-            flat_data.append(&mut flat.1);
+        Self {
+            origin: Self::get_origin_from_chunks(&chunks),
+            width: width,
+            chunks: chunks,
         }
-
-        (ShaderGrid::new(2, &pos_ind), flat_data)
     }
 
-    pub fn flatten(self) -> Vec<i32> {
-        let total_size = 3 + self.grid.len();
-        let mut flattened = Vec::with_capacity(total_size);
+    pub fn flatten(&self) -> (Vec<i32>, Vec<u32>) {
+        let mut flat_chunks: Vec<u32> = Vec::new();
+        let mut flat_grid: Vec<i32> = vec![0; (self.width.pow(3)) as usize];
 
-        // Add origin values first
-        flattened.extend_from_slice(&self.origin);
+        // Accumulated index
+        let mut curr_index: i32 = 0;
 
-        // Add grid values (converting u32 to i32)
-        flattened.extend(self.grid.iter().map(|&x| x as i32));
+        // Convert to function in grid
+        for chunk in &self.chunks {
+            let mut flat = chunk.flatten();
+            let chunk_pos = self.get_chunk_pos(&flat.0);
 
-        flattened
+            let grid_index = chunk_pos[0] + chunk_pos[1] * self.width + chunk_pos[2] * self.width * self.width;
+
+            flat_grid[grid_index as usize] = curr_index; 
+
+            curr_index += flat.1.len() as i32;
+            flat_chunks.append(&mut flat.1);
+        }
+
+        // Add origin to the flat grid
+        flat_grid.splice(0..0, Vec::from(self.origin));
+       
+
+        (flat_grid, flat_chunks)
     }
 }
 

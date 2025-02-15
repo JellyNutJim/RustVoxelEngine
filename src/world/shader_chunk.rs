@@ -50,6 +50,10 @@ impl ShaderChunk {
             data: ChunkContent::Leaf(VoxelData(data)),
         }
     }
+
+    pub fn get_origin(&self) -> [i32; 3]{
+        self.pos
+    }
     
     // Convert position to be local to the current chunk
     pub fn local_pos_from_vec(self, point: [i32; 3]) -> [u32; 3] {

@@ -47,7 +47,7 @@ mod asset_load;
 mod types;
 mod world;
 
-use world::{get_world, ShaderChunk, ShaderGrid};
+use world::{get_flat_world, ShaderChunk, ShaderGrid};
 
 use types::Vec3;
 
@@ -216,14 +216,7 @@ impl App {
         ));
 
 
-        let world = get_world();
-
-        println!("{:?}", world.0);
-        println!("{:?}", world.0.clone().flatten());
-        println!("{:?}", world.1[0]);
-        println!("{:?}", world.1);
-
-
+        let world = get_flat_world();
 
         let voxel_buffer = Buffer::from_iter(
             memory_allocator.clone(),
@@ -253,7 +246,7 @@ impl App {
                     | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
                 ..Default::default()
             },
-            world.0.flatten(),
+            world.0,
         )
         .expect("failed to create buffer");
     
@@ -640,7 +633,7 @@ impl ApplicationHandler for App {
                         ]
                     };
 
-                    //println!("{:?}", look_from);
+                    println!("{:?}", look_from);
                     
 
                     let subbuffer = self.camera_buffer.allocate_sized().unwrap();

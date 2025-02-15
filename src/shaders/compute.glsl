@@ -30,21 +30,6 @@ layout(set = 0, binding = 2) buffer WorldBuffer {
 
 layout(set = 0, binding = 3, rgba8) uniform image2D storageImage;
 
-// Input must be 64 chunk based -> CURRENTLY ASSUME CHUNK WIDTH OF 2
-int get_current_chunk_index(vec3 curr_pos) {
-    ivec3 t = (ivec3(curr_pos) / 64) - w_buf.origin;
-
-    if (any(greaterThan(t, vec3(1)))) {
-        return 100;
-    }
-
-    if (any(lessThan(t, vec3(0)))) {
-        return 100;
-    }
-
-    return t.x + t.y * 2 + t.z * 4;
-}
-
 uint get_octant(vec3 pos, uint mid) {
     uint octant = 0;
     if (pos.x > mid) {
@@ -64,7 +49,7 @@ uint get_octant(vec3 pos, uint mid) {
 
 
 
-uint get_depth(vec3 pos) {
+uint get_depth(vec3 pos, inout int multiplier) {
     if (pos.x < 0 || pos.y < 0 || pos.z < 0) {
         return 100;
     }
@@ -86,54 +71,86 @@ uint get_depth(vec3 pos) {
     index = w_buf.chunks[index];
 
     if (v_buf.voxels[index] == 0) {
-        return 0;
+        multiplier =  64;
+        return v_buf.voxels[index + 1];
     }
 
     uint octant = get_octant(mod(local_pos, 64), 31);
     index = index + v_buf.voxels[index + octant + 1];
 
     if (v_buf.voxels[index] == 0) {
-        return 1;
+       multiplier = 32;
+        return v_buf.voxels[index + 1];
     }
 
     octant = get_octant(mod(local_pos, 32), 15);
     index = index + v_buf.voxels[index + octant + 1];
 
     if (v_buf.voxels[index] == 0) {
-        return 2;
+        multiplier = 16;
+        return v_buf.voxels[index + 1];
     }
 
     octant = get_octant(mod(local_pos, 16), 7);
     index = index + v_buf.voxels[index + octant + 1];
 
     if (v_buf.voxels[index] == 0) {
-        return 3;
+        multiplier =  8;
+        return v_buf.voxels[index + 1];
     }
 
     octant = get_octant(mod(local_pos, 8), 3);
     index = index + v_buf.voxels[index + octant + 1];
 
     if (v_buf.voxels[index] == 0) {
-        return 4;
+        multiplier = 4;
+        return v_buf.voxels[index + 1];
     }
 
     octant = get_octant(mod(local_pos, 4), 1);
     index = index + v_buf.voxels[index + octant + 1];
 
     if (v_buf.voxels[index] == 0) {
-        return 5;
+        multiplier = 2;
+        return v_buf.voxels[index + 1];
     }
 
     octant = get_octant(mod(local_pos, 2), 0);
     index = index + v_buf.voxels[index + octant + 1];
 
-    if (v_buf.voxels[index + 1] == 1) {
-        return 7;
-    }
-    return 6;
+    multiplier = 1;
+    return v_buf.voxels[index + 1];
 }
 
-void take_step(ivec3 step, vec3 t_delta, inout vec3 t_max, inout uint hit_axis, inout vec3 world_pos) {
+void take_step(ivec3 step, vec3 t_delta, inout vec3 t_max, inout uint hit_axis, inout vec3 world_pos, int multiplier, vec3 dir) {
+
+    if (multiplier > 1) {
+        float minT = 1e10;
+        vec3 origin = world_pos;
+
+        for (int i = 0; i < 3; i++) {
+            if (dir[i] != 0.0) {
+                float nextBoundary = dir[i] > 0.0 ? 
+                    multiplier * (floor(origin[i] / multiplier) + 1.0) : 
+                    multiplier * floor(origin[i] / multiplier);
+                
+                float t = (nextBoundary - origin[i]) / dir[i];
+                if (t > 0.0 && t < minT) {
+                    minT = t;
+                }
+            }
+        }
+        
+        // Get position just before intersection
+        vec3 pos = origin + dir * (minT - 0.001);
+        vec3 temp = ivec3(floor(pos));
+
+        t_max += (temp - world_pos) * t_delta;
+        world_pos = temp;
+    }
+
+
+
     if(t_max.x < t_max.y) {
         if(t_max.x < t_max.z) {
             world_pos.x += step.x;
@@ -156,6 +173,7 @@ void take_step(ivec3 step, vec3 t_delta, inout vec3 t_max, inout uint hit_axis, 
             hit_axis = 2;
         }
     }
+    
 }
 
 vec4 get_colour(uint hit_axis, ivec3 step) {
@@ -214,49 +232,47 @@ void main() {
 
     t_max /= dir;
 
-
     uint steps = 0;
     uint hit_axis = 0;
 
     steps = 0;
 
+    int multiplier;
+
     while (steps < 300) {
-        if (world_pos.x > 0 && world_pos.y > 0 && world_pos.z > 0) {
-            steps += 1;
-            take_step(step, t_delta, t_max, hit_axis, world_pos);
-            continue;
-        }
-
-        //uint c_pos = get_current_chunk_index(world_pos_64);
-
-        //if (c_pos > 7) { break; }
-
-        //c_pos = w_buf.chunks[c_pos];
-
         // Go through chunks
         // Check if current chunk has octants
 
-        uint current_depth = get_depth(world_pos);
-        if (current_depth < 0) {
-            break;
+        uint current_depth = get_depth(world_pos, multiplier);
+
+        if (current_depth == 100) { // Empty space or out of bounds
+            multiplier = 1;
+            steps += 1;
+            take_step(step, t_delta, t_max, hit_axis, world_pos, multiplier, dir);
+            continue;
         }
 
-        if (current_depth == 0) {
+        // if (current_depth == 0) {
+        //     imageStore(storageImage, pixel_coords, get_colour(hit_axis, step));
+        //     return;
+        // }
+        // if (current_depth >= 1 && current_depth <= 7) {
+        //     vec3 depth_color = mix(
+        //         vec3(0.071, 0.173, 0.365),  // Dark blue
+        //         vec3(0.937, 0.235, 0.251),  // Coral red
+        //         float(current_depth) / 7.0
+        //     );
+        //     imageStore(storageImage, pixel_coords, vec4(depth_color, 1.0));
+        //     return;
+        // }
+
+        if (current_depth == 1) {
             imageStore(storageImage, pixel_coords, get_colour(hit_axis, step));
-            return;
-        }
-        if (current_depth >= 1 && current_depth <= 7) {
-            vec3 depth_color = mix(
-                vec3(0.071, 0.173, 0.365),  // Dark blue
-                vec3(0.937, 0.235, 0.251),  // Coral red
-                float(current_depth) / 7.0
-            );
-            imageStore(storageImage, pixel_coords, vec4(depth_color, 1.0));
             return;
         }
 
         steps += 1;
-        take_step(step, t_delta, t_max, hit_axis, world_pos);
+        take_step(step, t_delta, t_max, hit_axis, world_pos, multiplier, dir);
     }
 
 
