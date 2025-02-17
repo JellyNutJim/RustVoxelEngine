@@ -10,6 +10,7 @@ use super::chunk;
 pub struct ShaderGrid {
     origin: [i32; 3],  // Origin of the current grid = the origin of the chunk with the lowest positional value 
     width: u32,
+    grid: Vec<u32>,
     chunks: Vec<ShaderChunk>
 }
 
@@ -31,6 +32,28 @@ impl ShaderGrid {
         origin
     }
 
+    pub fn insert_voxel(&mut self, pos: [i32; 3], voxel_type: u32) {
+        // Round to lower chunk bound
+        let chunk_pos = [
+            (pos[0] / 64) * 64,
+            (pos[1] / 64) * 64,
+            (pos[2] / 64) * 64,
+        ];
+
+        let chunk_pos = self.get_chunk_pos(&chunk_pos);
+        let chunk_index = chunk_pos[0] + chunk_pos[1] * self.width + chunk_pos[2] * (self.width * self.width);
+        
+
+        let pos = [
+            (pos[0] % 64) as u32,
+            (pos[1] % 64) as u32,
+            (pos[2] % 64) as u32
+        ];
+
+
+        self.chunks[self.grid[chunk_index as usize] as usize].insert_voxel(pos, voxel_type);
+    }
+
     // Finds the smallest chunk origin, and sets that to the grid origin
     fn get_origin_from_chunks(shader_chunks: &Vec<ShaderChunk>) -> [i32; 3] {
         let mut origin = [0, 0, 0];
@@ -50,9 +73,9 @@ impl ShaderGrid {
     // Assumes position is within the bounds of the grid
     pub fn get_chunk_pos(&self, pos: &[i32; 3]) -> [u32; 3] {
         [
-            (pos[0] / 64 - self.origin[0]) as u32, 
-            (pos[1] / 64 - self.origin[1]) as u32, 
-            (pos[2] / 64 - self.origin[2]) as u32
+            (pos[0] / 64 - self.origin[0] / 64) as u32, 
+            (pos[1] / 64 - self.origin[1] / 64) as u32, 
+            (pos[2] / 64 - self.origin[2] / 64) as u32
         ]
     }
 
@@ -61,6 +84,7 @@ impl ShaderGrid {
         let mut s = Self {
             origin: origin,
             width: width,
+            grid: vec![0; (width.pow(3)) as usize],
             chunks: Vec::new(),
         };
 
@@ -75,6 +99,7 @@ impl ShaderGrid {
             }
         }
 
+        s.set_grid_from_chunks();
         s
     }
 
@@ -83,10 +108,29 @@ impl ShaderGrid {
         #[cfg(debug_assertions)]
         if chunks.len() > width.pow(3) as usize { panic!("Chunk depth out of range") }
 
-        Self {
+        let mut s = Self {
             origin: Self::get_origin_from_chunks(&chunks),
             width: width,
+            grid: vec![0; (width.pow(3)) as usize],
             chunks: chunks,
+        };
+
+        s.set_grid_from_chunks();
+        s
+    }
+
+    // Assumes grid has be predfined with the needed size
+    fn set_grid_from_chunks(&mut self) {
+
+        // Convert to function in grid
+        for (i, chunk) in self.chunks.iter().enumerate() {
+            let chunk_pos: [u32; 3] = self.get_chunk_pos(&chunk.get_origin());
+            //println!("{:?}", chunk_pos);
+            
+            let grid_index = chunk_pos[0] + chunk_pos[1] * self.width + chunk_pos[2] * self.width.pow(2);
+
+            self.grid[grid_index as usize] = i as u32; 
+
         }
     }
 

@@ -7,25 +7,18 @@ layout(set = 0, binding = 0) uniform camera_subbuffer {
     vec3 pixel00_loc;
     vec3 pixel_delta_u;
     vec3 pixel_delta_v;
-
     vec3 world_pos_1;
-    vec3 world_pos_2;
-    vec3 world_pos_4;
-    vec3 world_pos_8;
-    vec3 world_pos_16;
-    vec3 world_pos_32;
-    vec3 world_pos_64;
 } c;
 
 
 //  TEST IF 3D MATIX OF BIT SHIFTING IS FASTER FOR VOXEL CHECKING!
 layout(set = 0, binding = 1) buffer VoxelBuffer {
-    uint voxels[131];
+    uint voxels[409293];
 } v_buf;
 
 layout(set = 0, binding = 2) buffer WorldBuffer {
     ivec3 origin;
-    uint chunks[8];
+    uint chunks[27];
 } w_buf;
 
 layout(set = 0, binding = 3, rgba8) uniform image2D storageImage;
@@ -54,20 +47,22 @@ uint get_depth(vec3 pos, inout int multiplier) {
         return 100;
     }
 
-    ivec3 realtive_chunk_location = ivec3(floor((pos) / 64)) - w_buf.origin;
+    ivec3 realitive_chunk_location = ivec3(floor((pos) / 64)) - (w_buf.origin) / 64;
     ivec3 chunk_location = ivec3((floor((pos) / 64)) * 64);
 
-    if (any(greaterThan(realtive_chunk_location, vec3(1)))) {
+    int WIDTH = 10;
+
+    if (any(greaterThan(realitive_chunk_location, vec3(WIDTH - 1)))) {
         return 100;
     }
 
-    if (any(lessThan(realtive_chunk_location, vec3(0)))) {
+    if (any(lessThan(realitive_chunk_location, vec3(0)))) {
         return 100;
     }
 
     vec3 local_pos = mod(abs(pos), 64.0);
 
-    uint index = realtive_chunk_location.x + realtive_chunk_location.y * 2 + realtive_chunk_location.z * 4;
+    uint index = realitive_chunk_location.x + realitive_chunk_location.y * WIDTH + realitive_chunk_location.z * WIDTH * WIDTH;
     index = w_buf.chunks[index];
 
     if (v_buf.voxels[index] == 0) {
@@ -124,30 +119,43 @@ uint get_depth(vec3 pos, inout int multiplier) {
 
 void take_step(ivec3 step, vec3 t_delta, inout vec3 t_max, inout uint hit_axis, inout vec3 world_pos, int multiplier, vec3 dir) {
 
-    if (multiplier > 1) {
-        float minT = 1e10;
-        vec3 origin = world_pos;
+    // if (multiplier > 1) {
+    //     float minT = 1e10;
 
-        for (int i = 0; i < 3; i++) {
-            if (dir[i] != 0.0) {
-                float nextBoundary = dir[i] > 0.0 ? 
-                    multiplier * (floor(origin[i] / multiplier) + 1.0) : 
-                    multiplier * floor(origin[i] / multiplier);
-                
-                float t = (nextBoundary - origin[i]) / dir[i];
-                if (t > 0.0 && t < minT) {
-                    minT = t;
-                }
-            }
-        }
+    //     vec3 origin = world_pos + fract(c.origin);
+
+    //     // vec3 origin = c.origin;
+
+    //     origin = vec3(
+    //         (step.x > 0 ?  world_pos.x + fract(origin.x) : world_pos.x + (1 - fract(origin.x))),
+    //         (step.y > 0 ?  world_pos.y + fract(origin.y) : world_pos.y + (1 - fract(origin.y))),
+    //         (step.z > 0 ?  world_pos.z + fract(origin.z) : world_pos.z + (1 - fract(origin.z)))
+    //     );
         
-        // Get position just before intersection
-        vec3 pos = origin + dir * (minT - 0.001);
-        vec3 temp = ivec3(floor(pos));
 
-        t_max += (temp - world_pos) * t_delta;
-        world_pos = temp;
-    }
+        
+
+    //     for (int i = 0; i < 3; i++) {
+    //         if (dir[i] != 0.0) {
+    //             float nextBoundary = dir[i] > 0.0 ? 
+    //                 multiplier * (floor(origin[i] / multiplier) + 1.0) : 
+    //                 multiplier * floor(origin[i] / multiplier);
+                
+    //             float t = (nextBoundary - origin[i]) / dir[i];
+    //             if (t > 0.0 && t < minT) {
+    //                 minT = t;
+    //             }
+    //         }
+    //     }
+        
+    //     // Get position just before intersection
+    //     vec3 pos = origin + dir * (minT - 0.001);
+    //     vec3 temp = floor(pos);
+
+    
+    //     t_max += abs(temp - world_pos) * t_delta;
+    //     world_pos = temp;
+    // }
 
 
 
@@ -176,14 +184,34 @@ void take_step(ivec3 step, vec3 t_delta, inout vec3 t_max, inout uint hit_axis, 
     
 }
 
-vec4 get_colour(uint hit_axis, ivec3 step) {
+vec4 get_colour(uint hit_axis, ivec3 step, vec3 c) {
     vec3 normal;
 
     if(hit_axis == 0) normal = vec3(-step.x, 0.0, 0.0);
     else if(hit_axis == 1) normal = vec3(0.0, -step.y, 0.0);
     else normal = vec3(0.0, 0.0, -step.z);
 
-    return vec4((normal + vec3(1.0)) * 0.5, 1.0);
+    return vec4((normal + c) * 0.5, 1.0);
+}
+
+vec4 stone(uint hit_axis, ivec3 step) {
+    vec3 normal;
+
+    if(hit_axis == 0) normal = vec3(-step.x, 0.0, 0.0);
+    else if(hit_axis == 1) normal = vec3(0.0, -step.y, 0.0);
+    else normal = vec3(0.0, 0.0, -step.z);
+
+    return vec4((vec3(0.7, 0.71, 0.7) * 0.3 + normal * 0.1), 1.0);
+}
+
+vec4 grass(uint hit_axis, ivec3 step) {
+        vec3 normal;
+
+    if(hit_axis == 0) normal = vec3(0.0, 0.0, 0.0);
+    else if(hit_axis == 1) normal = vec3(0.0, -step.y, 0.0);
+    else normal = vec3(0.0, 0.0, 0.0);
+
+    return vec4((normal + vec3(0.0, 0.5, 0.1)) * 0.5, 1.0);
 }
 
 
@@ -239,7 +267,7 @@ void main() {
 
     int multiplier;
 
-    while (steps < 300) {
+    while (steps < 150) {
         // Go through chunks
         // Check if current chunk has octants
 
@@ -267,7 +295,12 @@ void main() {
         // }
 
         if (current_depth == 1) {
-            imageStore(storageImage, pixel_coords, get_colour(hit_axis, step));
+            imageStore(storageImage, pixel_coords, grass(hit_axis, step) );
+            return;
+        }
+
+        if (current_depth == 2) {
+            imageStore(storageImage, pixel_coords, stone(hit_axis, step));
             return;
         }
 
