@@ -43,24 +43,39 @@ uint get_octant(vec3 pos, uint mid) {
 
 
 uint get_depth(vec3 pos, inout int multiplier) {
-    if (pos.x < 0 || pos.y < 0 || pos.z < 0) {
+
+
+    //ivec3 rel = ivec3(floor((pos) / 64)) - (w_buf.origin) / 64;
+
+    ivec3 rel = ivec3(
+        ((pos.x - (int(pos.x) & 63)) / 64) - (w_buf.origin.x / 64),
+        ((pos.y - (int(pos.y) & 63)) / 64) - (w_buf.origin.y / 64),
+        ((pos.z - (int(pos.z) & 63)) / 64) - (w_buf.origin.z / 64)
+    );
+
+
+    // Currently defining here -> Will switch this out for buffer input
+    int WIDTH = 20;
+
+
+    // Chunk if chunk is within current grid bounds
+    if (any(greaterThan(rel, ivec3(WIDTH - 1)))) {
         return 100;
     }
 
-    ivec3 realitive_chunk_location = ivec3(floor((pos) / 64)) - (w_buf.origin) / 64;
-    ivec3 chunk_location = ivec3((floor((pos) / 64)) * 64);
-
-    int WIDTH = 10;
-
-    if (any(greaterThan(realitive_chunk_location, vec3(WIDTH - 1)))) {
+    if (any(lessThan(rel, ivec3(0)))) {
         return 100;
     }
 
-    if (any(lessThan(realitive_chunk_location, vec3(0)))) {
-        return 100;
-    }
+    uvec3 realitive_chunk_location = uvec3(rel);
 
-    vec3 local_pos = mod(abs(pos), 64.0);
+    // Voxel position in the current chunk
+    //vec3 voxel_pos = vec3(0.0);
+
+
+    vec3 local_pos = mod(mod(pos, 64.0) + vec3(64.0), 64.0);
+    //vec3 local_pos = mod(pos, 64.0);
+
 
     uint index = realitive_chunk_location.x + realitive_chunk_location.y * WIDTH + realitive_chunk_location.z * WIDTH * WIDTH;
     index = w_buf.chunks[index];
@@ -119,43 +134,43 @@ uint get_depth(vec3 pos, inout int multiplier) {
 
 void take_step(ivec3 step, vec3 t_delta, inout vec3 t_max, inout uint hit_axis, inout vec3 world_pos, int multiplier, vec3 dir) {
 
-    // if (multiplier > 1) {
-    //     float minT = 1e10;
+    if (multiplier > 1) {
+        float minT = 1e10;
 
-    //     vec3 origin = world_pos + fract(c.origin);
+        vec3 origin = world_pos + fract(c.origin);
 
-    //     // vec3 origin = c.origin;
+        // vec3 origin = c.origin;
 
-    //     origin = vec3(
-    //         (step.x > 0 ?  world_pos.x + fract(origin.x) : world_pos.x + (1 - fract(origin.x))),
-    //         (step.y > 0 ?  world_pos.y + fract(origin.y) : world_pos.y + (1 - fract(origin.y))),
-    //         (step.z > 0 ?  world_pos.z + fract(origin.z) : world_pos.z + (1 - fract(origin.z)))
-    //     );
+        origin = vec3(
+            (step.x > 0 ?  world_pos.x + fract(origin.x) : world_pos.x + (1 - fract(origin.x))),
+            (step.y > 0 ?  world_pos.y + fract(origin.y) : world_pos.y + (1 - fract(origin.y))),
+            (step.z > 0 ?  world_pos.z + fract(origin.z) : world_pos.z + (1 - fract(origin.z)))
+        );
         
 
         
 
-    //     for (int i = 0; i < 3; i++) {
-    //         if (dir[i] != 0.0) {
-    //             float nextBoundary = dir[i] > 0.0 ? 
-    //                 multiplier * (floor(origin[i] / multiplier) + 1.0) : 
-    //                 multiplier * floor(origin[i] / multiplier);
+        for (int i = 0; i < 3; i++) {
+            if (dir[i] != 0.0) {
+                float nextBoundary = dir[i] > 0.0 ? 
+                    multiplier * (floor(origin[i] / multiplier) + 1.0) : 
+                    multiplier * floor(origin[i] / multiplier);
                 
-    //             float t = (nextBoundary - origin[i]) / dir[i];
-    //             if (t > 0.0 && t < minT) {
-    //                 minT = t;
-    //             }
-    //         }
-    //     }
+                float t = (nextBoundary - origin[i]) / dir[i];
+                if (t > 0.0 && t < minT) {
+                    minT = t;
+                }
+            } 
+        }
         
-    //     // Get position just before intersection
-    //     vec3 pos = origin + dir * (minT - 0.001);
-    //     vec3 temp = floor(pos);
+        // Get position just before intersection
+        vec3 pos = origin + dir * (minT - 0.001);
+        vec3 temp = floor(pos);
 
     
-    //     t_max += abs(temp - world_pos) * t_delta;
-    //     world_pos = temp;
-    // }
+        t_max += abs(temp - world_pos) * t_delta;
+        world_pos = temp;
+    }
 
 
 
@@ -267,9 +282,8 @@ void main() {
 
     int multiplier;
 
-    while (steps < 150) {
+    while (steps < 640) {
         // Go through chunks
-        // Check if current chunk has octants
 
         uint current_depth = get_depth(world_pos, multiplier);
 
@@ -279,20 +293,6 @@ void main() {
             take_step(step, t_delta, t_max, hit_axis, world_pos, multiplier, dir);
             continue;
         }
-
-        // if (current_depth == 0) {
-        //     imageStore(storageImage, pixel_coords, get_colour(hit_axis, step));
-        //     return;
-        // }
-        // if (current_depth >= 1 && current_depth <= 7) {
-        //     vec3 depth_color = mix(
-        //         vec3(0.071, 0.173, 0.365),  // Dark blue
-        //         vec3(0.937, 0.235, 0.251),  // Coral red
-        //         float(current_depth) / 7.0
-        //     );
-        //     imageStore(storageImage, pixel_coords, vec4(depth_color, 1.0));
-        //     return;
-        // }
 
         if (current_depth == 1) {
             imageStore(storageImage, pixel_coords, grass(hit_axis, step) );
@@ -314,3 +314,21 @@ void main() {
     output_colour = vec4(colour, 1.0);
     imageStore(storageImage, pixel_coords, output_colour);
 }
+
+
+
+
+
+        // if (current_depth == 0) {
+        //     imageStore(storageImage, pixel_coords, get_colour(hit_axis, step));
+        //     return;
+        // }
+        // if (current_depth >= 1 && current_depth <= 7) {
+        //     vec3 depth_color = mix(
+        //         vec3(0.071, 0.173, 0.365),  // Dark blue
+        //         vec3(0.937, 0.235, 0.251),  // Coral red
+        //         float(current_depth) / 7.0
+        //     );
+        //     imageStore(storageImage, pixel_coords, vec4(depth_color, 1.0));
+        //     return;
+        // }

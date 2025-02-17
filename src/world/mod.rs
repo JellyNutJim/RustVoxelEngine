@@ -76,7 +76,7 @@ pub fn get_flat_world() -> (Vec<i32>, Vec<u32>){
 
 
     //let mut p = ShaderGrid::from(chunks, 3);
-    let width = 10;
+    let width = 20;
 
     let noise = PerlinNoise::new(42); // Use any seed
     let w = width*64;
@@ -86,37 +86,61 @@ pub fn get_flat_world() -> (Vec<i32>, Vec<u32>){
     let noise_matrix = noise.generate_grid(w, h, scale);
 
 
-    let mut p = ShaderGrid::new(width as u32, [0,0,0]);
+    let mut p = ShaderGrid::new(width as u32, [-64 * (width as i32 / 2), -64, -64 * (width as i32/ 2)]);
 
     println!("INSERT");
-    // for x in 0..(64*width as i32) {
-    //     for z in 0..(64*width as i32) {
-    //         let mut y = (noise_matrix[x as usize][z as usize] * 64.0 + 64.0);
+    for x in 0..(64*width as i32) {
+        for z in 0..(64*width as i32) {
+            let mut y = noise_matrix[x as usize][z as usize] * 64.0;
+
+            let x_adjusted = x - (64 * width / 2 ) as i32;
+            let z_adjusted = z - (64 * width / 2 ) as i32;
             
-    //         if y > 64.0{
-    //             y = ((y / 4.0).floor() * 4.0);
-    //         }
+            if y > 64.0{
+                y = ((y / 4.0).floor() * 4.0);
+            }
 
-    //         let y = y as i32;
+            let y = y as i32;
 
 
 
-    //         p.insert_voxel([x, y, z], 1);
-    //         p.insert_voxel([x, y - 1, z], 2);
-    //         p.insert_voxel([x, y - 2, z], 2);
-    //         p.insert_voxel([x, y - 3, z], 2);
+            p.insert_voxel([x_adjusted, y, z_adjusted], 1);
+            p.insert_voxel([x_adjusted, y - 1, z_adjusted], 2);
+            p.insert_voxel([x_adjusted, y - 2, z_adjusted], 2);
+            p.insert_voxel([x_adjusted, y - 3, z_adjusted], 2);
+        }
+    }
+
+
+    // for x in 0..((64 * width as i32) + 0) {
+    //     for z in 0..(64 * width as i32) {
+
+    //         let x_adjusted = x - (64 * width / 2 ) as i32;
+    //         let z_adjusted = z - (64 * width / 2 ) as i32;
+
+    //         p.insert_voxel([x_adjusted, -3, z_adjusted], 1);
     //     }
     // }
 
-    p.insert_voxel([65, 0, 0], 1);
+    //p.insert_voxel([0, 0, 0], 1);
+    //p.insert_voxel([1*(64 * 4), -1, 1 * (64 * 4)], 1);
 
-    p.insert_voxel([0, 0, 0], 1);
+    // p.insert_voxel([2, 0, 0], 1);
 
-    p.insert_voxel([0, 0, 63], 1);                                        
-    p.insert_voxel([0, 2, 64], 1);
-    p.insert_voxel([0, 4, 65], 1);
+    // p.insert_voxel([2, 0, 2], 1);
 
+    // p.insert_voxel([0, 0, 2], 1);
 
+    // p.insert_voxel([0, 2, 0], 1);
+
+    // p.insert_voxel([0, -2, 0], 1);
+    // p.insert_voxel([0, 2, 0], 1);
+    
+    // p.insert_voxel([1, -4, 1], 1);
+
+    // p.insert_voxel([0, 0, 63], 1);                                        
+    // p.insert_voxel([0, 2, 64], 1);
+    // p.insert_voxel([0, 4, 65], 1);
 
 
 

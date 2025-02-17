@@ -483,7 +483,7 @@ impl ApplicationHandler for App {
                     PhysicalKey::Code(KeyCode::KeyA) => { self.camera_location.location = self.camera_location.location - (self.camera_location.direction.cross(up)) * dis  }
                     PhysicalKey::Code(KeyCode::KeyD) => { self.camera_location.location = self.camera_location.location + (self.camera_location.direction.cross(up)) * dis }
                     PhysicalKey::Code(KeyCode::Space) => { self.camera_location.location += Vec3::from(0.0, 0.25, 0.0)  }
-                    PhysicalKey::Code(KeyCode::ShiftLeft) => { self.camera_location.location += Vec3::from(0.0, -0.25, 0.0)  }
+                    PhysicalKey::Code(KeyCode::ControlLeft) => { self.camera_location.location += Vec3::from(0.0, -0.25, 0.0)  }
 
                     
                     

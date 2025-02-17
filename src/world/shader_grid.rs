@@ -34,22 +34,23 @@ impl ShaderGrid {
 
     pub fn insert_voxel(&mut self, pos: [i32; 3], voxel_type: u32) {
         // Round to lower chunk bound
-        let chunk_pos = [
-            (pos[0] / 64) * 64,
-            (pos[1] / 64) * 64,
-            (pos[2] / 64) * 64,
-        ];
+        // let chunk_pos = [
+        //     (pos[0] / 64) * 64,
+        //     (pos[1] / 64) * 64,
+        //     (pos[2] / 64) * 64,
+        // ];
 
-        let chunk_pos = self.get_chunk_pos(&chunk_pos);
+        let chunk_pos = self.get_chunk_pos(&pos);
         let chunk_index = chunk_pos[0] + chunk_pos[1] * self.width + chunk_pos[2] * (self.width * self.width);
         
-
+        // Local voxel pos in chunk
         let pos = [
-            (pos[0] % 64) as u32,
-            (pos[1] % 64) as u32,
-            (pos[2] % 64) as u32
+            (((pos[0] % 64) + 64) % 64) as u32,
+            (((pos[1] % 64) + 64) % 64) as u32,
+            (((pos[2] % 64) + 64) % 64) as u32
         ];
 
+        //println!("{:?}", chunk_pos);
 
         self.chunks[self.grid[chunk_index as usize] as usize].insert_voxel(pos, voxel_type);
     }
@@ -73,9 +74,9 @@ impl ShaderGrid {
     // Assumes position is within the bounds of the grid
     pub fn get_chunk_pos(&self, pos: &[i32; 3]) -> [u32; 3] {
         [
-            (pos[0] / 64 - self.origin[0] / 64) as u32, 
-            (pos[1] / 64 - self.origin[1] / 64) as u32, 
-            (pos[2] / 64 - self.origin[2] / 64) as u32
+            (((pos[0] - (pos[0] & 63)) / 64) - self.origin[0] / 64) as u32, 
+            (((pos[1] - (pos[1] & 63)) / 64) - self.origin[1] / 64) as u32, 
+            (((pos[2] - (pos[2] & 63)) / 64) - self.origin[2] / 64) as u32
         ]
     }
 
@@ -89,6 +90,9 @@ impl ShaderGrid {
         };
 
         let width = width as i32;
+
+        // 64 0 0 
+        
 
         // Fill grid with empty chunks
         for x in 0..width {
