@@ -57,16 +57,6 @@ uint get_depth(vec3 pos, inout int multiplier) {
     // Currently defining here -> Will switch this out for buffer input
     int WIDTH = 40;
 
-
-    // Chunk if chunk is within current grid bounds
-    if (any(greaterThan(rel, ivec3(WIDTH - 1)))) {
-        return 100;
-    }
-
-    if (any(lessThan(rel, ivec3(0)))) {
-        return 100;
-    }
-
     uvec3 realitive_chunk_location = uvec3(rel);
 
     // Voxel position in the current chunk
@@ -134,7 +124,7 @@ uint get_depth(vec3 pos, inout int multiplier) {
 
 void take_step(ivec3 step, vec3 t_delta, inout vec3 t_max, inout uint hit_axis, inout vec3 world_pos, int multiplier, vec3 dir) {
 
-    if (multiplier > 2) {
+    if (multiplier > 4) {
         float minT = 1e10;
 
         float curr_t = min(t_max.x, min(t_max.y, t_max.z));
@@ -143,25 +133,24 @@ void take_step(ivec3 step, vec3 t_delta, inout vec3 t_max, inout uint hit_axis, 
 
 
         for (int i = 0; i < 3; i++) {
-            if (dir[i] != 0.0) {
-                float nextBoundary = dir[i] > 0.0 ? 
-                    multiplier * (floor(origin[i] / multiplier) + 1.0) : 
-                    multiplier * floor(origin[i] / multiplier) - 1.0;
-                
-                float t = (nextBoundary - origin[i]) / dir[i];
-                
-                if (t > 0.0 && t < minT) {
-                    minT = t;
-                    hit_axis = uint(i);
-                }
-            } 
+            float nextBoundary = dir[i] > 0.0 ? 
+                multiplier * (floor(origin[i] / multiplier) + 1.0) : 
+                multiplier * floor(origin[i] / multiplier) - 1.0;
+            
+            float t = (nextBoundary - origin[i]) / dir[i];
+            
+            if (t > 0.0 && t < minT) {
+                minT = t;
+                hit_axis = uint(i);
+            }
+            
         }
         
         // Get position just before intersection
         vec3 pos = origin + dir * (minT);
         vec3 temp = floor(pos);
         
-        t_max += floor(abs(temp - world_pos)) * t_delta;
+        t_max += (abs(temp - world_pos)) * t_delta;
         world_pos = temp;
         return;
     }
@@ -276,21 +265,11 @@ void main() {
 
     int multiplier;
 
-    while (steps < 100) {
+
+    while(all(lessThan(abs(world_pos), vec3(20*64, 200, 20*64))) && steps < 1000) {
         // Go through chunks
 
-        if (world_pos.y > 100) {
-            break;
-        }
-
         uint current_depth = get_depth(world_pos, multiplier);
-
-        if (current_depth == 100) { // Empty space or out of bounds
-            multiplier = 1;
-            steps += 1;
-            take_step(step, t_delta, t_max, hit_axis, world_pos, multiplier, dir);
-            continue;
-        }
 
         if (current_depth == 1) {
             imageStore(storageImage, pixel_coords, grass(hit_axis, step) );
@@ -306,6 +285,11 @@ void main() {
         take_step(step, t_delta, t_max, hit_axis, world_pos, multiplier, dir);
     }
 
+
+    if (steps > 300) {
+        imageStore(storageImage, pixel_coords, vec4(1.0, 0.0, 1.0, 1.0));
+        return;
+    }
 
     float a = (normalize(dir).y + 1.0) * 0.5;
     vec3 colour = vec3(1.0) * (1.0 - a) + vec3(0.5, 0.7, 1.0) * (a);
