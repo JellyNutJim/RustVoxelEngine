@@ -13,7 +13,7 @@ pub fn get_flat_world(seed: u64) -> (Vec<i32>, Vec<u32>) {
 
 
     //let mut p = ShaderGrid::from(chunks, 3);
-    let width = 20;
+    let width = 40;
 
     let noise = PerlinNoise::new(seed); // Use any seed
     let w = width*64;

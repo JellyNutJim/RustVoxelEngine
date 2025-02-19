@@ -243,7 +243,7 @@ impl App {
         let mut meta_data = world.0;
 
         // Resize to desired capacity (e.g., 1 million elements)
-        voxels.resize(100_000_000, 0);  // Pad with zeros
+        voxels.resize(1000000000, 0);  // Pad with zeros
         //meta_data.resize(1_000_000, 0);  // Pad with zeros
 
         let voxel_buffers = [
@@ -321,7 +321,7 @@ impl App {
 
         println!("{:?}", a);
 
-        let last_n_press = Instant::now() - Duration::from_secs(10);
+        let last_n_press = Instant::now() - Duration::from_secs(1);
 
 
         App {
@@ -541,7 +541,7 @@ impl ApplicationHandler for App {
                     PhysicalKey::Code(KeyCode::ControlLeft) => { self.camera_location.location += Vec3::from(0.0, -0.25, 0.0)  }
                     PhysicalKey::Code(KeyCode::KeyN) => {
                         let now = Instant::now();
-                        if now.duration_since(self.last_n_press) >= Duration::from_secs(10) {
+                        if now.duration_since(self.last_n_press) >= Duration::from_secs(1) {
                             self.update_world();
                             self.last_n_press = now;
                         }
@@ -827,6 +827,7 @@ struct WorldUpdater {
     update_thread: Option<thread::JoinHandle<()>>,
 }
 
+use rand::Rng;
 
 impl WorldUpdater {
     pub fn new(
@@ -835,11 +836,10 @@ impl WorldUpdater {
         voxel_buffers: [Subbuffer<[u32]>; 2],
         world_meta_data_buffer: Subbuffer<[i32]>,
     ) -> (Self, Receiver<WorldUpdateMessage>) {
-        // Create an unbounded channel
-        let (tx, rx) = unbounded();
-        let tx_clone = tx.clone();
-        let rx_clone = rx.clone();
-
+        // Create a single channel pair
+        let (command_tx, command_rx) = unbounded(); 
+        let (update_tx, update_rx) = unbounded(); 
+    
         let update_thread = Some(thread::spawn(move || {
             let memory_allocator = Arc::new(StandardMemoryAllocator::new_default(device.clone()));
             let command_buffer_allocator = StandardCommandBufferAllocator::new(
@@ -849,20 +849,20 @@ impl WorldUpdater {
             
             let mut shutdown = false;
             let mut current_buffer = 0;
-
+    
             while !shutdown {
-                // Receive messages - this will block until a message is available
-                match rx_clone.recv() {
+                match command_rx.recv() {  // Use rx_worker instead of tx_clone
                     Ok(WorldUpdateMessage::UpdateWorld) => {
                         println!("Worker thread received UpdateWorld message");
                         // Get next buffer index
-                        let next_buffer = (current_buffer + 1) % 2;
+                        let next_buffer = current_buffer; //(current_buffer + 1) % 2;
                         
                         // Generate new world data
-                        let world = get_flat_world(13);
+                        let mut rng = rand::rng();
+                        let world = get_flat_world(rng.random_range(1..99999));
                         let mut w = world.1;
-                        w.resize(100_000_000, 0);
-
+                        w.resize(1000000000, 0);
+    
                         // Create staging buffers
                         let staging_buffer = Buffer::from_iter(
                             memory_allocator.clone(),
@@ -877,7 +877,7 @@ impl WorldUpdater {
                             },
                             w,
                         ).unwrap();
-
+    
                         let staging_meta = Buffer::from_iter(
                             memory_allocator.clone(),
                             BufferCreateInfo {
@@ -891,14 +891,14 @@ impl WorldUpdater {
                             },
                             world.0,
                         ).unwrap();
-
+    
                         // Create and record command buffer
                         let mut builder = AutoCommandBufferBuilder::primary(
                             &command_buffer_allocator,
                             queue.queue_family_index(),
                             CommandBufferUsage::OneTimeSubmit,
                         ).unwrap();
-
+    
                         builder
                             .copy_buffer(CopyBufferInfo::buffers(
                                 staging_buffer,
@@ -910,46 +910,52 @@ impl WorldUpdater {
                                 world_meta_data_buffer.clone(),
                             ))
                             .unwrap();
-
+    
                         let command_buffer = builder.build().unwrap();
-
+    
                         // Execute and wait for completion
                         let future = sync::now(device.clone())
                             .then_execute(queue.clone(), command_buffer)
                             .unwrap()
                             .then_signal_fence_and_flush()
                             .unwrap();
-
+    
                         future.wait(None).unwrap();
-
+    
                         // Update current buffer and notify main thread
                         current_buffer = next_buffer;
                         println!("Worker completed update - sending BufferUpdated({}) message", next_buffer);
-                        println!("Worker about to send BufferUpdated({}) message", next_buffer);
-                        if let Err(e) = tx_clone.send(WorldUpdateMessage::BufferUpdated(next_buffer)) {
+                        
+                        if let Err(e) = update_tx.send(WorldUpdateMessage::BufferUpdated(next_buffer)) {
                             println!("Failed to send buffer update: {:?}", e);
+                            shutdown = true; // Exit if we can't send messages
                         } else {
                             println!("Successfully sent BufferUpdated({}) message", next_buffer);
                         }
+                        
                     },
                     Ok(WorldUpdateMessage::Shutdown) => {
+                        println!("Worker thread received shutdown message");
                         shutdown = true;
                     },
-                    Ok(_) => (), // Ignore other message types
+                    Ok(_) => {
+                        println!("Worker thread received unexpected message type");
+                    },
                     Err(e) => {
-                        println!("Channel error: {:?}", e);
+                        println!("Channel error in worker thread: {:?}", e);
                         shutdown = true;
                     }
                 }
             }
+            println!("Worker thread shutting down");
         }));
-
+    
         (
             WorldUpdater {
-                sender: tx,
+                sender: command_tx,
                 update_thread,
             },
-            rx
+            update_rx  // Return the original receiver for the main thread
         )
     }
 
