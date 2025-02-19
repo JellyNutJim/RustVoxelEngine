@@ -9,18 +9,7 @@ pub use shader_chunk::ShaderChunk;
 pub use shader_grid::ShaderGrid;
 
 
-pub fn get_flat_world(seed: u64) -> (Vec<i32>, Vec<u32>){
-    // let mut chunks: Vec<ShaderChunk> = vec![
-    //     ShaderChunk::new([0, 0, 0]),
-    //     ShaderChunk::new([0, 64, 0]),
-    //     ShaderChunk::new([0, 0, 64]),
-    //     ShaderChunk::new([0, 64, 64]),
-    //     ShaderChunk::new([64, 0, 0]),
-    //     ShaderChunk::new([64, 64, 0]),
-    //     ShaderChunk::new([64, 0, 64]),
-    //     ShaderChunk::new([64, 64, 64]),
-
-
+pub fn get_flat_world(seed: u64) -> (Vec<i32>, Vec<u32>) {
 
 
     //let mut p = ShaderGrid::from(chunks, 3);
@@ -70,32 +59,22 @@ pub fn get_flat_world(seed: u64) -> (Vec<i32>, Vec<u32>){
     //     }
     // }
 
-    //p.insert_voxel([0, 0, 0], 1);
-    //p.insert_voxel([1*(64 * 4), -1, 1 * (64 * 4)], 1);
-
-    // p.insert_voxel([2, 0, 0], 1);
-
-    // p.insert_voxel([2, 0, 2], 1);
-
-    // p.insert_voxel([0, 0, 2], 1);
-
-    // p.insert_voxel([0, 2, 0], 1);
-
-    // p.insert_voxel([0, -2, 0], 1);
-    // p.insert_voxel([0, 2, 0], 1);
-    
-    // p.insert_voxel([1, -4, 1], 1);
-
-    // p.insert_voxel([0, 0, 63], 1);                                        
-    // p.insert_voxel([0, 2, 64], 1);
-    // p.insert_voxel([0, 4, 65], 1);
-
 
 
     let p = p.flatten();
 
     //println!("Grid: {:?}\nChunk Data: {:?}", p.0, p.1);
     println!("Grid: {}", p.1.len());
+
+    p
+}
+
+pub fn get_empty() -> (Vec<i32>, Vec<u32>) {
+    let width = 20;
+    let mut p = ShaderGrid::new(width as u32, [-64 * (width as i32 / 2), -64, -64 * (width as i32/ 2)]);
+    p.insert_voxel([0,0,0], 1);
+
+    let p = p.flatten();
 
     p
 }

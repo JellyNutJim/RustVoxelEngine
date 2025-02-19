@@ -12,11 +12,11 @@ layout(set = 0, binding = 0) uniform camera_subbuffer {
 
 
 //  TEST IF 3D MATIX OF BIT SHIFTING IS FASTER FOR VOXEL CHECKING!
-layout(set = 0, binding = 1) buffer VoxelBuffer {
+layout(set = 0, binding = 1) readonly buffer VoxelBuffer {
     uint voxels[409293];
 } v_buf;
 
-layout(set = 0, binding = 2) buffer WorldBuffer {
+layout(set = 0, binding = 2) readonly buffer WorldBuffer {
     ivec3 origin;
     uint chunks[27];
 } w_buf;
@@ -276,7 +276,7 @@ void main() {
 
     int multiplier;
 
-    while (steps < 640) {
+    while (steps < 100) {
         // Go through chunks
 
         if (world_pos.y > 100) {

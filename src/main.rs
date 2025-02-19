@@ -43,11 +43,15 @@ use winit::{
 
 };
 
+use std::sync::{Mutex};
+use std::thread;
+use std::sync::mpsc::{channel, Sender, Receiver};
+
 mod asset_load;
 mod types;
 mod world;
 
-use world::{get_flat_world, ShaderChunk, ShaderGrid};
+use world::{get_flat_world, get_empty, ShaderChunk, ShaderGrid};
 
 use types::Vec3;
 
@@ -66,12 +70,17 @@ struct App {
     command_buffer_allocator: Arc<StandardCommandBufferAllocator>,
     descriptor_set_allocator: Arc<StandardDescriptorSetAllocator>,
 
-    voxel_buffer: Subbuffer<[u32]>,
+    voxel_buffers: [Subbuffer<[u32]>; 2],
+    current_voxel_buffer: usize,
+
     world_meta_data_buffer: Subbuffer<[i32]>,
     camera_buffer: SubbufferAllocator,
 
     rcx: Option<RenderContext>, 
     camera_location: CameraLocation,
+
+    world_updater: WorldUpdater,
+    update_receiver: Arc<Mutex<Receiver<WorldUpdateMessage>>>,
 }
 
 struct RenderContext {
@@ -103,52 +112,12 @@ struct CameraLocation {
     direction: Vec3,
 }
 
+use vulkano::command_buffer::CopyBufferInfo;
+
 
 impl App {
     fn update_world(&mut self) {
-        // Get the new world data
-        let world = get_flat_world(13);
-    
-        // Ensure we wait for the previous frame to complete
-        if let Some(rcx) = &mut self.rcx {
-            rcx.previous_frame_end.as_mut().unwrap().cleanup_finished();
-            
-            // Take ownership of the previous frame end and flush it
-            let mut previous_future = rcx.previous_frame_end.take().unwrap();
-            previous_future.flush().unwrap();
-            
-            // Update buffers
-            {
-                let mut meta_content = self.world_meta_data_buffer.write().unwrap();
-                meta_content.copy_from_slice(&world.0);
-            }
-            
-            {
-                let mut voxel_content = self.voxel_buffer.write().unwrap();
-                let mut w = world.1;
-                w.resize(100_000_000, 0);
-                voxel_content.copy_from_slice(&w);
-            }
-            
-            // Create new command buffer and future
-            let mut builder = AutoCommandBufferBuilder::primary(
-                &self.command_buffer_allocator,
-                self.queue.queue_family_index(),
-                CommandBufferUsage::OneTimeSubmit,
-            ).unwrap();
-            
-            let command_buffer = builder.build().unwrap();
-            
-            // Create new future
-            let future = sync::now(self.device.clone())
-                .then_execute(self.queue.clone(), command_buffer)
-                .unwrap()
-                .then_signal_fence_and_flush()
-                .unwrap();
-                
-            // Store the new future
-            rcx.previous_frame_end = Some(future.boxed());
-        }
+        self.world_updater.request_update();
     }
 
     fn new(event_loop: &EventLoop<()>) -> Self {
@@ -272,27 +241,42 @@ impl App {
         voxels.resize(100_000_000, 0);  // Pad with zeros
         //meta_data.resize(1_000_000, 0);  // Pad with zeros
 
-        let voxel_buffer = Buffer::from_iter(
-            memory_allocator.clone(),
-            BufferCreateInfo {
-                usage: BufferUsage::STORAGE_BUFFER,
-                ..Default::default()
-            },
-            AllocationCreateInfo {
-                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
-                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
-                ..Default::default()
-            },
-            voxels,
-        )
-        .expect("failed to create buffer");
+        let voxel_buffers = [
+            Buffer::from_iter(
+                memory_allocator.clone(),
+                BufferCreateInfo {
+                    usage: BufferUsage::STORAGE_BUFFER | BufferUsage::TRANSFER_DST,
+                    ..Default::default()
+                },
+                AllocationCreateInfo {
+                    memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                        | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                    ..Default::default()
+                },
+                voxels.clone(),
+            ).expect("failed to create buffer"),
+            
+            Buffer::from_iter(
+                memory_allocator.clone(),
+                BufferCreateInfo {
+                    usage: BufferUsage::STORAGE_BUFFER | BufferUsage::TRANSFER_DST,
+                    ..Default::default()
+                },
+                AllocationCreateInfo {
+                    memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                        | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                    ..Default::default()
+                },
+                voxels,
+            ).expect("failed to create buffer"),
+        ];
 
         //println!("{:?}", world.0.flatten());
 
         let world_meta_data_buffer = Buffer::from_iter(
             memory_allocator.clone(),
             BufferCreateInfo {
-                usage: BufferUsage::STORAGE_BUFFER,
+                usage: BufferUsage::STORAGE_BUFFER | BufferUsage::TRANSFER_DST,
                 ..Default::default()
             },
             AllocationCreateInfo {
@@ -314,6 +298,12 @@ impl App {
             },
         );
 
+        let (world_updater, update_receiver) = WorldUpdater::new(
+            device.clone(),
+            queue.clone(),
+            voxel_buffers.clone(),
+            world_meta_data_buffer.clone(),
+        );
 
         #[allow(unused_mut)]
         // Default values
@@ -333,11 +323,14 @@ impl App {
             queue,
             command_buffer_allocator,
             descriptor_set_allocator,
-            voxel_buffer,
+            voxel_buffers,
+            current_voxel_buffer: 0,
             world_meta_data_buffer,
             camera_buffer,
             rcx,
-            camera_location
+            camera_location,
+            world_updater,
+            update_receiver
         }
     }
 }
@@ -575,6 +568,14 @@ impl ApplicationHandler for App {
                 
             }
             WindowEvent::RedrawRequested => {
+
+                if let Ok(rx_lock) = self.update_receiver.try_lock() {
+                    if let Ok(WorldUpdateMessage::BufferUpdated(new_buffer_index)) = rx_lock.try_recv() {
+                        // Buffer index only updates after both transfers are complete
+                        self.current_voxel_buffer = new_buffer_index;
+                    }
+                }
+
                 let window_size = rcx.window.inner_size();
                 
                 // Dont draw frame when minimised
@@ -689,7 +690,7 @@ impl ApplicationHandler for App {
                     layout.clone(),
                     [
                         WriteDescriptorSet::buffer(0, uniform_camera_subbuffer), 
-                        WriteDescriptorSet::buffer(1, self.voxel_buffer.clone()),
+                        WriteDescriptorSet::buffer(1, self.voxel_buffers[self.current_voxel_buffer].clone()),
                         WriteDescriptorSet::buffer(2, self.world_meta_data_buffer.clone()),
                         WriteDescriptorSet::image_view(3, rcx.attachment_image_views[image_index as usize].clone()),
                     ],
@@ -785,4 +786,148 @@ fn window_size_dependent_setup(images: &[Arc<Image>]) -> Vec<Arc<ImageView>> {
         .iter()
         .map(|image| ImageView::new_default(image.clone()).unwrap())
         .collect::<Vec<_>>()
+}
+
+
+
+// Message types for communication
+enum WorldUpdateMessage {
+    UpdateWorld,
+    BufferUpdated(usize),
+    Shutdown,
+}
+
+struct WorldUpdater {
+    sender: Sender<WorldUpdateMessage>,
+    update_thread: Option<thread::JoinHandle<()>>,
+}
+
+impl WorldUpdater {
+    pub fn new(
+        device: Arc<Device>,
+        queue: Arc<Queue>,
+        voxel_buffers: [Subbuffer<[u32]>; 2],
+        world_meta_data_buffer: Subbuffer<[i32]>,
+    ) -> (Self, Arc<Mutex<Receiver<WorldUpdateMessage>>>) {
+        let (tx, rx) = channel();
+        let tx_clone = tx.clone();
+        let rx = Arc::new(Mutex::new(rx));
+        let rx_thread = rx.clone();
+
+        let update_thread = Some(thread::spawn(move || {
+            let memory_allocator = Arc::new(StandardMemoryAllocator::new_default(device.clone()));
+            let command_buffer_allocator = StandardCommandBufferAllocator::new(
+                device.clone(),
+                Default::default(),
+            );
+            
+            let mut shutdown = false;
+            let mut current_buffer = 0;
+
+            while !shutdown {
+                // Lock the receiver to get the message
+                if let Ok(msg) = rx_thread.lock().unwrap().recv() {
+                    match msg {
+                        WorldUpdateMessage::UpdateWorld => {
+                            // Get next buffer index
+                            let next_buffer = (current_buffer + 1) % 2;
+                            
+                            // Generate new world data
+                            let world = get_empty();
+                            let mut w = world.1;
+                            w.resize(100_000_000, 0);
+
+                            // Create staging buffers
+                            let staging_buffer = Buffer::from_iter(
+                                memory_allocator.clone(),
+                                BufferCreateInfo {
+                                    usage: BufferUsage::TRANSFER_SRC,
+                                    ..Default::default()
+                                },
+                                AllocationCreateInfo {
+                                    memory_type_filter: MemoryTypeFilter::PREFER_HOST 
+                                        | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                                    ..Default::default()
+                                },
+                                w,
+                            ).unwrap();
+
+                            let staging_meta = Buffer::from_iter(
+                                memory_allocator.clone(),
+                                BufferCreateInfo {
+                                    usage: BufferUsage::TRANSFER_SRC,
+                                    ..Default::default()
+                                },
+                                AllocationCreateInfo {
+                                    memory_type_filter: MemoryTypeFilter::PREFER_HOST 
+                                        | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                                    ..Default::default()
+                                },
+                                world.0,
+                            ).unwrap();
+
+                            // Create and record command buffer
+                            let mut builder = AutoCommandBufferBuilder::primary(
+                                &command_buffer_allocator,
+                                queue.queue_family_index(),
+                                CommandBufferUsage::OneTimeSubmit,
+                            ).unwrap();
+
+                            builder
+                                .copy_buffer(CopyBufferInfo::buffers(
+                                    staging_buffer,
+                                    voxel_buffers[next_buffer].clone(),
+                                ))
+                                .unwrap()
+                                .copy_buffer(CopyBufferInfo::buffers(
+                                    staging_meta,
+                                    world_meta_data_buffer.clone(),
+                                ))
+                                .unwrap();
+
+                            let command_buffer = builder.build().unwrap();
+
+                            // Execute and wait for completion
+                            let future = sync::now(device.clone())
+                                .then_execute(queue.clone(), command_buffer)
+                                .unwrap()
+                                .then_signal_fence_and_flush()
+                                .unwrap();
+
+                            future.wait(None).unwrap();
+
+                            // Update current buffer and notify main thread
+                            current_buffer = next_buffer;
+                            tx_clone.send(WorldUpdateMessage::BufferUpdated(next_buffer)).unwrap();
+                        },
+                        WorldUpdateMessage::Shutdown => {
+                            shutdown = true;
+                        },
+                        _ => {}
+                    }
+                }
+            }
+        }));
+
+        (
+            WorldUpdater {
+                sender: tx,
+                update_thread,
+            },
+            rx
+        )
+    }
+
+    pub fn request_update(&self) {
+        self.sender.send(WorldUpdateMessage::UpdateWorld).unwrap();
+    }
+}
+
+impl Drop for WorldUpdater {
+    fn drop(&mut self) {
+        self.sender.send(WorldUpdateMessage::Shutdown).unwrap();
+        if let Some(handle) = self.update_thread.take() {
+            handle.join().unwrap();
+        }
+    }
 }
