@@ -137,58 +137,33 @@ void take_step(ivec3 step, vec3 t_delta, inout vec3 t_max, inout uint hit_axis, 
     if (multiplier > 1) {
         float minT = 1e10;
 
-        //vec3 origin = world_pos + fract(c.origin);
+        float curr_t = min(t_max.x, min(t_max.y, t_max.z));
 
-
-        // vec3 origin = c.origin;
-        // vec3 relativePos = world_pos - floor(origin);
-        // origin = relativePos;
-
-        // vec3 origin = world_pos + vec3(
-        //     (step.x > 0 ? fract(c.origin.x) : 1.0 - fract(c.origin.x)),
-        //     (step.y > 0 ? fract(c.origin.y) : 1.0 - fract(c.origin.y)),
-        //     (step.z > 0 ? fract(c.origin.z) : 1.0 - fract(c.origin.z))
-        // );
-
-        float t;
-
-        if (hit_axis == 0) {
-            t = t_max.x;
-        }
-        else if (hit_axis == 1) {
-            t = t_max.y;
-        }
-        else {
-            t = t_max.z;
-        }
-
-
-        vec3 origin = c.origin + dir * t;
-
-
-        //vec3 origin = c.origin + world_pos;
+        vec3 origin = c.origin + dir * curr_t;
 
 
         for (int i = 0; i < 3; i++) {
             if (dir[i] != 0.0) {
                 float nextBoundary = dir[i] > 0.0 ? 
                     multiplier * (floor(origin[i] / multiplier) + 1.0) : 
-                    multiplier * floor(origin[i] / multiplier);
+                    multiplier * floor(origin[i] / multiplier) - 1.0;
                 
                 float t = (nextBoundary - origin[i]) / dir[i];
+                
                 if (t > 0.0 && t < minT) {
                     minT = t;
-                    hit_axis = i;
+                    hit_axis = uint(i);
                 }
             } 
         }
         
         // Get position just before intersection
-        vec3 pos = origin + dir * (minT - 0.001);
+        vec3 pos = origin + dir * (minT);
         vec3 temp = floor(pos);
         
-        t_max += abs(temp - world_pos) * t_delta;
+        t_max += floor(abs(temp - world_pos)) * t_delta;
         world_pos = temp;
+        return;
     }
 
 
