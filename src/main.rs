@@ -45,13 +45,16 @@ use winit::{
 
 use std::sync::{Mutex};
 use std::thread;
-use std::sync::mpsc::{channel, Sender, Receiver};
+
+use crossbeam_channel::{unbounded, Sender, Receiver};
 
 mod asset_load;
 mod types;
 mod world;
 
 use world::{get_flat_world, get_empty, ShaderChunk, ShaderGrid};
+
+use std::time::{Instant, Duration};
 
 use types::Vec3;
 
@@ -79,8 +82,10 @@ struct App {
     rcx: Option<RenderContext>, 
     camera_location: CameraLocation,
 
+    update_receiver: Receiver<WorldUpdateMessage>,
     world_updater: WorldUpdater,
-    update_receiver: Arc<Mutex<Receiver<WorldUpdateMessage>>>,
+
+    last_n_press: Instant,
 }
 
 struct RenderContext {
@@ -316,6 +321,8 @@ impl App {
 
         println!("{:?}", a);
 
+        let last_n_press = Instant::now() - Duration::from_secs(10);
+
 
         App {
             instance,
@@ -330,7 +337,8 @@ impl App {
             rcx,
             camera_location,
             world_updater,
-            update_receiver
+            update_receiver,
+            last_n_press
         }
     }
 }
@@ -531,7 +539,22 @@ impl ApplicationHandler for App {
                     PhysicalKey::Code(KeyCode::KeyD) => { self.camera_location.location = self.camera_location.location + (self.camera_location.direction.cross(up)) * dis }
                     PhysicalKey::Code(KeyCode::Space) => { self.camera_location.location += Vec3::from(0.0, 0.25, 0.0)  }
                     PhysicalKey::Code(KeyCode::ControlLeft) => { self.camera_location.location += Vec3::from(0.0, -0.25, 0.0)  }
-                    PhysicalKey::Code(KeyCode::KeyN) => { self.update_world(); }
+                    PhysicalKey::Code(KeyCode::KeyN) => {
+                        let now = Instant::now();
+                        if now.duration_since(self.last_n_press) >= Duration::from_secs(10) {
+                            self.update_world();
+                            self.last_n_press = now;
+                        }
+                    }
+
+                    PhysicalKey::Code(KeyCode::KeyM) => {
+                        let now = Instant::now();
+                        if now.duration_since(self.last_n_press) >= Duration::from_secs(1) {
+                           self.current_voxel_buffer = (self.current_voxel_buffer + 1) % 2; 
+                           println!("Set buffer index to {}", self.current_voxel_buffer);
+                           self.last_n_press = now;
+                        }
+                    }
 
                     
                     
@@ -569,9 +592,11 @@ impl ApplicationHandler for App {
             }
             WindowEvent::RedrawRequested => {
 
-                if let Ok(rx_lock) = self.update_receiver.try_lock() {
-                    if let Ok(WorldUpdateMessage::BufferUpdated(new_buffer_index)) = rx_lock.try_recv() {
-                        // Buffer index only updates after both transfers are complete
+                //println!("Checking for messages in RedrawRequested");
+                while let Ok(msg) = self.update_receiver.try_recv() {
+                    println!("Received message in RedrawRequested: {:?}", msg);
+                    if let WorldUpdateMessage::BufferUpdated(new_buffer_index) = msg {
+                        println!("RedrawRequested: Switching buffer to {}", new_buffer_index);
                         self.current_voxel_buffer = new_buffer_index;
                     }
                 }
@@ -790,7 +815,7 @@ fn window_size_dependent_setup(images: &[Arc<Image>]) -> Vec<Arc<ImageView>> {
 
 
 
-// Message types for communication
+#[derive(Debug)]
 enum WorldUpdateMessage {
     UpdateWorld,
     BufferUpdated(usize),
@@ -802,17 +827,18 @@ struct WorldUpdater {
     update_thread: Option<thread::JoinHandle<()>>,
 }
 
+
 impl WorldUpdater {
     pub fn new(
         device: Arc<Device>,
         queue: Arc<Queue>,
         voxel_buffers: [Subbuffer<[u32]>; 2],
         world_meta_data_buffer: Subbuffer<[i32]>,
-    ) -> (Self, Arc<Mutex<Receiver<WorldUpdateMessage>>>) {
-        let (tx, rx) = channel();
+    ) -> (Self, Receiver<WorldUpdateMessage>) {
+        // Create an unbounded channel
+        let (tx, rx) = unbounded();
         let tx_clone = tx.clone();
-        let rx = Arc::new(Mutex::new(rx));
-        let rx_thread = rx.clone();
+        let rx_clone = rx.clone();
 
         let update_thread = Some(thread::spawn(move || {
             let memory_allocator = Arc::new(StandardMemoryAllocator::new_default(device.clone()));
@@ -825,85 +851,94 @@ impl WorldUpdater {
             let mut current_buffer = 0;
 
             while !shutdown {
-                // Lock the receiver to get the message
-                if let Ok(msg) = rx_thread.lock().unwrap().recv() {
-                    match msg {
-                        WorldUpdateMessage::UpdateWorld => {
-                            // Get next buffer index
-                            let next_buffer = (current_buffer + 1) % 2;
-                            
-                            // Generate new world data
-                            let world = get_empty();
-                            let mut w = world.1;
-                            w.resize(100_000_000, 0);
+                // Receive messages - this will block until a message is available
+                match rx_clone.recv() {
+                    Ok(WorldUpdateMessage::UpdateWorld) => {
+                        println!("Worker thread received UpdateWorld message");
+                        // Get next buffer index
+                        let next_buffer = (current_buffer + 1) % 2;
+                        
+                        // Generate new world data
+                        let world = get_flat_world(13);
+                        let mut w = world.1;
+                        w.resize(100_000_000, 0);
 
-                            // Create staging buffers
-                            let staging_buffer = Buffer::from_iter(
-                                memory_allocator.clone(),
-                                BufferCreateInfo {
-                                    usage: BufferUsage::TRANSFER_SRC,
-                                    ..Default::default()
-                                },
-                                AllocationCreateInfo {
-                                    memory_type_filter: MemoryTypeFilter::PREFER_HOST 
-                                        | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
-                                    ..Default::default()
-                                },
-                                w,
-                            ).unwrap();
+                        // Create staging buffers
+                        let staging_buffer = Buffer::from_iter(
+                            memory_allocator.clone(),
+                            BufferCreateInfo {
+                                usage: BufferUsage::TRANSFER_SRC,
+                                ..Default::default()
+                            },
+                            AllocationCreateInfo {
+                                memory_type_filter: MemoryTypeFilter::PREFER_HOST 
+                                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                                ..Default::default()
+                            },
+                            w,
+                        ).unwrap();
 
-                            let staging_meta = Buffer::from_iter(
-                                memory_allocator.clone(),
-                                BufferCreateInfo {
-                                    usage: BufferUsage::TRANSFER_SRC,
-                                    ..Default::default()
-                                },
-                                AllocationCreateInfo {
-                                    memory_type_filter: MemoryTypeFilter::PREFER_HOST 
-                                        | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
-                                    ..Default::default()
-                                },
-                                world.0,
-                            ).unwrap();
+                        let staging_meta = Buffer::from_iter(
+                            memory_allocator.clone(),
+                            BufferCreateInfo {
+                                usage: BufferUsage::TRANSFER_SRC,
+                                ..Default::default()
+                            },
+                            AllocationCreateInfo {
+                                memory_type_filter: MemoryTypeFilter::PREFER_HOST 
+                                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                                ..Default::default()
+                            },
+                            world.0,
+                        ).unwrap();
 
-                            // Create and record command buffer
-                            let mut builder = AutoCommandBufferBuilder::primary(
-                                &command_buffer_allocator,
-                                queue.queue_family_index(),
-                                CommandBufferUsage::OneTimeSubmit,
-                            ).unwrap();
+                        // Create and record command buffer
+                        let mut builder = AutoCommandBufferBuilder::primary(
+                            &command_buffer_allocator,
+                            queue.queue_family_index(),
+                            CommandBufferUsage::OneTimeSubmit,
+                        ).unwrap();
 
-                            builder
-                                .copy_buffer(CopyBufferInfo::buffers(
-                                    staging_buffer,
-                                    voxel_buffers[next_buffer].clone(),
-                                ))
-                                .unwrap()
-                                .copy_buffer(CopyBufferInfo::buffers(
-                                    staging_meta,
-                                    world_meta_data_buffer.clone(),
-                                ))
-                                .unwrap();
+                        builder
+                            .copy_buffer(CopyBufferInfo::buffers(
+                                staging_buffer,
+                                voxel_buffers[next_buffer].clone(),
+                            ))
+                            .unwrap()
+                            .copy_buffer(CopyBufferInfo::buffers(
+                                staging_meta,
+                                world_meta_data_buffer.clone(),
+                            ))
+                            .unwrap();
 
-                            let command_buffer = builder.build().unwrap();
+                        let command_buffer = builder.build().unwrap();
 
-                            // Execute and wait for completion
-                            let future = sync::now(device.clone())
-                                .then_execute(queue.clone(), command_buffer)
-                                .unwrap()
-                                .then_signal_fence_and_flush()
-                                .unwrap();
+                        // Execute and wait for completion
+                        let future = sync::now(device.clone())
+                            .then_execute(queue.clone(), command_buffer)
+                            .unwrap()
+                            .then_signal_fence_and_flush()
+                            .unwrap();
 
-                            future.wait(None).unwrap();
+                        future.wait(None).unwrap();
 
-                            // Update current buffer and notify main thread
-                            current_buffer = next_buffer;
-                            tx_clone.send(WorldUpdateMessage::BufferUpdated(next_buffer)).unwrap();
-                        },
-                        WorldUpdateMessage::Shutdown => {
-                            shutdown = true;
-                        },
-                        _ => {}
+                        // Update current buffer and notify main thread
+                        current_buffer = next_buffer;
+                        println!("Worker completed update - sending BufferUpdated({}) message", next_buffer);
+                        println!("Worker about to send BufferUpdated({}) message", next_buffer);
+                        if let Err(e) = tx_clone.send(WorldUpdateMessage::BufferUpdated(next_buffer)) {
+                            println!("Failed to send buffer update: {:?}", e);
+                        } else {
+                            println!("Successfully sent BufferUpdated({}) message", next_buffer);
+                        }
+                    },
+                    Ok(WorldUpdateMessage::Shutdown) => {
+                        shutdown = true;
+                    },
+                    Ok(_) => (), // Ignore other message types
+                    Err(e) => {
+                        println!("Channel error: {:?}", e);
+                        shutdown = true;
                     }
                 }
             }
@@ -919,13 +954,18 @@ impl WorldUpdater {
     }
 
     pub fn request_update(&self) {
-        self.sender.send(WorldUpdateMessage::UpdateWorld).unwrap();
+        println!("Requesting world update");
+        if let Err(e) = self.sender.send(WorldUpdateMessage::UpdateWorld) {
+            println!("Failed to request update: {:?}", e);
+        }
     }
 }
 
 impl Drop for WorldUpdater {
     fn drop(&mut self) {
-        self.sender.send(WorldUpdateMessage::Shutdown).unwrap();
+        if let Err(e) = self.sender.send(WorldUpdateMessage::Shutdown) {
+            println!("Failed to send shutdown message: {:?}", e);
+        }
         if let Some(handle) = self.update_thread.take() {
             handle.join().unwrap();
         }
