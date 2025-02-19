@@ -134,37 +134,37 @@ uint get_depth(vec3 pos, inout int multiplier) {
 
 void take_step(ivec3 step, vec3 t_delta, inout vec3 t_max, inout uint hit_axis, inout vec3 world_pos, int multiplier, vec3 dir) {
 
-    if (multiplier > 1) {
-        float minT = 1e10;
+    // if (multiplier > 1) {
+    //     float minT = 1e10;
 
-        float curr_t = min(t_max.x, min(t_max.y, t_max.z));
+    //     float curr_t = min(t_max.x, min(t_max.y, t_max.z));
 
-        vec3 origin = c.origin + dir * curr_t;
+    //     vec3 origin = c.origin + dir * curr_t;
 
 
-        for (int i = 0; i < 3; i++) {
-            if (dir[i] != 0.0) {
-                float nextBoundary = dir[i] > 0.0 ? 
-                    multiplier * (floor(origin[i] / multiplier) + 1.0) : 
-                    multiplier * floor(origin[i] / multiplier) - 1.0;
+    //     for (int i = 0; i < 3; i++) {
+    //         if (dir[i] != 0.0) {
+    //             float nextBoundary = dir[i] > 0.0 ? 
+    //                 multiplier * (floor(origin[i] / multiplier) + 1.0) : 
+    //                 multiplier * floor(origin[i] / multiplier) - 1.0;
                 
-                float t = (nextBoundary - origin[i]) / dir[i];
+    //             float t = (nextBoundary - origin[i]) / dir[i];
                 
-                if (t > 0.0 && t < minT) {
-                    minT = t;
-                    hit_axis = uint(i);
-                }
-            } 
-        }
+    //             if (t > 0.0 && t < minT) {
+    //                 minT = t;
+    //                 hit_axis = uint(i);
+    //             }
+    //         } 
+    //     }
         
-        // Get position just before intersection
-        vec3 pos = origin + dir * (minT);
-        vec3 temp = floor(pos);
+    //     // Get position just before intersection
+    //     vec3 pos = origin + dir * (minT);
+    //     vec3 temp = floor(pos);
         
-        t_max += floor(abs(temp - world_pos)) * t_delta;
-        world_pos = temp;
-        return;
-    }
+    //     t_max += floor(abs(temp - world_pos)) * t_delta;
+    //     world_pos = temp;
+    //     return;
+    // }
 
 
 
@@ -278,6 +278,10 @@ void main() {
 
     while (steps < 640) {
         // Go through chunks
+
+        if (world_pos.y > 100) {
+            break;
+        }
 
         uint current_depth = get_depth(world_pos, multiplier);
 

@@ -105,6 +105,52 @@ struct CameraLocation {
 
 
 impl App {
+    fn update_world(&mut self) {
+        // Get the new world data
+        let world = get_flat_world(13);
+    
+        // Ensure we wait for the previous frame to complete
+        if let Some(rcx) = &mut self.rcx {
+            rcx.previous_frame_end.as_mut().unwrap().cleanup_finished();
+            
+            // Take ownership of the previous frame end and flush it
+            let mut previous_future = rcx.previous_frame_end.take().unwrap();
+            previous_future.flush().unwrap();
+            
+            // Update buffers
+            {
+                let mut meta_content = self.world_meta_data_buffer.write().unwrap();
+                meta_content.copy_from_slice(&world.0);
+            }
+            
+            {
+                let mut voxel_content = self.voxel_buffer.write().unwrap();
+                let mut w = world.1;
+                w.resize(100_000_000, 0);
+                voxel_content.copy_from_slice(&w);
+            }
+            
+            // Create new command buffer and future
+            let mut builder = AutoCommandBufferBuilder::primary(
+                &self.command_buffer_allocator,
+                self.queue.queue_family_index(),
+                CommandBufferUsage::OneTimeSubmit,
+            ).unwrap();
+            
+            let command_buffer = builder.build().unwrap();
+            
+            // Create new future
+            let future = sync::now(self.device.clone())
+                .then_execute(self.queue.clone(), command_buffer)
+                .unwrap()
+                .then_signal_fence_and_flush()
+                .unwrap();
+                
+            // Store the new future
+            rcx.previous_frame_end = Some(future.boxed());
+        }
+    }
+
     fn new(event_loop: &EventLoop<()>) -> Self {
 
         // Ready extensions
@@ -216,7 +262,15 @@ impl App {
         ));
 
 
-        let world = get_flat_world();
+        let world = get_flat_world(42);
+
+        // Extend vectors to desired size
+        let mut voxels = world.1;
+        let mut meta_data = world.0;
+
+        // Resize to desired capacity (e.g., 1 million elements)
+        voxels.resize(100_000_000, 0);  // Pad with zeros
+        //meta_data.resize(1_000_000, 0);  // Pad with zeros
 
         let voxel_buffer = Buffer::from_iter(
             memory_allocator.clone(),
@@ -229,7 +283,7 @@ impl App {
                     | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
                 ..Default::default()
             },
-            world.1,
+            voxels,
         )
         .expect("failed to create buffer");
 
@@ -246,7 +300,7 @@ impl App {
                     | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
                 ..Default::default()
             },
-            world.0,
+            meta_data,
         )
         .expect("failed to create buffer");
     
@@ -484,6 +538,7 @@ impl ApplicationHandler for App {
                     PhysicalKey::Code(KeyCode::KeyD) => { self.camera_location.location = self.camera_location.location + (self.camera_location.direction.cross(up)) * dis }
                     PhysicalKey::Code(KeyCode::Space) => { self.camera_location.location += Vec3::from(0.0, 0.25, 0.0)  }
                     PhysicalKey::Code(KeyCode::ControlLeft) => { self.camera_location.location += Vec3::from(0.0, -0.25, 0.0)  }
+                    PhysicalKey::Code(KeyCode::KeyN) => { self.update_world(); }
 
                     
                     
@@ -546,6 +601,9 @@ impl ApplicationHandler for App {
                     rcx.viewport.extent = window_size.into();
                     rcx.recreate_swapchain = false;
                 }
+
+                // UPDATE HERE
+
 
                 // Calculate camera buffer variables and set them to the buffer
                 let uniform_camera_subbuffer = {

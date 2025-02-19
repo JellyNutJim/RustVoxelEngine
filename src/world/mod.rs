@@ -9,7 +9,7 @@ pub use shader_chunk::ShaderChunk;
 pub use shader_grid::ShaderGrid;
 
 
-pub fn get_flat_world() -> (Vec<i32>, Vec<u32>){
+pub fn get_flat_world(seed: u64) -> (Vec<i32>, Vec<u32>){
     // let mut chunks: Vec<ShaderChunk> = vec![
     //     ShaderChunk::new([0, 0, 0]),
     //     ShaderChunk::new([0, 64, 0]),
@@ -23,62 +23,10 @@ pub fn get_flat_world() -> (Vec<i32>, Vec<u32>){
 
 
 
-    // ];
-
-    let mut chunks: Vec<ShaderChunk> = vec![
-        // y = 0
-        ShaderChunk::new([0, 0, 0]),
-        ShaderChunk::new([64, 0, 0]),
-        ShaderChunk::new([128, 0, 0]),
-
-        ShaderChunk::new([0, 0, 64]),
-        ShaderChunk::new([64, 0, 64]),
-        ShaderChunk::new([128, 0, 64]),
-
-        ShaderChunk::new([0, 0, 128]),
-        ShaderChunk::new([64, 0, 128]),
-        ShaderChunk::new([128, 0, 128]),
-
-        // y = 1
-        ShaderChunk::new([0, 64, 0]),
-        ShaderChunk::new([64, 64, 0]),
-        ShaderChunk::new([128, 64, 0]),
-        
-        ShaderChunk::new([0, 64, 64]),
-        ShaderChunk::new([64, 64, 64]),
-        ShaderChunk::new([128, 64, 64]),
-
-        ShaderChunk::new([0, 64, 128]),
-        ShaderChunk::new([64, 64, 128]),
-        ShaderChunk::new([128, 64, 128]),
-        
-        // y = 2
-        ShaderChunk::new([0, 128, 0]),
-        ShaderChunk::new([64, 128, 0]),
-        ShaderChunk::new([128, 128, 0]),
-        
-        ShaderChunk::new([0, 128, 64]),
-        ShaderChunk::new([64, 128, 64]),
-        ShaderChunk::new([128, 128, 64]),
-
-        ShaderChunk::new([0, 128, 128]),
-        ShaderChunk::new([64, 128, 128]),
-        ShaderChunk::new([128, 128, 128]),
-
-    ];
-
-    // chunks.get_mut(0).unwrap().insert_voxel([1,1,1], 1);
-    // chunks.get_mut(0).unwrap().insert_subchunk([2,2,2], 4, 1);
-    // chunks.get_mut(0).unwrap().insert_subchunk([4,4,4], 3, 1);
-    // chunks.get_mut(0).unwrap().insert_subchunk([8,8,8], 2, 1);
-    // chunks.get_mut(0).unwrap().insert_subchunk([16,16,16], 1, 1);
-    // chunks.get_mut(0).unwrap().insert_subchunk([32,32,32], 0, 1);
-
-
     //let mut p = ShaderGrid::from(chunks, 3);
     let width = 20;
 
-    let noise = PerlinNoise::new(42); // Use any seed
+    let noise = PerlinNoise::new(seed); // Use any seed
     let w = width*64;
     let h = width*64;
     let scale = 0.01; // Adjust this to change the "zoom level" of the noise
