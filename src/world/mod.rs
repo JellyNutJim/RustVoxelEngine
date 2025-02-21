@@ -26,20 +26,18 @@ pub fn get_flat_world(seed: u64) -> (Vec<i32>, Vec<u32>) {
     let mut p = ShaderGrid::new(width as u32, [-64 * (width as i32 / 2), -64, -64 * (width as i32/ 2)]);
 
     println!("INSERT");
-    for x in 0..(64*width as i32) {
-        for z in 0..(64*width as i32) {
+    for x in (0..((64*width) as i32)).step_by(1) {
+        for z in (0..((64*width) as i32)).step_by(1) {
             let mut y = noise_matrix[x as usize][z as usize] * 64.0;
 
-            let x_adjusted = x - (64 * width / 2 ) as i32;
-            let z_adjusted = z - (64 * width / 2 ) as i32;
+            let mut x_adjusted = x - (64 * width / 2 ) as i32;
+            let mut z_adjusted = z - (64 * width / 2 ) as i32;
             
-            if y > 64.0{
-                y = ((y / 4.0).floor() * 4.0);
-            }
+            // if y > 0.0{
+            //     y = ((y / 2.0).floor() * 2.0);
+            // }
 
             let y = y as i32;
-
-
 
             p.insert_voxel([x_adjusted, y, z_adjusted], 1);
             p.insert_voxel([x_adjusted, y - 1, z_adjusted], 2);

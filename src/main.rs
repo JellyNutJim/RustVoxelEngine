@@ -108,6 +108,7 @@ struct CameraBufferData {
     pixel_delta_u: [f32; 4],
     pixel_delta_v: [f32; 4],
     world_position: [f32; 4],
+    sun_position: [f32; 4],
 }
 
 struct CameraLocation {
@@ -243,7 +244,7 @@ impl App {
         let mut meta_data = world.0;
 
         // Resize to desired capacity (e.g., 1 million elements)
-        voxels.resize(1000000000, 0);  // Pad with zeros
+        voxels.resize(150000000, 0);  // Pad with zeros
         //meta_data.resize(1_000_000, 0);  // Pad with zeros
 
         let voxel_buffers = [
@@ -312,7 +313,7 @@ impl App {
 
         #[allow(unused_mut)]
         // Default values
-        let mut camera_location = CameraLocation {location: Vec3::new(), direction: Vec3::new(), h_angle: 0.0, v_angle: 0.0};
+        let mut camera_location = CameraLocation {location: Vec3::from(0.0,100.0,0.0), direction: Vec3::new(), h_angle: 0.0, v_angle: 0.0};
         let rcx = None;
 
         let p = Vec3::new();
@@ -594,9 +595,9 @@ impl ApplicationHandler for App {
 
                 //println!("Checking for messages in RedrawRequested");
                 while let Ok(msg) = self.update_receiver.try_recv() {
-                    println!("Received message in RedrawRequested: {:?}", msg);
+                    println!("Received {:?}", msg);
                     if let WorldUpdateMessage::BufferUpdated(new_buffer_index) = msg {
-                        println!("RedrawRequested: Switching buffer to {}", new_buffer_index);
+                        println!("Switching buffer to {}", new_buffer_index);
                         self.current_voxel_buffer = new_buffer_index;
                     }
                 }
@@ -675,7 +676,8 @@ impl ApplicationHandler for App {
                         pixel00_loc: [ pixel00_loc.x as f32, pixel00_loc.y as f32, pixel00_loc.z as f32, 1.0],
                         pixel_delta_u:[pixel_delta_u.x as f32, pixel_delta_u.y as f32, pixel_delta_u.z as f32, 1.0],
                         pixel_delta_v: [pixel_delta_v.x as f32, pixel_delta_v.y as f32, pixel_delta_v.z as f32, 1.0],
-                        world_position: [world_position_1.x as f32, world_position_1.y as f32, world_position_1.z as f32, 1.0]
+                        world_position: [world_position_1.x as f32, world_position_1.y as f32, world_position_1.z as f32, 1.0],
+                        sun_position: [10000.0, 3000.0, 10000.0, 1.0]
                     };
 
                     //println!("{:?}", look_from);
@@ -853,7 +855,7 @@ impl WorldUpdater {
             while !shutdown {
                 match command_rx.recv() {  // Use rx_worker instead of tx_clone
                     Ok(WorldUpdateMessage::UpdateWorld) => {
-                        println!("Worker thread received UpdateWorld message");
+                        println!("Received");
                         // Get next buffer index
                         let next_buffer = current_buffer; //(current_buffer + 1) % 2;
                         
@@ -861,7 +863,7 @@ impl WorldUpdater {
                         let mut rng = rand::rng();
                         let world = get_flat_world(rng.random_range(1..99999));
                         let mut w = world.1;
-                        w.resize(1000000000, 0);
+                        w.resize(150000000, 0);
     
                         // Create staging buffers
                         let staging_buffer = Buffer::from_iter(
@@ -924,25 +926,25 @@ impl WorldUpdater {
     
                         // Update current buffer and notify main thread
                         current_buffer = next_buffer;
-                        println!("Worker completed update - sending BufferUpdated({}) message", next_buffer);
+                        println!("Updated Buffer");
                         
                         if let Err(e) = update_tx.send(WorldUpdateMessage::BufferUpdated(next_buffer)) {
-                            println!("Failed to send buffer update: {:?}", e);
+                            println!("Failed");
                             shutdown = true; // Exit if we can't send messages
                         } else {
-                            println!("Successfully sent BufferUpdated({}) message", next_buffer);
+                            println!("Success");
                         }
                         
                     },
                     Ok(WorldUpdateMessage::Shutdown) => {
-                        println!("Worker thread received shutdown message");
+                        println!("Shutdown");
                         shutdown = true;
                     },
                     Ok(_) => {
-                        println!("Worker thread received unexpected message type");
+                        println!("Recevied");
                     },
                     Err(e) => {
-                        println!("Channel error in worker thread: {:?}", e);
+                        println!("Error {:?}", e);
                         shutdown = true;
                     }
                 }
@@ -960,9 +962,9 @@ impl WorldUpdater {
     }
 
     pub fn request_update(&self) {
-        println!("Requesting world update");
+        println!("Updating world");
         if let Err(e) = self.sender.send(WorldUpdateMessage::UpdateWorld) {
-            println!("Failed to request update: {:?}", e);
+            println!("Error");
         }
     }
 }

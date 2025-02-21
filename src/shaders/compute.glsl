@@ -8,6 +8,7 @@ layout(set = 0, binding = 0) uniform camera_subbuffer {
     vec3 pixel_delta_u;
     vec3 pixel_delta_v;
     vec3 world_pos_1;
+    vec3 sun_loc;
 } c;
 
 
@@ -182,36 +183,105 @@ void take_step(ivec3 step, vec3 t_delta, inout vec3 t_max, inout uint hit_axis, 
     
 }
 
-vec4 get_colour(uint hit_axis, ivec3 step, vec3 c) {
+vec3 get_colour(uint hit_axis, ivec3 step, vec3 c) {
+    vec3 normal;
+
+    // if(hit_axis == 0) normal = vec3(-step.x, 0.0, 0.0);
+    // else if(hit_axis == 1) normal = vec3(0.0, -step.y, 0.0);
+    // else normal = vec3(0.0, 0.0, -step.z);
+
+    return vec3(0.1, 0.1, 0.1);
+}
+
+vec3 stone(uint hit_axis, ivec3 step) {
     vec3 normal;
 
     if(hit_axis == 0) normal = vec3(-step.x, 0.0, 0.0);
     else if(hit_axis == 1) normal = vec3(0.0, -step.y, 0.0);
     else normal = vec3(0.0, 0.0, -step.z);
 
-    return vec4((normal + c) * 0.5, 1.0);
+    return vec3(0.7, 0.71, 0.7) * 0.3 + normal * 0.1;
 }
 
-vec4 stone(uint hit_axis, ivec3 step) {
-    vec3 normal;
-
-    if(hit_axis == 0) normal = vec3(-step.x, 0.0, 0.0);
-    else if(hit_axis == 1) normal = vec3(0.0, -step.y, 0.0);
-    else normal = vec3(0.0, 0.0, -step.z);
-
-    return vec4((vec3(0.7, 0.71, 0.7) * 0.3 + normal * 0.1), 1.0);
-}
-
-vec4 grass(uint hit_axis, ivec3 step) {
+vec3 grass(uint hit_axis, ivec3 step) {
         vec3 normal;
 
     if(hit_axis == 0) normal = vec3(0.0, 0.0, 0.0);
     else if(hit_axis == 1) normal = vec3(0.0, -step.y, 0.0);
     else normal = vec3(0.0, 0.0, 0.0);
 
-    return vec4((normal + vec3(0.0, 0.5, 0.1)) * 0.5, 1.0);
+    // if (hit_axis == 1) {
+    //     return vec3(0.7, 0.73, 0.7) * 0.5;
+    // }
+
+    return normal + vec3(0.0, 0.5, 0.1) * 0.5;
 }
 
+bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_delta, ivec3 step, vec3 dir, inout vec3 hit_colour) {
+
+    uint steps = 0;
+    uint hit_axis = 0;
+    steps = 0;
+    int multiplier;
+
+    while(all(lessThan(abs(world_pos), vec3(20*64, 200, 20*64))) && steps < 1000) {
+        // Go through chunks
+
+        uint voxel_type = get_depth(world_pos, multiplier);
+
+        if (voxel_type == 1) {
+            hit_colour = grass(hit_axis, step);
+            return true;
+        }
+
+        if (voxel_type == 2) {
+            hit_colour = stone(hit_axis, step);
+            return true;
+        }
+
+        steps += 1;
+        take_step(step, t_delta, t_max, hit_axis, world_pos, multiplier, dir);
+
+        if (steps > 300) {
+            hit_colour = vec3(1.0, 0.0, 1.0);
+            return true;
+        }
+    }
+
+    return false;
+}
+
+void apply_shadow(vec3 world_pos, vec3 t_max, vec3 t_delta, ivec3 step, vec3 dir, inout vec3 hit_colour) {
+
+    uint steps = 1;
+    uint hit_axis = 0;
+    int multiplier;
+
+    //take_step(step, t_delta, t_max, hit_axis, world_pos, 1, dir);
+    world_pos += step;
+
+    while(steps < 20) {
+        // Go through chunks
+
+        uint voxel_type = get_depth(world_pos, multiplier);
+
+
+        if (voxel_type == 1) {
+            hit_colour *= 0.5;
+            return;
+        }
+
+        if (voxel_type == 2) {
+            hit_colour *= 0.5;
+            return;
+        }
+
+        steps += 1;
+        take_step(step, t_delta, t_max, hit_axis, world_pos, 1, dir);
+    }
+
+    return;
+}
 
 void main() {
     ivec2 pixel_coords = ivec2(gl_GlobalInvocationID.xy);
@@ -221,7 +291,6 @@ void main() {
     vec3 pixel_center = c.pixel00_loc + (c.pixel_delta_u * float(pixel_coords.x)) + (c.pixel_delta_v * float(pixel_coords.y));
     vec3 dir = pixel_center - origin;
 
-    vec4 output_colour = vec4(1.0);
     vec3 world_pos = c.world_pos_1;
 
     vec3 t_delta = abs(vec3(1.0) / dir);
@@ -258,42 +327,57 @@ void main() {
 
     t_max /= dir;
 
-    uint steps = 0;
-    uint hit_axis = 0;
+    vec3 hit_colour;
 
-    steps = 0;
+    bool hit = get_intersect(pixel_coords, world_pos, t_max, t_delta, step, dir, hit_colour);
 
-    int multiplier;
+    if (hit == true) {
+        // Get lighting
+        vec3 hit_pos = c.origin + dir * min(t_max.x, min(t_max.y, t_max.z));
+        world_pos = floor(hit_pos);
+        dir = normalize((c.sun_loc));
 
+        t_delta = abs(vec3(1.0)/dir);
 
-    while(all(lessThan(abs(world_pos), vec3(20*64, 200, 20*64))) && steps < 1000) {
-        // Go through chunks
-
-        uint current_depth = get_depth(world_pos, multiplier);
-
-        if (current_depth == 1) {
-            imageStore(storageImage, pixel_coords, grass(hit_axis, step) );
-            return;
+        if (dir.x < 0.0) {
+            step.x = -1;
+            t_max.x = ((world_pos.x) - hit_pos.x);
+        }
+        else {
+            step.x = 1;
+            t_max.x = ((world_pos.x + 1.0) - hit_pos.x);
         }
 
-        if (current_depth == 2) {
-            imageStore(storageImage, pixel_coords, stone(hit_axis, step));
-            return;
+        if (dir.y < 0.0) {
+            step.y = -1;
+            t_max.y = ((world_pos.y) - hit_pos.y);
+        }
+        else {
+            step.y = 1;
+            t_max.y = ((world_pos.y + 1.0) - hit_pos.y);
         }
 
-        steps += 1;
-        take_step(step, t_delta, t_max, hit_axis, world_pos, multiplier, dir);
-    }
+        if (dir.z < 0.0) {
+            step.z = -1;
+            t_max.z = ((world_pos.z) - hit_pos.z);
+        }
+        else {
+            step.z = 1;
+            t_max.z = ((world_pos.z + 1.0) - hit_pos.z);
+        }
 
+        t_max /= dir;
 
-    if (steps > 300) {
-        imageStore(storageImage, pixel_coords, vec4(1.0, 0.0, 1.0, 1.0));
+        apply_shadow(world_pos, t_max, t_delta, step, dir, hit_colour);
+
+        imageStore(storageImage, pixel_coords, vec4(hit_colour, 1.0));
+
         return;
     }
 
     float a = (normalize(dir).y + 1.0) * 0.5;
     vec3 colour = vec3(1.0) * (1.0 - a) + vec3(0.5, 0.7, 1.0) * (a);
-    output_colour = vec4(colour, 1.0);
+    vec4 output_colour = vec4(colour, 1.0);
     imageStore(storageImage, pixel_coords, output_colour);
 }
 
