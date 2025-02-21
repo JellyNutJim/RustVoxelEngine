@@ -130,13 +130,7 @@ void take_step(ivec3 step, vec3 t_delta, inout vec3 t_max, inout uint hit_axis, 
 
         float curr_t = curr_distance;
 
-        vec3 origin = c.origin + dir * curr_t;
-
-        // if (curr_t == t_max.x) {
-
-        // }
-        // else if (curr_t == t_max.y) {
-        // }
+        vec3 origin = c.origin + dir * vec3(curr_t);
 
 
         for (int i = 0; i < 3; i++) {
@@ -154,47 +148,21 @@ void take_step(ivec3 step, vec3 t_delta, inout vec3 t_max, inout uint hit_axis, 
         }
         
         // Get position just before intersection
-        vec3 pos = origin + dir * (minT);
+        vec3 pos = origin + dir * vec3(minT);
         vec3 temp = floor(pos);
-        //vec3 world_pos = floor(pos);
     
-        //t_max += (abs(temp - world_pos)) * t_delta;
-        //t_max[hit_axis] -= t_delta[hit_axis];
+
         t_max += (abs(temp - world_pos)) * t_delta;
-        curr_distance = t_max[hit_axis];
-        //t_max = vec3(abs(c.origin[hit_axis] - pos[hit_axis])) + t_delta;
-
-        //t_max = vec3(abs(temp - world_pos)[hit_axis] * t_delta[hit_axis]);
-
-        // current t_max[hit] should be the lowest, the other represeting the next distances
-
-        // if (hit_axis == 0) {
-        //     t_max[1] += t_delta[1];
-        //     t_max[2] += t_delta[2];
-        // }
-        // else if (hit_axis == 1) {
-        //     t_max[0] += t_delta[0];
-        //     t_max[2] += t_delta[2];
-        // }
-        // else {
-        //     t_max[1] += t_delta[1];
-        //     t_max[0] += t_delta[0];
-        // }
-
-        // if (hit_axis == 0) {
-        //     t_max.y += (step.y > 0 ?  world_pos.y + 1.0 : world_pos.y) - pos.y;
-        //     t_max.z += (step.z > 0 ?  world_pos.z + 1.0 : world_pos.z) - pos.z;
-        // }
-        // else if (hit_axis == 1) {
-        //     t_max.x += (step.x > 0 ?  world_pos.x + 1.0 : world_pos.x) - pos.x;
-        //     t_max.z += (step.z > 0 ?  world_pos.z + 1.0 : world_pos.z) - pos.z;
-        // }
-        // else {
-        //     t_max.y += (step.y > 0 ?  world_pos.y + 1.0 : world_pos.y) - pos.y;
-        //     t_max.x += (step.x > 0 ?  world_pos.x + 1.0 : world_pos.x) - pos.x;
-        // }
 
         world_pos = temp;
+
+        // t_max = vec3(
+        //     (step.x > 0 ?  world_pos.x + 1.0 : world_pos.x) - c.origin.x,
+        //     (step.y > 0 ?  world_pos.y + 1.0 : world_pos.y) - c.origin.y,
+        //     (step.z > 0 ?  world_pos.z + 1.0 : world_pos.z) - c.origin.z
+        // ) / dir;
+
+        curr_distance += minT;
 
         return;
     }
@@ -202,8 +170,8 @@ void take_step(ivec3 step, vec3 t_delta, inout vec3 t_max, inout uint hit_axis, 
     if(t_max.x < t_max.y) {
         if(t_max.x < t_max.z) {
             world_pos.x += step.x;
-            t_max.x += t_delta.x;
             curr_distance = t_max.x;
+            t_max.x += t_delta.x;
             hit_axis = 0;
         } else {
             world_pos.z += step.z;
@@ -215,13 +183,13 @@ void take_step(ivec3 step, vec3 t_delta, inout vec3 t_max, inout uint hit_axis, 
     else {
         if(t_max.y < t_max.z) {
             world_pos.y += step.y;
-            t_max.y += t_delta.y;
             curr_distance = t_max.y;
+            t_max.y += t_delta.y;
             hit_axis = 1;
         } else {
             world_pos.z += step.z;
-            t_max.z += t_delta.z;
             curr_distance = t_max.z;
+            t_max.z += t_delta.z;
             hit_axis = 2;
         }
     }
