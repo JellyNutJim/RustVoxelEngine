@@ -123,14 +123,20 @@ uint get_depth(vec3 pos, inout int multiplier) {
     return v_buf.voxels[index + 1];
 }
 
-void take_step(ivec3 step, vec3 t_delta, inout vec3 t_max, inout uint hit_axis, inout vec3 world_pos, int multiplier, vec3 dir) {
+void take_step(ivec3 step, vec3 t_delta, inout vec3 t_max, inout uint hit_axis, inout vec3 world_pos, int multiplier, vec3 dir, inout float curr_distance) {
 
     if (multiplier > 4) {
         float minT = 1e10;
 
-        float curr_t = min(t_max.x, min(t_max.y, t_max.z));
+        float curr_t = curr_distance;
 
         vec3 origin = c.origin + dir * curr_t;
+
+        // if (curr_t == t_max.x) {
+
+        // }
+        // else if (curr_t == t_max.y) {
+        // }
 
 
         for (int i = 0; i < 3; i++) {
@@ -150,22 +156,59 @@ void take_step(ivec3 step, vec3 t_delta, inout vec3 t_max, inout uint hit_axis, 
         // Get position just before intersection
         vec3 pos = origin + dir * (minT);
         vec3 temp = floor(pos);
-        
+        //vec3 world_pos = floor(pos);
+    
+        //t_max += (abs(temp - world_pos)) * t_delta;
+        //t_max[hit_axis] -= t_delta[hit_axis];
         t_max += (abs(temp - world_pos)) * t_delta;
+        curr_distance = t_max[hit_axis];
+        //t_max = vec3(abs(c.origin[hit_axis] - pos[hit_axis])) + t_delta;
+
+        //t_max = vec3(abs(temp - world_pos)[hit_axis] * t_delta[hit_axis]);
+
+        // current t_max[hit] should be the lowest, the other represeting the next distances
+
+        // if (hit_axis == 0) {
+        //     t_max[1] += t_delta[1];
+        //     t_max[2] += t_delta[2];
+        // }
+        // else if (hit_axis == 1) {
+        //     t_max[0] += t_delta[0];
+        //     t_max[2] += t_delta[2];
+        // }
+        // else {
+        //     t_max[1] += t_delta[1];
+        //     t_max[0] += t_delta[0];
+        // }
+
+        // if (hit_axis == 0) {
+        //     t_max.y += (step.y > 0 ?  world_pos.y + 1.0 : world_pos.y) - pos.y;
+        //     t_max.z += (step.z > 0 ?  world_pos.z + 1.0 : world_pos.z) - pos.z;
+        // }
+        // else if (hit_axis == 1) {
+        //     t_max.x += (step.x > 0 ?  world_pos.x + 1.0 : world_pos.x) - pos.x;
+        //     t_max.z += (step.z > 0 ?  world_pos.z + 1.0 : world_pos.z) - pos.z;
+        // }
+        // else {
+        //     t_max.y += (step.y > 0 ?  world_pos.y + 1.0 : world_pos.y) - pos.y;
+        //     t_max.x += (step.x > 0 ?  world_pos.x + 1.0 : world_pos.x) - pos.x;
+        // }
+
         world_pos = temp;
+
         return;
     }
-
-
 
     if(t_max.x < t_max.y) {
         if(t_max.x < t_max.z) {
             world_pos.x += step.x;
             t_max.x += t_delta.x;
+            curr_distance = t_max.x;
             hit_axis = 0;
         } else {
             world_pos.z += step.z;
             t_max.z += t_delta.z;
+            curr_distance = t_max.z;
             hit_axis = 2;
         }
     } 
@@ -173,10 +216,12 @@ void take_step(ivec3 step, vec3 t_delta, inout vec3 t_max, inout uint hit_axis, 
         if(t_max.y < t_max.z) {
             world_pos.y += step.y;
             t_max.y += t_delta.y;
+            curr_distance = t_max.y;
             hit_axis = 1;
         } else {
             world_pos.z += step.z;
             t_max.z += t_delta.z;
+            curr_distance = t_max.z;
             hit_axis = 2;
         }
     }
@@ -217,7 +262,7 @@ vec3 grass(uint hit_axis, ivec3 step) {
     return normal + vec3(0.0, 0.5, 0.1) * 0.5;
 }
 
-bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_delta, ivec3 step, vec3 dir, inout vec3 hit_colour) {
+bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_delta, ivec3 step, vec3 dir, inout vec3 hit_colour, inout float curr_distance) {
 
     uint steps = 0;
     uint hit_axis = 0;
@@ -240,7 +285,7 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
         }
 
         steps += 1;
-        take_step(step, t_delta, t_max, hit_axis, world_pos, multiplier, dir);
+        take_step(step, t_delta, t_max, hit_axis, world_pos, multiplier, dir, curr_distance);
 
         if (steps > 300) {
             hit_colour = vec3(1.0, 0.0, 1.0);
@@ -251,7 +296,7 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
     return false;
 }
 
-void apply_shadow(vec3 world_pos, vec3 t_max, vec3 t_delta, ivec3 step, vec3 dir, inout vec3 hit_colour) {
+void apply_shadow(vec3 world_pos, vec3 t_max, vec3 t_delta, ivec3 step, vec3 dir, inout vec3 hit_colour, inout float curr_distance) {
 
     uint steps = 1;
     uint hit_axis = 0;
@@ -277,7 +322,7 @@ void apply_shadow(vec3 world_pos, vec3 t_max, vec3 t_delta, ivec3 step, vec3 dir
         }
 
         steps += 1;
-        take_step(step, t_delta, t_max, hit_axis, world_pos, 1, dir);
+        take_step(step, t_delta, t_max, hit_axis, world_pos, 1, dir, curr_distance);
     }
 
     return;
@@ -328,8 +373,9 @@ void main() {
     t_max /= dir;
 
     vec3 hit_colour;
+    float curr_distance = 0;
 
-    bool hit = get_intersect(pixel_coords, world_pos, t_max, t_delta, step, dir, hit_colour);
+    bool hit = get_intersect(pixel_coords, world_pos, t_max, t_delta, step, dir, hit_colour, curr_distance);
 
     if (hit == true) {
         // Get lighting
@@ -368,7 +414,7 @@ void main() {
 
         t_max /= dir;
 
-        apply_shadow(world_pos, t_max, t_delta, step, dir, hit_colour);
+        apply_shadow(world_pos, t_max, t_delta, step, dir, hit_colour, curr_distance);
 
         imageStore(storageImage, pixel_coords, vec4(hit_colour, 1.0));
 
