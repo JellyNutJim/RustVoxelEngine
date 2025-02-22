@@ -66,6 +66,38 @@ fn main() -> Result<(), impl Error> {
     event_loop.run_app(&mut app)
 }
 
+struct FrameTimer {
+    last_frame: Instant,
+    frame_duration: Duration,
+    accumulated_time: Duration,
+}
+
+impl FrameTimer {
+    fn new(fps: u32) -> Self {
+        FrameTimer {
+            last_frame: Instant::now(),
+            frame_duration: Duration::from_secs_f64(1.0 / fps as f64),
+            accumulated_time: Duration::ZERO,
+        }
+    }
+
+    fn update(&mut self) -> bool {
+        let now = Instant::now();
+        let delta = now - self.last_frame;
+        self.last_frame = now;
+        
+        // Add the time since last frame to our accumulator
+        self.accumulated_time += delta;
+        
+        // Check if enough time has passed for a new frame
+        if self.accumulated_time >= self.frame_duration {
+            self.accumulated_time -= self.frame_duration;
+            return true;
+        }
+        false
+    }
+}
+
 struct App {
     instance: Arc<Instance>,
     device: Arc<Device>,
@@ -86,6 +118,7 @@ struct App {
     world_updater: WorldUpdater,
 
     last_n_press: Instant,
+    frame_timer: FrameTimer,
 }
 
 struct RenderContext {
@@ -323,6 +356,7 @@ impl App {
         println!("{:?}", a);
 
         let last_n_press = Instant::now() - Duration::from_secs(1);
+        let frame_timer = FrameTimer::new(60); 
 
 
         App {
@@ -339,12 +373,15 @@ impl App {
             camera_location,
             world_updater,
             update_receiver,
-            last_n_press
+            last_n_press,
+            frame_timer
         }
     }
 }
 
 impl ApplicationHandler for App {
+
+
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         let window = Arc::new(
             event_loop
@@ -607,6 +644,10 @@ impl ApplicationHandler for App {
                 // Dont draw frame when minimised
                 if window_size.width == 0 || window_size.height == 0 {
                     return;
+                }
+
+                if !self.frame_timer.update() {
+                    return; // Skip rendering this frame but keep processing input
                 }
 
                 // Free finished resources

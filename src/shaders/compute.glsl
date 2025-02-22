@@ -1,6 +1,6 @@
 #version 460
 
-layout(local_size_x = 8, local_size_y = 1, local_size_z = 1) in;
+layout(local_size_x = 4, local_size_y = 1, local_size_z = 1) in;
 
 layout(set = 0, binding = 0) uniform camera_subbuffer {
     vec3 origin;
@@ -44,27 +44,26 @@ uint get_octant(vec3 pos, uint mid) {
 
 
 uint get_depth(vec3 pos, inout int multiplier) {
+    uvec3 realitive_chunk_location = uvec3((floor((pos) / 64)) - (w_buf.origin) / 64);
 
-
-    //ivec3 rel = ivec3(floor((pos) / 64)) - (w_buf.origin) / 64;
-
-    ivec3 rel = ivec3(
-        ((pos.x - (int(pos.x) & 63)) / 64) - (w_buf.origin.x / 64),
-        ((pos.y - (int(pos.y) & 63)) / 64) - (w_buf.origin.y / 64),
-        ((pos.z - (int(pos.z) & 63)) / 64) - (w_buf.origin.z / 64)
-    );
+    // ivec3 rel = ivec3(
+    //     ((pos.x - (int(pos.x) & 63)) / 64) - (w_buf.origin.x / 64),
+    //     ((pos.y - (int(pos.y) & 63)) / 64) - (w_buf.origin.y / 64),
+    //     ((pos.z - (int(pos.z) & 63)) / 64) - (w_buf.origin.z / 64)
+    // );
 
 
     // Currently defining here -> Will switch this out for buffer input
     int WIDTH = 40;
 
-    uvec3 realitive_chunk_location = uvec3(rel);
+    //uvec3 realitive_chunk_location = uvec3(rel);
 
     // Voxel position in the current chunk
     //vec3 voxel_pos = vec3(0.0);
 
 
     vec3 local_pos = mod(mod(pos, 64.0) + vec3(64.0), 64.0);
+
     //vec3 local_pos = mod(pos, 64.0);
 
 
@@ -133,6 +132,7 @@ void take_step(ivec3 step, vec3 t_delta, inout vec3 t_max, inout uint hit_axis, 
         vec3 origin = c.origin + dir * vec3(curr_t);
 
 
+        // After issues have bee fixed, the next boundary calculation could easily be replaced with hardcoded values for each multi
         for (int i = 0; i < 3; i++) {
             float nextBoundary = dir[i] > 0.0 ? 
                 multiplier * (floor(origin[i] / multiplier) + 1.0) : 
@@ -148,8 +148,9 @@ void take_step(ivec3 step, vec3 t_delta, inout vec3 t_max, inout uint hit_axis, 
         }
         
         // Get position just before intersection
-        vec3 pos = origin + dir * vec3(minT);
-        vec3 temp = floor(pos);
+        curr_distance += minT;
+        vec3 pos = c.origin + (dir) * curr_distance;
+        vec3 temp = floor(pos + 0.001 * sign(dir));
     
 
         t_max += (abs(temp - world_pos)) * t_delta;
@@ -162,7 +163,7 @@ void take_step(ivec3 step, vec3 t_delta, inout vec3 t_max, inout uint hit_axis, 
         //     (step.z > 0 ?  world_pos.z + 1.0 : world_pos.z) - c.origin.z
         // ) / dir;
 
-        curr_distance += minT;
+        
 
         return;
     }
@@ -237,7 +238,7 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
     steps = 0;
     int multiplier;
 
-    while(all(lessThan(abs(world_pos), vec3(20*64, 200, 20*64))) && steps < 1000) {
+    while(all(lessThan(abs(world_pos), vec3(20*64, 200, 20*64))) && steps < 300) {
         // Go through chunks
 
         uint voxel_type = get_depth(world_pos, multiplier);
