@@ -42,30 +42,15 @@ uint get_octant(vec3 pos, uint mid) {
 }
 
 
-
 uint get_depth(vec3 pos, inout int multiplier) {
     uvec3 realitive_chunk_location = uvec3((floor((pos) / 64)) - (w_buf.origin) / 64);
-
-    // ivec3 rel = ivec3(
-    //     ((pos.x - (int(pos.x) & 63)) / 64) - (w_buf.origin.x / 64),
-    //     ((pos.y - (int(pos.y) & 63)) / 64) - (w_buf.origin.y / 64),
-    //     ((pos.z - (int(pos.z) & 63)) / 64) - (w_buf.origin.z / 64)
-    // );
-
 
     // Currently defining here -> Will switch this out for buffer input
     int WIDTH = 40;
 
-    //uvec3 realitive_chunk_location = uvec3(rel);
+    //vec3 local_pos = mod(mod(pos , 64.0) + vec3(64.0), 64.0);
 
-    // Voxel position in the current chunk
-    //vec3 voxel_pos = vec3(0.0);
-
-
-    vec3 local_pos = mod(mod(pos, 64.0) + vec3(64.0), 64.0);
-
-    //vec3 local_pos = mod(pos, 64.0);
-
+    vec3 local_pos = mod(pos, 64.0);
 
     uint index = realitive_chunk_location.x + realitive_chunk_location.y * WIDTH + realitive_chunk_location.z * WIDTH * WIDTH;
     index = w_buf.chunks[index];
@@ -80,7 +65,7 @@ uint get_depth(vec3 pos, inout int multiplier) {
 
     if (v_buf.voxels[index] == 0) {
        multiplier = 32;
-        return v_buf.voxels[index + 1];
+       return v_buf.voxels[index + 1];
     }
 
     octant = get_octant(mod(local_pos, 32), 15);
@@ -116,10 +101,10 @@ uint get_depth(vec3 pos, inout int multiplier) {
     }
 
     octant = get_octant(mod(local_pos, 2), 0);
-    index = index + v_buf.voxels[index + octant + 1];
+    index = index + octant + 1;
 
     multiplier = 1;
-    return v_buf.voxels[index + 1];
+    return v_buf.voxels[index];
 }
 
 void take_step(ivec3 step, vec3 t_delta, inout vec3 t_max, inout uint hit_axis, inout vec3 world_pos, int multiplier, vec3 dir, inout float curr_distance) {
@@ -127,20 +112,20 @@ void take_step(ivec3 step, vec3 t_delta, inout vec3 t_max, inout uint hit_axis, 
     if (multiplier > 4) {
         float minT = 1e10;
 
-        float curr_t = curr_distance;
-
-        vec3 origin = c.origin + dir * vec3(curr_t);
-
+        vec3 origin = c.origin + dir * curr_distance;
 
         // After issues have bee fixed, the next boundary calculation could easily be replaced with hardcoded values for each multi
         for (int i = 0; i < 3; i++) {
+            if (dir[i] == 0.0) {
+                continue;
+            }
             float nextBoundary = dir[i] > 0.0 ? 
                 multiplier * (floor(origin[i] / multiplier) + 1.0) : 
-                multiplier * floor(origin[i] / multiplier) - 1.0;
+                multiplier * floor(origin[i] / multiplier);
             
             float t = (nextBoundary - origin[i]) / dir[i];
             
-            if (t > 0.0 && t < minT) {
+            if (t < minT) {
                 minT = t;
                 hit_axis = uint(i);
             }
@@ -150,12 +135,18 @@ void take_step(ivec3 step, vec3 t_delta, inout vec3 t_max, inout uint hit_axis, 
         // Get position just before intersection
         curr_distance += minT;
         vec3 pos = c.origin + (dir) * curr_distance;
-        vec3 temp = floor(pos + 0.001 * sign(dir));
-    
+        
+        vec3 temp = floor(pos);
 
+        if (dir[hit_axis] < 0.0) {
+            curr_distance += 0.01;
+            temp[hit_axis] += step[hit_axis];
+        }
+        
         t_max += (abs(temp - world_pos)) * t_delta;
-
+        
         world_pos = temp;
+        
 
         // t_max = vec3(
         //     (step.x > 0 ?  world_pos.x + 1.0 : world_pos.x) - c.origin.x,
@@ -176,8 +167,8 @@ void take_step(ivec3 step, vec3 t_delta, inout vec3 t_max, inout uint hit_axis, 
             hit_axis = 0;
         } else {
             world_pos.z += step.z;
-            t_max.z += t_delta.z;
             curr_distance = t_max.z;
+            t_max.z += t_delta.z;
             hit_axis = 2;
         }
     } 
@@ -236,32 +227,55 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
     uint steps = 0;
     uint hit_axis = 0;
     steps = 0;
-    int multiplier;
+    int multiplier = 1;
+    int transparent_hits = 0;
+    vec3 tansparent_mask = vec3(1.0);
 
-    while(all(lessThan(abs(world_pos), vec3(20*64, 200, 20*64))) && steps < 300) {
+    while(min(world_pos.x, world_pos.z) > w_buf.origin.x && max(world_pos.x, world_pos.z) < w_buf.origin.x + 64*40  && steps < 500) {
         // Go through chunks
+
+        if (world_pos.y > 1000) {
+            break;
+        }
 
         uint voxel_type = get_depth(world_pos, multiplier);
 
+        // Air
+        if (voxel_type == 0) {  
+            steps += 1;
+            take_step(step, t_delta, t_max, hit_axis, world_pos, multiplier, dir, curr_distance);
+            continue;
+        }
+
         if (voxel_type == 1) {
-            hit_colour = grass(hit_axis, step);
+            hit_colour = grass(hit_axis, step) * tansparent_mask;
+            vec3 hit_pos = c.origin + dir * curr_distance;
+            if (fract(hit_pos.x) > 0.5) {
+                hit_colour *= 0.9;
+            }
+
+            if (fract(hit_pos.y) < 0.5) {
+                hit_colour *= 0.9;
+            }
+
+            if (fract(hit_pos.z) < 0.5) {
+                hit_colour *= 0.9;
+            }
+
+
             return true;
         }
 
         if (voxel_type == 2) {
-            hit_colour = stone(hit_axis, step);
+            hit_colour = stone(hit_axis, step) * tansparent_mask;
             return true;
         }
 
-        steps += 1;
-        take_step(step, t_delta, t_max, hit_axis, world_pos, multiplier, dir, curr_distance);
-
-        if (steps > 300) {
-            hit_colour = vec3(1.0, 0.0, 1.0);
-            return true;
+        if (voxel_type == 3) {
+            hit_colour = vec3(0.31, 0.239, 0.9);
+            return true; 
         }
     }
-
     return false;
 }
 
@@ -271,7 +285,7 @@ void apply_shadow(vec3 world_pos, vec3 t_max, vec3 t_delta, ivec3 step, vec3 dir
     uint hit_axis = 0;
     int multiplier;
 
-    //take_step(step, t_delta, t_max, hit_axis, world_pos, 1, dir);
+    //take_step(step, t_delta, t_max, hit_axis, world_pos, 1, dir, curr_distance);
     world_pos += step;
 
     while(steps < 20) {
@@ -383,7 +397,7 @@ void main() {
 
         t_max /= dir;
 
-        apply_shadow(world_pos, t_max, t_delta, step, dir, hit_colour, curr_distance);
+        //apply_shadow(world_pos, t_max, t_delta, step, dir, hit_colour, curr_distance);
 
         imageStore(storageImage, pixel_coords, vec4(hit_colour, 1.0));
 

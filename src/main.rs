@@ -346,7 +346,7 @@ impl App {
 
         #[allow(unused_mut)]
         // Default values
-        let mut camera_location = CameraLocation {location: Vec3::from(0.0,100.0,0.0), direction: Vec3::new(), h_angle: 0.0, v_angle: 0.0};
+        let mut camera_location = CameraLocation {location: Vec3::from(3840.0,830.0,3840.0), direction: Vec3::new(), h_angle: 0.0, v_angle: 0.0};
         let rcx = None;
 
         let p = Vec3::new();
@@ -721,7 +721,7 @@ impl ApplicationHandler for App {
                         sun_position: [10000.0, 3000.0, 10000.0, 1.0]
                     };
 
-                    //println!("{:?}", look_from);
+                    println!("{:?}", look_from);
                     
 
                     let subbuffer = self.camera_buffer.allocate_sized().unwrap();

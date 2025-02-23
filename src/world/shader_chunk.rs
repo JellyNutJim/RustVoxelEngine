@@ -14,7 +14,7 @@ enum ChunkContent {
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
-struct VoxelData(u32);
+struct VoxelData(u32, bool);
 
 #[repr(C)]
 #[derive(Debug, Clone)]
@@ -40,14 +40,14 @@ impl ShaderChunk {
     pub fn new(pos: [i32; 3]) -> Self {
         Self {
             pos,
-            data: ChunkContent::Leaf(VoxelData(0)),
+            data: ChunkContent::Leaf(VoxelData(0, false)),
         }
     }
 
     pub fn new_with_type(pos: [i32; 3], data: u32) -> Self {
         Self {
             pos,
-            data: ChunkContent::Leaf(VoxelData(data)),
+            data: ChunkContent::Leaf(VoxelData(data, false)),
         }
     }
 
@@ -101,20 +101,21 @@ impl ShaderChunk {
         if depth > 6 { panic!("Depth out of range") }
 
         let mut current = &mut self.data;       
-
+        let mut is_voxel = false;
         for i in 0..=depth {
             // Create octants if they do not already exist
+            is_voxel = if i == 5 { true } else { false };
             if let ChunkContent::Leaf(_) = current {
                 *current = ChunkContent::Octants( Box::new(
                     OctantsData([ 
-                        ChunkContent::Leaf(VoxelData(0)),
-                        ChunkContent::Leaf(VoxelData(0)),
-                        ChunkContent::Leaf(VoxelData(0)),
-                        ChunkContent::Leaf(VoxelData(0)),
-                        ChunkContent::Leaf(VoxelData(0)),
-                        ChunkContent::Leaf(VoxelData(0)),
-                        ChunkContent::Leaf(VoxelData(0)),
-                        ChunkContent::Leaf(VoxelData(0)),
+                        ChunkContent::Leaf(VoxelData(0, is_voxel)),
+                        ChunkContent::Leaf(VoxelData(0, is_voxel)),
+                        ChunkContent::Leaf(VoxelData(0, is_voxel)),
+                        ChunkContent::Leaf(VoxelData(0, is_voxel)),
+                        ChunkContent::Leaf(VoxelData(0, is_voxel)),
+                        ChunkContent::Leaf(VoxelData(0, is_voxel)),
+                        ChunkContent::Leaf(VoxelData(0, is_voxel)),
+                        ChunkContent::Leaf(VoxelData(0, is_voxel)),
                     ]))
                 );
             }
@@ -126,7 +127,7 @@ impl ShaderChunk {
         }
 
         // Set current octants value to the given voxel type
-        *current = ChunkContent::Leaf(VoxelData(voxel_type));
+        *current = ChunkContent::Leaf(VoxelData(voxel_type, is_voxel));
     }
 
     // Returns the voxel type at the given position, accounts for subchunks
@@ -168,23 +169,43 @@ impl ShaderChunk {
         let mut result: Vec<u32> = Vec::new();
         let mut curr_len = 0;
 
+        let mut voxel_depth = false;
+
         for octant in octants {
             match octant { 
-                ChunkContent::Leaf(voxel_data) => { octant_vec.push(vec![0, voxel_data.0]); }
+                ChunkContent::Leaf(voxel_data) => { 
+                    if voxel_data.1 == false {
+                        octant_vec.push(vec![0, voxel_data.0]); 
+                    }
+                    else {
+                        voxel_depth = true;
+                        octant_vec.push(vec![voxel_data.0]); 
+                    } 
+                }
                 ChunkContent::Octants(ref octants) => {
                     octant_vec.push(Self::get_flattened_octant(&octants.0));
                 }
             } 
         }
 
-        for (i, ov) in octant_vec.iter_mut().enumerate() {
-            result.insert(i, curr_len + 9);
-            curr_len += ov.len() as u32;
-            result.append(ov);
+        if voxel_depth == false {
+            for (i, ov) in octant_vec.iter_mut().enumerate() {
+                result.insert(i, curr_len + 9);
+                curr_len += ov.len() as u32;
+                result.append(ov);
+            }
+
+            result.insert(0, 1);
+
+            result
         }
+        else {
+            result.push(1);
+            for (i, ov) in octant_vec.iter_mut().enumerate() {
+                result.append(ov);
+            }
 
-        result.insert(0, 1);
-
-        result
+            result
+        }
     }
 }

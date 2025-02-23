@@ -33,12 +33,6 @@ impl ShaderGrid {
     }
 
     pub fn insert_voxel(&mut self, pos: [i32; 3], voxel_type: u32) {
-        // Round to lower chunk bound
-        // let chunk_pos = [
-        //     (pos[0] / 64) * 64,
-        //     (pos[1] / 64) * 64,
-        //     (pos[2] / 64) * 64,
-        // ];
 
         let chunk_pos = self.get_chunk_pos(&pos);
         let chunk_index = chunk_pos[0] + chunk_pos[1] * self.width + chunk_pos[2] * (self.width * self.width);
@@ -53,6 +47,23 @@ impl ShaderGrid {
         //println!("{:?}", chunk_pos);
 
         self.chunks[self.grid[chunk_index as usize] as usize].insert_voxel(pos, voxel_type);
+    }
+
+    pub fn insert_subchunk(&mut self, pos: [i32; 3], voxel_type: u32, depth: u32) {
+
+        let chunk_pos = self.get_chunk_pos(&pos);
+        let chunk_index = chunk_pos[0] + chunk_pos[1] * self.width + chunk_pos[2] * (self.width * self.width);
+        
+        // Local voxel pos in chunk
+        let pos = [
+            (((pos[0] % 64) + 64) % 64) as u32,
+            (((pos[1] % 64) + 64) % 64) as u32,
+            (((pos[2] % 64) + 64) % 64) as u32
+        ];
+
+        //println!("{:?}", chunk_pos);
+
+        self.chunks[self.grid[chunk_index as usize] as usize].insert_subchunk(pos, depth, voxel_type);
     }
 
     // Finds the smallest chunk origin, and sets that to the grid origin

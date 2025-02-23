@@ -9,35 +9,88 @@ pub use shader_chunk::ShaderChunk;
 pub use shader_grid::ShaderGrid;
 
 
+// VOXEL TYPES
+// 0 - air
+// 1 - grass
+// 2 - stone
+// 3 - water
+
+
 pub fn get_flat_world(seed: u64) -> (Vec<i32>, Vec<u32>) {
 
 
     //let mut p = ShaderGrid::from(chunks, 3);
     let width = 40;
 
+
+    let origin = [(width * 64) as i32, 640, (width * 64) as i32];
+
+    let mut p = ShaderGrid::new(width as u32, origin);
+    p.insert_voxel([3840, 801, 3840], 1);
+
+    p.insert_voxel([3842, 800, 3840], 1);
+
+    // Elavation
+    create_flat_with_water(&mut p, width, origin, seed);
+
+
+
+
+    let p = p.flatten();
+    println!("Grid: {}", p.1.len());
+
+    p
+}
+
+fn create_continents(p: &mut ShaderGrid, width: usize, origin: [i32; 3], seed: u64) {
     let noise = PerlinNoise::new(seed); // Use any seed
-    let w = width*64;
-    let h = width*64;
+    let w = width*4;
+    let h = width*4;
     let scale = 0.01; // Adjust this to change the "zoom level" of the noise
     
     let noise_matrix = noise.generate_grid(w, h, scale);
 
+    for x in 0..(w as i32) {
+        for z in 0..(h  as i32) {
+            let y = ((noise_matrix[x as usize][z as usize] * 16.0).floor()) as i32;
+            let x_adjusted = x * 16 + origin[0] as i32;
+            let z_adjusted = z * 16 + origin[2] as i32;
 
-    let mut p = ShaderGrid::new(width as u32, [-64 * (width as i32 / 2), -64, -64 * (width as i32/ 2)]);
+            //p.insert_subchunk([x_adjusted, y, z_adjusted], 1, 1);
 
-    println!("INSERT");
+            //println!("{y}");
+ 
+            p.insert_subchunk([x_adjusted, y + 800, z_adjusted], 1, 1);
+        }
+    }
+
+
+}
+
+fn create_flat_with_water(p: &mut ShaderGrid, width: usize, origin: [i32; 3], seed: u64) {
+    let noise = PerlinNoise::new(seed); // Use any seed
+    let w = width*64;
+    let h = width*64;
+    let scale = 0.005; // Adjust this to change the "zoom level" of the noise
+    
+    let noise_matrix = noise.generate_grid(w, h, scale);
+
+    // Elavation
     for x in (0..((64*width) as i32)).step_by(1) {
         for z in (0..((64*width) as i32)).step_by(1) {
-            let mut y = noise_matrix[x as usize][z as usize] * 64.0;
+            let y = noise_matrix[x as usize][z as usize] * 64.0;
 
-            let mut x_adjusted = x - (64 * width / 2 ) as i32;
-            let mut z_adjusted = z - (64 * width / 2 ) as i32;
-            
-            // if y > 0.0{
-            //     y = ((y / 2.0).floor() * 2.0);
-            // }
+            let x_adjusted = x + origin[0] as i32;
+            let z_adjusted = z + origin[2]  as i32;
 
-            let y = y as i32;
+            let y = (y + 768.0) as i32;
+            if y < 768 {
+                let mut temp = y + 1;
+                while temp < 769 {
+                    p.insert_voxel([x_adjusted, temp, z_adjusted], 3);
+                    temp += 1;
+                }
+            }
 
             p.insert_voxel([x_adjusted, y, z_adjusted], 1);
             p.insert_voxel([x_adjusted, y - 1, z_adjusted], 2);
@@ -45,27 +98,6 @@ pub fn get_flat_world(seed: u64) -> (Vec<i32>, Vec<u32>) {
             p.insert_voxel([x_adjusted, y - 3, z_adjusted], 2);
         }
     }
-
-
-
-    // for x in 0..((64 * width as i32) + 0) {
-    //     for z in 0..(64 * width as i32) {
-
-    //         let x_adjusted = x - (64 * width / 2 ) as i32;
-    //         let z_adjusted = z - (64 * width / 2 ) as i32;
-
-    //         p.insert_voxel([x_adjusted, -3, z_adjusted], 1);
-    //     }
-    // }
-
-
-
-    let p = p.flatten();
-
-    //println!("Grid: {:?}\nChunk Data: {:?}", p.0, p.1);
-    println!("Grid: {}", p.1.len());
-
-    p
 }
 
 pub fn get_empty() -> (Vec<i32>, Vec<u32>) {
