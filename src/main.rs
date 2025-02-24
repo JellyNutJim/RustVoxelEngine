@@ -149,6 +149,7 @@ struct CameraLocation {
     h_angle: f64,
     v_angle: f64,
     direction: Vec3,
+    sun_loc: Vec3,
 }
 
 use vulkano::command_buffer::CopyBufferInfo;
@@ -346,7 +347,7 @@ impl App {
 
         #[allow(unused_mut)]
         // Default values
-        let mut camera_location = CameraLocation {location: Vec3::from(3840.0,830.0,3840.0), direction: Vec3::new(), h_angle: 0.0, v_angle: 0.0};
+        let mut camera_location = CameraLocation {location: Vec3::from(3840.0,830.0,3840.0), direction: Vec3::new(), h_angle: 0.0, v_angle: 0.0, sun_loc: Vec3::from(10000.0, 3000.0, 10000.0)};
         let rcx = None;
 
         let p = Vec3::new();
@@ -577,6 +578,8 @@ impl ApplicationHandler for App {
                     PhysicalKey::Code(KeyCode::KeyD) => { self.camera_location.location = self.camera_location.location + (self.camera_location.direction.cross(up)) * dis }
                     PhysicalKey::Code(KeyCode::Space) => { self.camera_location.location += Vec3::from(0.0, 0.25, 0.0)  }
                     PhysicalKey::Code(KeyCode::ControlLeft) => { self.camera_location.location += Vec3::from(0.0, -0.25, 0.0)  }
+                    PhysicalKey::Code(KeyCode::KeyL) => { self.camera_location.sun_loc -= Vec3::from(100.0, 0.0, 0.0) }
+
                     PhysicalKey::Code(KeyCode::KeyN) => {
                         let now = Instant::now();
                         if now.duration_since(self.last_n_press) >= Duration::from_secs(1) {
@@ -718,7 +721,7 @@ impl ApplicationHandler for App {
                         pixel_delta_u:[pixel_delta_u.x as f32, pixel_delta_u.y as f32, pixel_delta_u.z as f32, 1.0],
                         pixel_delta_v: [pixel_delta_v.x as f32, pixel_delta_v.y as f32, pixel_delta_v.z as f32, 1.0],
                         world_position: [world_position_1.x as f32, world_position_1.y as f32, world_position_1.z as f32, 1.0],
-                        sun_position: [10000.0, 3000.0, 10000.0, 1.0]
+                        sun_position: [self.camera_location.sun_loc.x as f32, self.camera_location.sun_loc.y as f32, self.camera_location.sun_loc.z as f32, 1.0]
                     };
 
                     println!("{:?}", look_from);

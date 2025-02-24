@@ -34,8 +34,6 @@ pub fn get_flat_world(seed: u64) -> (Vec<i32>, Vec<u32>) {
     create_flat_with_water(&mut p, width, origin, seed);
 
 
-
-
     let p = p.flatten();
     println!("Grid: {}", p.1.len());
 

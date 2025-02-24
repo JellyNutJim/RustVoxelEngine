@@ -109,8 +109,15 @@ uint get_depth(vec3 pos, inout int multiplier) {
 
 void take_step(ivec3 step, vec3 t_delta, inout vec3 t_max, inout uint hit_axis, inout vec3 world_pos, int multiplier, vec3 dir, inout float curr_distance) {
 
-    if (multiplier > 4) {
+    if (multiplier > 2) {
         float minT = 1e10;
+
+        // Change so curr_distance adjustment happens here if previous hit dir was negative
+        bool adjust = false;
+        if (dir[hit_axis] < 0.0) {
+            adjust = true;
+            curr_distance += 0.01;
+        }
 
         vec3 origin = c.origin + dir * curr_distance;
 
@@ -131,6 +138,10 @@ void take_step(ivec3 step, vec3 t_delta, inout vec3 t_max, inout uint hit_axis, 
             }
             
         }
+
+        // if (adjust == true) {
+        //     curr_distance -= 0.01;
+        // }
         
         // Get position just before intersection
         curr_distance += minT;
@@ -139,7 +150,7 @@ void take_step(ivec3 step, vec3 t_delta, inout vec3 t_max, inout uint hit_axis, 
         vec3 temp = floor(pos);
 
         if (dir[hit_axis] < 0.0) {
-            curr_distance += 0.01;
+            //curr_distance += 0.01;
             temp[hit_axis] += step[hit_axis];
         }
         
@@ -231,7 +242,7 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
     int transparent_hits = 0;
     vec3 tansparent_mask = vec3(1.0);
 
-    while(min(world_pos.x, world_pos.z) > w_buf.origin.x && max(world_pos.x, world_pos.z) < w_buf.origin.x + 64*40  && steps < 500) {
+    while(min(world_pos.x, world_pos.z) > w_buf.origin.x && max(world_pos.x, world_pos.z) < w_buf.origin.x + 64*40  && steps < 100) {
         // Go through chunks
 
         if (world_pos.y > 1000) {
@@ -281,25 +292,19 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
 
 void apply_shadow(vec3 world_pos, vec3 t_max, vec3 t_delta, ivec3 step, vec3 dir, inout vec3 hit_colour, inout float curr_distance) {
 
-    uint steps = 1;
+    uint steps = 0;
     uint hit_axis = 0;
     int multiplier;
 
-    //take_step(step, t_delta, t_max, hit_axis, world_pos, 1, dir, curr_distance);
-    world_pos += step;
+    take_step(step, t_delta, t_max, hit_axis, world_pos, 1, dir, curr_distance);
+    //world_pos += step;
 
-    while(steps < 20) {
+    while(steps < 10) {
         // Go through chunks
 
         uint voxel_type = get_depth(world_pos, multiplier);
 
-
-        if (voxel_type == 1) {
-            hit_colour *= 0.5;
-            return;
-        }
-
-        if (voxel_type == 2) {
+        if (voxel_type != 0) {
             hit_colour *= 0.5;
             return;
         }
@@ -362,7 +367,7 @@ void main() {
 
     if (hit == true) {
         // Get lighting
-        vec3 hit_pos = c.origin + dir * min(t_max.x, min(t_max.y, t_max.z));
+        vec3 hit_pos = c.origin + dir * curr_distance;
         world_pos = floor(hit_pos);
         dir = normalize((c.sun_loc));
 
@@ -397,12 +402,16 @@ void main() {
 
         t_max /= dir;
 
-        //apply_shadow(world_pos, t_max, t_delta, step, dir, hit_colour, curr_distance);
+        apply_shadow(world_pos, t_max, t_delta, step, dir, hit_colour, curr_distance);
 
         imageStore(storageImage, pixel_coords, vec4(hit_colour, 1.0));
 
         return;
     }
+
+    // Apply sun
+    // Use sphere ray interception from weekend ray tracing, maybe apply normal/multi ray
+    //if ()
 
     float a = (normalize(dir).y + 1.0) * 0.5;
     vec3 colour = vec3(1.0) * (1.0 - a) + vec3(0.5, 0.7, 1.0) * (a);
