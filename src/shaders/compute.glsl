@@ -114,12 +114,12 @@ void take_step(ivec3 step, vec3 t_delta, inout vec3 t_max, inout uint hit_axis, 
 
         // Change so curr_distance adjustment happens here if previous hit dir was negative
         bool adjust = false;
-        if (dir[hit_axis] < 0.0) {
-            adjust = true;
-            curr_distance += 0.01;
-        }
+        // if (dir[hit_axis] < 0.0) {
+        //     adjust = true;
+        //     curr_distance += 0.0001;
+        // }
 
-        vec3 origin = c.origin + dir * curr_distance;
+        vec3 origin = c.origin + dir * (curr_distance + 0.0001);
 
         // After issues have bee fixed, the next boundary calculation could easily be replaced with hardcoded values for each multi
         for (int i = 0; i < 3; i++) {
@@ -150,22 +150,17 @@ void take_step(ivec3 step, vec3 t_delta, inout vec3 t_max, inout uint hit_axis, 
         vec3 temp = floor(pos);
 
         if (dir[hit_axis] < 0.0) {
-            //curr_distance += 0.01;
             temp[hit_axis] += step[hit_axis];
         }
+
         
         t_max += (abs(temp - world_pos)) * t_delta;
+        curr_distance += 0.0001;
+        //curr_distance = t_max[hit_axis] - t_delta[hit_axis];
         
         world_pos = temp;
-        
 
-        // t_max = vec3(
-        //     (step.x > 0 ?  world_pos.x + 1.0 : world_pos.x) - c.origin.x,
-        //     (step.y > 0 ?  world_pos.y + 1.0 : world_pos.y) - c.origin.y,
-        //     (step.z > 0 ?  world_pos.z + 1.0 : world_pos.z) - c.origin.z
-        // ) / dir;
-
-        
+        //curr_distance += 0.01;
 
         return;
     }
@@ -196,7 +191,6 @@ void take_step(ivec3 step, vec3 t_delta, inout vec3 t_max, inout uint hit_axis, 
             hit_axis = 2;
         }
     }
-    
 }
 
 vec3 get_colour(uint hit_axis, ivec3 step, vec3 c) {
@@ -411,10 +405,22 @@ void main() {
 
     // Apply sun
     // Use sphere ray interception from weekend ray tracing, maybe apply normal/multi ray
-    //if ()
 
-    float a = (normalize(dir).y + 1.0) * 0.5;
-    vec3 colour = vec3(1.0) * (1.0 - a) + vec3(0.5, 0.7, 1.0) * (a);
+    float radius = 1000;
+
+    vec3 oc = c.sun_loc - c.origin;
+    float a = dot(dir, dir);
+    float b = -2.0 * dot(dir, oc);
+    float c = dot(oc, oc) - radius*radius;
+    float discriminant = b*b - 4*a*c;
+
+    if (discriminant >= 0) {
+        imageStore(storageImage, pixel_coords, vec4(1.0, 1.0, 0.0, 1.0));
+        return;
+    }
+
+    float k = (normalize(dir).y + 1.0) * 0.5;
+    vec3 colour = vec3(1.0) * (1.0 - k) + vec3(0.5, 0.7, 1.0) * (k);
     vec4 output_colour = vec4(colour, 1.0);
     imageStore(storageImage, pixel_coords, output_colour);
 }
