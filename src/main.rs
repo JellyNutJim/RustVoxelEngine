@@ -1,4 +1,4 @@
-use vulkano::{buffer::allocator::{SubbufferAllocator, SubbufferAllocatorCreateInfo}, device::Features as DeviceFeatures, pipeline::{ComputePipeline, Pipeline}};
+use vulkano::{buffer::allocator::{SubbufferAllocator, SubbufferAllocatorCreateInfo}, device::Features as DeviceFeatures, pipeline::{ComputePipeline, Pipeline}, sync::Sharing};
 use vulkano::pipeline::PipelineBindPoint;
 use vulkano::descriptor_set::{{allocator::{StandardDescriptorSetAllocator, StandardDescriptorSetAllocatorCreateInfo}, WriteDescriptorSet}, PersistentDescriptorSet};
 
@@ -11,8 +11,7 @@ use vulkano::pipeline::compute::ComputePipelineCreateInfo;
 
 use vulkano::descriptor_set::layout::DescriptorSetLayoutBinding;
 
-use std::{error::Error, sync::Arc, f64::consts::PI};
-
+use std::{error::Error, sync::{Arc, Mutex}, f64::consts::PI};
 
 use vulkano::{
     buffer::{Buffer, BufferContents, BufferCreateInfo, BufferUsage, Subbuffer},
@@ -39,11 +38,10 @@ use vulkano::{
     Validated, Version, VulkanError, VulkanLibrary,
 };
 use winit::{
-    application::ApplicationHandler, dpi::PhysicalPosition, event::WindowEvent, event_loop::{ActiveEventLoop, EventLoop}, keyboard::{KeyCode, PhysicalKey}, window::{CursorGrabMode, Window, WindowId}
+    application::ApplicationHandler, dpi::PhysicalPosition, event::{MouseButton, WindowEvent}, event_loop::{ActiveEventLoop, EventLoop}, keyboard::{KeyCode, PhysicalKey}, window::{CursorGrabMode, Window, WindowId}
 
 };
 
-use std::sync::{Mutex};
 use std::thread;
 
 use crossbeam_channel::{unbounded, Sender, Receiver};
@@ -52,9 +50,11 @@ mod asset_load;
 mod types;
 mod world;
 
-use world::{get_flat_world, get_empty, ShaderChunk, ShaderGrid};
+use world::{get_grid_from_seed, ShaderGrid};
 
 use std::time::{Instant, Duration};
+
+use smallvec::smallvec;
 
 use types::Vec3;
 
@@ -157,7 +157,18 @@ use vulkano::command_buffer::CopyBufferInfo;
 
 impl App {
     fn update_world(&mut self) {
-        self.world_updater.request_update();
+        let mut rng = rand::rng();
+
+        self.world_updater.request_update(Update::SwitchSeed(rng.random_range(1..99999)));
+    }
+
+    fn place_voxel(&mut self, u: Update) {
+        if let Update::AddVoxel(_, _, _) = u {
+            self.world_updater.request_update(u);
+        }
+        else {
+            panic!("Tried to add a voxel using incorrect update type");
+        }
     }
 
     fn new(event_loop: &EventLoop<()>) -> Self {
@@ -186,7 +197,7 @@ impl App {
         };
 
         // Select physical device -> Ideally a discrete gpu, will allow selection at a later date
-        let (physical_device, queue_family_index) = instance
+        let (physical_device, queue_family_indicies) = instance
             .enumerate_physical_devices()
             .unwrap()
             .filter(|p| {
@@ -198,15 +209,42 @@ impl App {
                 p.supported_extensions().contains(&device_extensions)
             })
             .filter_map(|p| {
-                p.queue_family_properties()
+                
+               // Find compute queue family
+               let compute_family_index = p.queue_family_properties()
                     .iter()
                     .enumerate()
                     .position(|(_i, q)| {
-
                         q.queue_flags.intersects(QueueFlags::COMPUTE)
-                            
                     })
-                    .map(|i| (p, i as u32))
+                    .map(|i| i as u32);
+           
+                // Find queue family that supports transfer, and ideally not graphics
+                let transfer_family_index = p.queue_family_properties()
+                    .iter()
+                    .enumerate()
+                    .position(|(_i, q)| {
+                        q.queue_flags.contains(QueueFlags::TRANSFER) && 
+                        !q.queue_flags.contains(QueueFlags::GRAPHICS)
+                    })
+                    .map(|i| i as u32)
+                    .or_else(|| {
+                        // Use Transfer and graphics if needed
+                        p.queue_family_properties()
+                            .iter()
+                            .enumerate()
+                            .position(|(_i, q)| {
+                                q.queue_flags.contains(QueueFlags::TRANSFER)
+                            })
+                            .map(|i| i as u32)
+                    });
+                    
+                // Ensure both queues are defined
+                if let (Some(compute), Some(transfer)) = (compute_family_index, transfer_family_index) {
+                    Some((p, (compute, transfer)))
+                } else {
+                    None
+                }
             })
             .min_by_key(|(p, _)| {
                 // We assign a lower score to device types that are likely to be faster/better.
@@ -232,14 +270,37 @@ impl App {
             device_extensions.khr_dynamic_rendering = true;
         }
 
-        // initiliase device and queues
+        let (compute_index, transfer_index) = queue_family_indicies;
+
+        // Create info prrior to initialisation
+        let queue_create_infos = if compute_index == transfer_index {
+            // If they're the same family, request 2 queues from that family
+            vec![QueueCreateInfo {
+                queue_family_index: compute_index,
+                queues: vec![1.0, 1.0], // Request 2 queues with priority 1.0
+                ..Default::default()
+            }]
+        } else {
+            // If they're different families, create separate queue infos
+            vec![
+                QueueCreateInfo {
+                    queue_family_index: compute_index,
+                    queues: vec![1.0], // One compute queue
+                    ..Default::default()
+                },
+                QueueCreateInfo {
+                    queue_family_index: transfer_index,
+                    queues: vec![1.0], // One transfer queue
+                    ..Default::default()
+                }
+            ]
+        };
+
+        // Initiliase device and queues
         let (device, mut queues) = Device::new(
             physical_device,
             DeviceCreateInfo {
-                queue_create_infos: vec![QueueCreateInfo {
-                    queue_family_index,
-                    ..Default::default()
-                }],
+                queue_create_infos,
                 enabled_extensions: device_extensions,
                 enabled_features: DeviceFeatures {
                     dynamic_rendering: true,
@@ -251,7 +312,10 @@ impl App {
         )
         .unwrap();
 
-        let queue = queues.next().unwrap();
+        // Get quues
+        let compute_queue = queues.next().unwrap();
+        let transfer_queue = if compute_index == transfer_index { queues.next().unwrap() } else { queues.next().unwrap() };
+
         let memory_allocator = Arc::new(StandardMemoryAllocator::new_default(device.clone()));
         
         // Allocators
@@ -271,11 +335,12 @@ impl App {
         ));
 
 
-        let world = get_flat_world(42);
+        let mut intial_world = get_grid_from_seed(42);
 
         // Extend vectors to desired size
-        let mut voxels = world.1;
-        let mut meta_data = world.0;
+        let flat_world = intial_world.flatten_world();
+        let mut voxels = flat_world.1;
+        let meta_data = flat_world.0;
 
         // Resize to desired capacity (e.g., 1 million elements)
         voxels.resize(150000000, 0);  // Pad with zeros
@@ -286,6 +351,7 @@ impl App {
                 memory_allocator.clone(),
                 BufferCreateInfo {
                     usage: BufferUsage::STORAGE_BUFFER | BufferUsage::TRANSFER_DST,
+                    sharing: Sharing::Concurrent(smallvec![compute_index, transfer_index]),
                     ..Default::default()
                 },
                 AllocationCreateInfo {
@@ -300,6 +366,7 @@ impl App {
                 memory_allocator.clone(),
                 BufferCreateInfo {
                     usage: BufferUsage::STORAGE_BUFFER | BufferUsage::TRANSFER_DST,
+                    sharing: Sharing::Concurrent(smallvec![compute_index, transfer_index]),
                     ..Default::default()
                 },
                 AllocationCreateInfo {
@@ -317,6 +384,7 @@ impl App {
             memory_allocator.clone(),
             BufferCreateInfo {
                 usage: BufferUsage::STORAGE_BUFFER | BufferUsage::TRANSFER_DST,
+                sharing: Sharing::Concurrent(smallvec![compute_index, transfer_index]),
                 ..Default::default()
             },
             AllocationCreateInfo {
@@ -340,9 +408,10 @@ impl App {
 
         let (world_updater, update_receiver) = WorldUpdater::new(
             device.clone(),
-            queue.clone(),
+            compute_queue.clone(),
             voxel_buffers.clone(),
             world_meta_data_buffer.clone(),
+            intial_world,
         );
 
         #[allow(unused_mut)]
@@ -363,7 +432,7 @@ impl App {
         App {
             instance,
             device,
-            queue,
+            queue: compute_queue,
             command_buffer_allocator,
             descriptor_set_allocator,
             voxel_buffers,
@@ -375,7 +444,7 @@ impl App {
             world_updater,
             update_receiver,
             last_n_press,
-            frame_timer
+            frame_timer,
         }
     }
 }
@@ -446,7 +515,6 @@ impl ApplicationHandler for App {
         let attachment_image_views = window_size_dependent_setup(&images);
 
         // Shader
-
         mod cs {
             vulkano_shaders::shader! {
                 ty: "compute",
@@ -597,13 +665,27 @@ impl ApplicationHandler for App {
                         }
                     }
 
+
                     
                     
                     PhysicalKey::Code(KeyCode::Escape) => { std::process::exit(0) }
                     _ =>  { print!("Non-Assigned Key")}
                 }
+            }
+            #[allow(unused_variables)]
+            WindowEvent::MouseInput { device_id, state, button } => {
+                match button {
+                    MouseButton::Left => {
+                        let u = Update::AddVoxel(self.camera_location.location.x as i32, self.camera_location.location.y as i32, self.camera_location.location.z as i32);
 
-
+                        let now = Instant::now();
+                        if now.duration_since(self.last_n_press) >= Duration::from_secs(1) {
+                            self.place_voxel(u);
+                            self.last_n_press = now;
+                        }
+                    }
+                    _ => {}
+                }
             }
             #[allow(unused_variables)]
             WindowEvent::CursorMoved { device_id, position } => {
@@ -681,6 +763,8 @@ impl ApplicationHandler for App {
                     let look_from = self.camera_location.location;
                     //println!("{:?}", look_from);
 
+                    // Detect Chunk switch and move world
+
                     let look_distance = 1.0;
                     let look_at = self.camera_location.location + self.camera_location.direction * look_distance;
 
@@ -713,6 +797,7 @@ impl ApplicationHandler for App {
                         z: look_from.z.floor(),
                     };
 
+
                     //println!("{:?} {:?} {:?} {:?}", world_position_1, world_position_2, world_position_4 ,world_position_8);
 
                     let c: CameraBufferData = CameraBufferData {
@@ -724,7 +809,7 @@ impl ApplicationHandler for App {
                         sun_position: [self.camera_location.sun_loc.x as f32, self.camera_location.sun_loc.y as f32, self.camera_location.sun_loc.z as f32, 1.0]
                     };
 
-                    println!("{:?}", look_from);
+                    //println!("{:?}", look_from);
                     
 
                     let subbuffer = self.camera_buffer.allocate_sized().unwrap();
@@ -863,14 +948,24 @@ fn window_size_dependent_setup(images: &[Arc<Image>]) -> Vec<Arc<ImageView>> {
 
 #[derive(Debug)]
 enum WorldUpdateMessage {
-    UpdateWorld,
+    UpdateWorld(Update),
     BufferUpdated(usize),
     Shutdown,
 }
 
+#[derive(Debug)]
+#[allow(unused)]
+enum Update {
+    AddVoxel(i32, i32, i32),
+    Shift(u32, i32),
+    SwitchSeed(u64),
+}
+
+#[allow(dead_code)]
 struct WorldUpdater {
     sender: Sender<WorldUpdateMessage>,
     update_thread: Option<thread::JoinHandle<()>>,
+    world: Arc<Mutex<ShaderGrid>>,
 }
 
 use rand::Rng;
@@ -881,12 +976,18 @@ impl WorldUpdater {
         queue: Arc<Queue>,
         voxel_buffers: [Subbuffer<[u32]>; 2],
         world_meta_data_buffer: Subbuffer<[i32]>,
+        intial_world: ShaderGrid,
     ) -> (Self, Receiver<WorldUpdateMessage>) {
         // Create a single channel pair
         let (command_tx, command_rx) = unbounded(); 
         let (update_tx, update_rx) = unbounded(); 
+
+        // Conver world to mutex
+        let world_mutex = Arc::new(Mutex::new(intial_world));
+        let thread_world = world_mutex.clone();
     
         let update_thread = Some(thread::spawn(move || {
+
             let memory_allocator = Arc::new(StandardMemoryAllocator::new_default(device.clone()));
             let command_buffer_allocator = StandardCommandBufferAllocator::new(
                 device.clone(),
@@ -895,73 +996,123 @@ impl WorldUpdater {
             
             let mut shutdown = false;
             let mut current_buffer = 0;
+
+            let mut persistent_voxel_buff: Vec<u32> = Vec::with_capacity(150000000);
+            persistent_voxel_buff.resize(150000000, 0);
+
+            let mut persistent_meta_buff: Vec<i32> = Vec::with_capacity(1000000);
+            persistent_meta_buff.resize(1000000, 0);
+
+
+            let mapped_voxel_buffer = Buffer::from_iter(
+                memory_allocator.clone(),
+                BufferCreateInfo {
+                    usage: BufferUsage::TRANSFER_SRC,
+                    sharing: Sharing::Exclusive,
+                    ..Default::default()
+                },
+                AllocationCreateInfo {
+                    memory_type_filter: MemoryTypeFilter::PREFER_HOST 
+                        | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                    ..Default::default()
+                },
+                persistent_voxel_buff.clone(),
+            ).unwrap();
+
+            let mapped_meta_buffer = Buffer::from_iter(
+                memory_allocator.clone(),
+                BufferCreateInfo {
+                    usage: BufferUsage::TRANSFER_SRC,
+                    sharing: Sharing::Exclusive,
+                    ..Default::default()
+                },
+                AllocationCreateInfo {
+                    memory_type_filter: MemoryTypeFilter::PREFER_HOST 
+                        | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                    ..Default::default()
+                },
+                persistent_meta_buff,
+            ).unwrap();
+
+            let mut builder = AutoCommandBufferBuilder::primary(
+                &command_buffer_allocator,
+                queue.queue_family_index(),
+                CommandBufferUsage::MultipleSubmit,
+            ).unwrap();
+    
+            builder
+                .copy_buffer(CopyBufferInfo::buffers(
+                    mapped_voxel_buffer.clone(),
+                    voxel_buffers[0].clone(),
+                ))
+                .unwrap()
+                .copy_buffer(CopyBufferInfo::buffers(
+                    mapped_meta_buffer.clone(),
+                    world_meta_data_buffer.clone(),
+                ))
+                .unwrap();
+    
+            let command_buffer = builder.build().unwrap();
     
             while !shutdown {
                 match command_rx.recv() {  // Use rx_worker instead of tx_clone
-                    Ok(WorldUpdateMessage::UpdateWorld) => {
+                    Ok(WorldUpdateMessage::UpdateWorld(update)) => {
                         println!("Received");
+
+                        // Lock world
+                        let mut world = thread_world.lock().unwrap();
                         // Get next buffer index
                         let next_buffer = current_buffer; //(current_buffer + 1) % 2;
                         
+                        let i = Instant::now();
+                        match update {
+                            Update::AddVoxel(x, y, z ) => {
+                                println!("Adding: {} {} {}", x, y, z);
+                                world.insert_voxel([x,y,z], 1); 
+                                world.update_flat_chunk_with_world_pos([x, y, z]);
+                            }
+                            Update::SwitchSeed(seed) => {
+                                *world = get_grid_from_seed(seed);
+                                world.flatten_world();
+                            }
+                            _ => { }
+                        };
+                        println!("add time: {}", i.elapsed().as_millis());
+
                         // Generate new world data
-                        let mut rng = rand::rng();
-                        let world = get_flat_world(rng.random_range(1..99999));
-                        let mut w = world.1;
-                        w.resize(150000000, 0);
-    
-                        // Create staging buffers
-                        let staging_buffer = Buffer::from_iter(
-                            memory_allocator.clone(),
-                            BufferCreateInfo {
-                                usage: BufferUsage::TRANSFER_SRC,
-                                ..Default::default()
-                            },
-                            AllocationCreateInfo {
-                                memory_type_filter: MemoryTypeFilter::PREFER_HOST 
-                                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
-                                ..Default::default()
-                            },
-                            w,
-                        ).unwrap();
-    
-                        let staging_meta = Buffer::from_iter(
-                            memory_allocator.clone(),
-                            BufferCreateInfo {
-                                usage: BufferUsage::TRANSFER_SRC,
-                                ..Default::default()
-                            },
-                            AllocationCreateInfo {
-                                memory_type_filter: MemoryTypeFilter::PREFER_HOST 
-                                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
-                                ..Default::default()
-                            },
-                            world.0,
-                        ).unwrap();
-    
-                        // Create and record command buffer
-                        let mut builder = AutoCommandBufferBuilder::primary(
-                            &command_buffer_allocator,
-                            queue.queue_family_index(),
-                            CommandBufferUsage::OneTimeSubmit,
-                        ).unwrap();
-    
-                        builder
-                            .copy_buffer(CopyBufferInfo::buffers(
-                                staging_buffer,
-                                voxel_buffers[next_buffer].clone(),
-                            ))
-                            .unwrap()
-                            .copy_buffer(CopyBufferInfo::buffers(
-                                staging_meta,
-                                world_meta_data_buffer.clone(),
-                            ))
-                            .unwrap();
-    
-                        let command_buffer = builder.build().unwrap();
-    
+                        //let mut rng = rand::rng();
+
+                        let flat_world = world.get_flat_world();
+                        let i = Instant::now();
+
+                        // for (i, v) in flat_world.1.iter().enumerate() {
+                        //     persistent_buffer[i] = *v;
+                        // }
+
+                        //w.resize(150000000, 0);
+                        println!("resize time: {}", i.elapsed().as_millis());
+                        
+                        
+
+                        {
+                            let mut mapped_ptr = mapped_voxel_buffer.write().unwrap();
+                            for (i, v) in flat_world.1.iter().enumerate() {
+                                mapped_ptr[i] = *v;
+                            }
+                        }
+
+                        {
+                            let mut mapped_meta = mapped_meta_buffer.write().unwrap();
+                            for (i, v) in flat_world.0.iter().enumerate() {
+                                mapped_meta[i] = *v;
+                            }
+                        }
+
+                        let i = Instant::now();
+                            
                         // Execute and wait for completion
                         let future = sync::now(device.clone())
-                            .then_execute(queue.clone(), command_buffer)
+                            .then_execute(queue.clone(), command_buffer.clone())
                             .unwrap()
                             .then_signal_fence_and_flush()
                             .unwrap();
@@ -971,8 +1122,10 @@ impl WorldUpdater {
                         // Update current buffer and notify main thread
                         current_buffer = next_buffer;
                         println!("Updated Buffer");
+
+                        println!("buffer time {}", i.elapsed().as_millis());
                         
-                        if let Err(e) = update_tx.send(WorldUpdateMessage::BufferUpdated(next_buffer)) {
+                        if let Err(_e) = update_tx.send(WorldUpdateMessage::BufferUpdated(next_buffer)) {
                             println!("Failed");
                             shutdown = true; // Exit if we can't send messages
                         } else {
@@ -1000,15 +1153,16 @@ impl WorldUpdater {
             WorldUpdater {
                 sender: command_tx,
                 update_thread,
+                world: world_mutex,
             },
             update_rx  // Return the original receiver for the main thread
         )
     }
 
-    pub fn request_update(&self) {
+    pub fn request_update(&self, u: Update) {
         println!("Updating world");
-        if let Err(e) = self.sender.send(WorldUpdateMessage::UpdateWorld) {
-            println!("Error");
+        if let Err(_e) = self.sender.send(WorldUpdateMessage::UpdateWorld(u)) {
+            println!("Thread is Dead");
         }
     }
 }

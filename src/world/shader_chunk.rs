@@ -36,6 +36,7 @@ struct OctantsData([ChunkContent; 8]);
 // layer 2: 5 7
 //          4 6
 
+#[allow(unused)]
 impl ShaderChunk {
     pub fn new(pos: [i32; 3]) -> Self {
         Self {
@@ -201,7 +202,7 @@ impl ShaderChunk {
         }
         else {
             result.push(1);
-            for (i, ov) in octant_vec.iter_mut().enumerate() {
+            for (_i, ov) in octant_vec.iter_mut().enumerate() {
                 result.append(ov);
             }
 

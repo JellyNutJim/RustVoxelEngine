@@ -109,23 +109,29 @@ uint get_depth(vec3 pos, inout int multiplier) {
 
 void take_step(ivec3 step, vec3 t_delta, inout vec3 t_max, inout uint hit_axis, inout vec3 world_pos, int multiplier, vec3 dir, inout float curr_distance) {
 
-    if (multiplier > 2) {
+    if (multiplier > 4) {
         float minT = 1e10;
 
         // Change so curr_distance adjustment happens here if previous hit dir was negative
         bool adjust = false;
+
+        // Add to switch
         // if (dir[hit_axis] < 0.0) {
         //     adjust = true;
         //     curr_distance += 0.0001;
         // }
-
-        vec3 origin = c.origin + dir * (curr_distance + 0.0001);
+        
+        // Remove to switch
+        vec3 origin = c.origin + dir * (curr_distance + 0.0001); //(curr_distance + 0.0001);
 
         // After issues have bee fixed, the next boundary calculation could easily be replaced with hardcoded values for each multi
+
+        // ADJUST SUCH THAT BEING AXIS ALIGNED AND IN A NEGATIVE DIRECTION E.G. AT 0.0 WOULD PLACE YOU IN THE NEXT NEGATIVE CHUNK SO 
+        // I DONT HAVE TO ADJUST CURR_DISTANCE
         for (int i = 0; i < 3; i++) {
-            if (dir[i] == 0.0) {
-                continue;
-            }
+            // if (abs(dir[i]) < 0.0001) {
+            //     continue;
+            // }
             float nextBoundary = dir[i] > 0.0 ? 
                 multiplier * (floor(origin[i] / multiplier) + 1.0) : 
                 multiplier * floor(origin[i] / multiplier);
@@ -155,7 +161,13 @@ void take_step(ivec3 step, vec3 t_delta, inout vec3 t_max, inout uint hit_axis, 
 
         
         t_max += (abs(temp - world_pos)) * t_delta;
+
+        // Remove to switch
         curr_distance += 0.0001;
+
+        // if (dir[hit_axis] < 0.0) {
+        //     curr_distance += 0.0001;
+        // }
         //curr_distance = t_max[hit_axis] - t_delta[hit_axis];
         
         world_pos = temp;
@@ -236,7 +248,7 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
     int transparent_hits = 0;
     vec3 tansparent_mask = vec3(1.0);
 
-    while(min(world_pos.x, world_pos.z) > w_buf.origin.x && max(world_pos.x, world_pos.z) < w_buf.origin.x + 64*40  && steps < 100) {
+    while(min(world_pos.x, world_pos.z) > w_buf.origin.x && max(world_pos.x, world_pos.z) < w_buf.origin.x + 64*40  && steps < 500) {
         // Go through chunks
 
         if (world_pos.y > 1000) {
@@ -244,6 +256,11 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
         }
 
         uint voxel_type = get_depth(world_pos, multiplier);
+
+        if (steps > 1000) {
+            hit_colour = vec3(0.0, 0.0, 0.0);
+            return true;
+        }
 
         // Air
         if (voxel_type == 0) {  
@@ -323,7 +340,6 @@ void main() {
     vec3 t_delta = abs(vec3(1.0) / dir);
     ivec3 step;
     vec3 t_max;
-
 
     if (dir.x < 0.0) {
         step.x = -1;
@@ -406,7 +422,7 @@ void main() {
     // Apply sun
     // Use sphere ray interception from weekend ray tracing, maybe apply normal/multi ray
 
-    float radius = 1000;
+    float radius = 500;
 
     vec3 oc = c.sun_loc - c.origin;
     float a = dot(dir, dir);

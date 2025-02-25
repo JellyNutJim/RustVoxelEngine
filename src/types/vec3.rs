@@ -105,7 +105,7 @@ impl Vec3 {
     pub fn from(x: f64, y: f64, z: f64) -> Self {
         Vec3 { x, y, z }
     }
-
+    #[allow(dead_code)]
     pub fn dot(self, other: Self) -> f64 {
         {   self.x * other.x +
             self.y * other.y +

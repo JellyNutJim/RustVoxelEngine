@@ -16,7 +16,7 @@ pub use shader_grid::ShaderGrid;
 // 3 - water
 
 
-pub fn get_flat_world(seed: u64) -> (Vec<i32>, Vec<u32>) {
+pub fn get_grid_from_seed(seed: u64) -> ShaderGrid {
 
 
     //let mut p = ShaderGrid::from(chunks, 3);
@@ -25,7 +25,7 @@ pub fn get_flat_world(seed: u64) -> (Vec<i32>, Vec<u32>) {
 
     let origin = [(width * 64) as i32, 640, (width * 64) as i32];
 
-    let mut p = ShaderGrid::new(width as u32, origin);
+    let mut p = ShaderGrid::new(width as u32, origin, seed);
     p.insert_voxel([3840, 801, 3840], 1);
 
     p.insert_voxel([3842, 800, 3840], 1);
@@ -34,12 +34,12 @@ pub fn get_flat_world(seed: u64) -> (Vec<i32>, Vec<u32>) {
     create_flat_with_water(&mut p, width, origin, seed);
 
 
-    let p = p.flatten();
-    println!("Grid: {}", p.1.len());
-
+    // let p = p.flatten();
+    // println!("Grid: {}", p.1.len());
     p
 }
 
+#[allow(dead_code)]
 fn create_continents(p: &mut ShaderGrid, width: usize, origin: [i32; 3], seed: u64) {
     let noise = PerlinNoise::new(seed); // Use any seed
     let w = width*4;
@@ -98,15 +98,15 @@ fn create_flat_with_water(p: &mut ShaderGrid, width: usize, origin: [i32; 3], se
     }
 }
 
-pub fn get_empty() -> (Vec<i32>, Vec<u32>) {
-    let width = 20;
-    let mut p = ShaderGrid::new(width as u32, [-64 * (width as i32 / 2), -64, -64 * (width as i32/ 2)]);
-    p.insert_voxel([0,0,0], 1);
+// pub fn get_empty() -> (Vec<i32>, Vec<u32>) {
+//     let width = 20;
+//     let mut p = ShaderGrid::new(width as u32, [-64 * (width as i32 / 2), -64, -64 * (width as i32/ 2)]);
+//     p.insert_voxel([0,0,0], 1);
 
-    let p = p.flatten();
+//     let p = p.flatten();
 
-    p
-}
+//     p
+// }
 
 // fn perlin(x: u32, y: u32, seed: u32) {
 //     let mut rng = rand::rngs::StdRng::seed_from_u64(seed);

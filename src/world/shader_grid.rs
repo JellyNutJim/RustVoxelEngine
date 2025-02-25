@@ -1,7 +1,6 @@
 use std::i32::MAX;
-use crate::world::ShaderChunk;
 
-use super::chunk;
+use crate::world::ShaderChunk;
 
 // Holds data to be placed in the voxel buffer
 // Origin will always be smaller than the current position
@@ -10,10 +9,15 @@ use super::chunk;
 pub struct ShaderGrid {
     origin: [i32; 3],  // Origin of the current grid = the origin of the chunk with the lowest positional value 
     width: u32,
-    grid: Vec<u32>,
-    chunks: Vec<ShaderChunk>
+    grid: Vec<u32>, // Grid relating to Shaderchunk Structs
+    chunks: Vec<ShaderChunk>,
+
+    flat_chunks: Vec<Vec<u32>>,
+    flat_chunk_locs: Vec<[u32; 3]>,
+    seed: u64,
 }
 
+#[allow(unused)]
 impl ShaderGrid {
     
     // Finds the smallest chunk origin, sets that as the grid origin
@@ -92,12 +96,15 @@ impl ShaderGrid {
     }
 
     // Create grid with given origin and size
-    pub fn new(width: u32, origin: [i32; 3], ) -> Self {
+    pub fn new(width: u32, origin: [i32; 3], seed: u64 ) -> Self {
         let mut s = Self {
             origin: origin,
             width: width,
             grid: vec![0; (width.pow(3)) as usize],
             chunks: Vec::new(),
+            flat_chunks: Vec::new(),
+            flat_chunk_locs: Vec::new(),
+            seed: seed,
         };
 
         let width = width as i32;
@@ -119,7 +126,7 @@ impl ShaderGrid {
     }
 
     // Create grid with existing chunks and width
-    pub fn from(chunks: Vec<ShaderChunk>, width: u32) -> Self {
+    pub fn from(chunks: Vec<ShaderChunk>, width: u32, seed: u64) -> Self {
         #[cfg(debug_assertions)]
         if chunks.len() > width.pow(3) as usize { panic!("Chunk depth out of range") }
 
@@ -128,10 +135,46 @@ impl ShaderGrid {
             width: width,
             grid: vec![0; (width.pow(3)) as usize],
             chunks: chunks,
+            flat_chunks: Vec::new(),
+            flat_chunk_locs: Vec::new(),
+            seed: seed,
         };
 
         s.set_grid_from_chunks();
         s
+    }
+
+    // INSTEAD OF SERACHING THROUGH SHIZ I CAN JUST DO X Y * W Z * W * W WITH SPECIFIC X OR Z !!!
+
+    pub fn shift(&mut self, axis: usize, dir: i32) {
+        // axis -> 0 = x, 1 = y, 2 = z
+
+        if axis != 0 || axis != 2 { panic!("Invalid shift axis") }; 
+
+        let new_axis: i32;
+        let remove_axis: i32;
+
+        // Determine row to chanage, and update origin
+        if dir == -1 {
+            new_axis = self.origin[axis] - 64;
+            remove_axis = self.origin[axis] + (self.width - 1) as i32 * 64;
+            self.origin[axis] -= 64;
+        }
+        else {
+            new_axis = self.origin[axis] + (self.width + 1) as i32 * 64;
+            remove_axis = self.origin[axis];
+            self.origin[axis] += 64;
+        }
+
+        // Replace uneeded chunks with new chunks
+        for chunk in &mut self.chunks {
+            let mut origin = chunk.get_origin();
+            if origin[axis] == remove_axis {
+                origin[axis] = new_axis;
+                *chunk = ShaderChunk::new(origin);
+                chunk.insert_voxel([0,0,0], 1);
+            }
+        }
     }
 
     // Assumes grid has be predfined with the needed size
@@ -149,7 +192,7 @@ impl ShaderGrid {
         }
     }
 
-    pub fn flatten(&self) -> (Vec<i32>, Vec<u32>) {
+    pub fn flatten_world(&mut self) -> (Vec<i32>, Vec<u32>) {
         let mut flat_chunks: Vec<u32> = Vec::new();
         let mut flat_grid: Vec<i32> = vec![0; (self.width.pow(3)) as usize];
 
@@ -166,14 +209,77 @@ impl ShaderGrid {
             flat_grid[grid_index as usize] = curr_index; 
 
             curr_index += flat.1.len() as i32;
+
+            // Store data for later access
+            self.flat_chunks.push(flat.1.clone());
+            self.flat_chunk_locs.push(chunk_pos);
+
             flat_chunks.append(&mut flat.1);
         }
 
         // Add origin to the flat grid
         flat_grid.splice(0..0, Vec::from(self.origin));
-       
 
         (flat_grid, flat_chunks)
+    }
+
+    // Updates a given chunks stored flat data from a position within the shaderchunk
+    pub fn update_flat_chunk_with_world_pos(&mut self, pos: [i32; 3]) {
+        let chunk_pos = self.get_chunk_pos(&pos);
+        let chunk_index = chunk_pos[0] + chunk_pos[1] * self.width + chunk_pos[2] * (self.width * self.width);
+        self.update_flat_chunk_with_chunk_index(chunk_index as usize);
+    }
+
+    // Updates a given chunks stored flat data from a given index
+    pub fn update_flat_chunk_with_chunk_index(&mut self, index: usize) {
+        let i = self.grid[index] as usize;
+
+        self.flat_chunks[i] = self.chunks[i].flatten().1;
+    }
+
+    // Returns flattened shader grid, does not do any flattening itself
+    pub fn get_flat_world(&self) -> (Vec<i32>, Vec<u32>){
+        let mut flat_chunks: Vec<u32> = Vec::new();
+        let mut flat_grid: Vec<i32> = vec![0; (self.width.pow(3)) as usize];
+
+        // Accumulated index
+        let mut curr_index: i32 = 0;
+
+        // Loop over flat chunk data to rebuild the 
+        for (loc, chunk) in self.flat_chunk_locs.iter().zip(self.flat_chunks.iter()) {
+            flat_chunks.extend(chunk);
+
+            let grid_index = loc[0] + loc[1] * self.width + loc[2] * self.width * self.width;
+            flat_grid[grid_index as usize] = curr_index; 
+            curr_index += chunk.len() as i32;
+
+        }
+
+        // Add origin to the flat grid
+        flat_grid.splice(0..0, Vec::from(self.origin));
+
+        (flat_grid, flat_chunks)
+    }
+
+    pub fn get_flat_grid(&self) -> Vec<i32> {
+        let mut flat_grid: Vec<i32> = vec![0; (self.width.pow(3)) as usize];
+
+        // Accumulated index
+        let mut curr_index: i32 = 0;
+
+        // Loop over flat chunk data to rebuild the 
+        for (loc, chunk) in self.flat_chunk_locs.iter().zip(self.flat_chunks.iter()) {
+
+            let grid_index = loc[0] + loc[1] * self.width + loc[2] * self.width * self.width;
+            flat_grid[grid_index as usize] = curr_index; 
+            curr_index += chunk.len() as i32;
+
+        }
+
+        // Add origin to the flat grid
+        flat_grid.splice(0..0, Vec::from(self.origin));
+
+        flat_grid
     }
 }
 
