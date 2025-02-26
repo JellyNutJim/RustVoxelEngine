@@ -13,11 +13,10 @@ pub struct ShaderGrid {
     chunks: Vec<ShaderChunk>,
 
     flat_chunks: Vec<Vec<u32>>,
-    flat_chunk_locs: Vec<[u32; 3]>,
     seed: u64,
 }
 
-#[allow(unused)]
+//#[allow(unused)]
 impl ShaderGrid {
     
     // Finds the smallest chunk origin, sets that as the grid origin
@@ -103,7 +102,6 @@ impl ShaderGrid {
             grid: vec![0; (width.pow(3)) as usize],
             chunks: Vec::new(),
             flat_chunks: Vec::new(),
-            flat_chunk_locs: Vec::new(),
             seed: seed,
         };
 
@@ -111,7 +109,6 @@ impl ShaderGrid {
 
         // 64 0 0 
         
-
         // Fill grid with empty chunks
         for x in 0..width {
             for y in 0..width {
@@ -136,7 +133,6 @@ impl ShaderGrid {
             grid: vec![0; (width.pow(3)) as usize],
             chunks: chunks,
             flat_chunks: Vec::new(),
-            flat_chunk_locs: Vec::new(),
             seed: seed,
         };
 
@@ -147,9 +143,8 @@ impl ShaderGrid {
     // INSTEAD OF SERACHING THROUGH SHIZ I CAN JUST DO X Y * W Z * W * W WITH SPECIFIC X OR Z !!!
 
     pub fn shift(&mut self, axis: usize, dir: i32) {
-        // axis -> 0 = x, 1 = y, 2 = z
 
-        if axis != 0 || axis != 2 { panic!("Invalid shift axis") }; 
+        if axis == 1 { panic!("Invalid shift axis") }; 
 
         let new_axis: i32;
         let remove_axis: i32;
@@ -161,20 +156,29 @@ impl ShaderGrid {
             self.origin[axis] -= 64;
         }
         else {
-            new_axis = self.origin[axis] + (self.width + 1) as i32 * 64;
+            new_axis = self.origin[axis] + (self.width) as i32 * 64;
             remove_axis = self.origin[axis];
             self.origin[axis] += 64;
         }
 
+        // println!("new {new_axis} remove {remove_axis}");
+
         // Replace uneeded chunks with new chunks
-        for chunk in &mut self.chunks {
-            let mut origin = chunk.get_origin();
+        for i in 0..self.chunks.len() {
+            let mut origin = self.chunks[i].get_origin();
+
             if origin[axis] == remove_axis {
                 origin[axis] = new_axis;
-                *chunk = ShaderChunk::new(origin);
-                chunk.insert_voxel([0,0,0], 1);
+                self.chunks[i] = ShaderChunk::new(origin);
+                self.chunks[i].insert_voxel([3,3,3], 1);
+
+
+                // Update flat chunk
+                self.flat_chunks[i] = self.chunks[i].flatten().1;
             }
         }
+
+        self.set_grid_from_chunks();
     }
 
     // Assumes grid has be predfined with the needed size
@@ -183,7 +187,6 @@ impl ShaderGrid {
         // Convert to function in grid
         for (i, chunk) in self.chunks.iter().enumerate() {
             let chunk_pos: [u32; 3] = self.get_chunk_pos(&chunk.get_origin());
-            //println!("{:?}", chunk_pos);
             
             let grid_index = chunk_pos[0] + chunk_pos[1] * self.width + chunk_pos[2] * self.width.pow(2);
 
@@ -212,7 +215,6 @@ impl ShaderGrid {
 
             // Store data for later access
             self.flat_chunks.push(flat.1.clone());
-            self.flat_chunk_locs.push(chunk_pos);
 
             flat_chunks.append(&mut flat.1);
         }
@@ -246,13 +248,14 @@ impl ShaderGrid {
         let mut curr_index: i32 = 0;
 
         // Loop over flat chunk data to rebuild the 
-        for (loc, chunk) in self.flat_chunk_locs.iter().zip(self.flat_chunks.iter()) {
-            flat_chunks.extend(chunk);
+        for i in 0..self.chunks.len() {
 
-            let grid_index = loc[0] + loc[1] * self.width + loc[2] * self.width * self.width;
+            flat_chunks.extend(&self.flat_chunks[i]);
+            let c_pos = self.get_chunk_pos(&self.chunks[i].get_origin());
+
+            let grid_index = c_pos[0] + c_pos[1] * self.width + c_pos[2] * self.width * self.width;
             flat_grid[grid_index as usize] = curr_index; 
-            curr_index += chunk.len() as i32;
-
+            curr_index += self.flat_chunks[i].len() as i32;
         }
 
         // Add origin to the flat grid
@@ -268,12 +271,12 @@ impl ShaderGrid {
         let mut curr_index: i32 = 0;
 
         // Loop over flat chunk data to rebuild the 
-        for (loc, chunk) in self.flat_chunk_locs.iter().zip(self.flat_chunks.iter()) {
+        for i in 0..self.chunks.len() {
+            let c_pos = self.get_chunk_pos(&self.chunks[i].get_origin());
 
-            let grid_index = loc[0] + loc[1] * self.width + loc[2] * self.width * self.width;
+            let grid_index = c_pos[0] + c_pos[1] * self.width + c_pos[2] * self.width * self.width;
             flat_grid[grid_index as usize] = curr_index; 
-            curr_index += chunk.len() as i32;
-
+            curr_index += self.flat_chunks[i].len() as i32;
         }
 
         // Add origin to the flat grid

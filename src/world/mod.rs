@@ -18,7 +18,6 @@ pub use shader_grid::ShaderGrid;
 
 pub fn get_grid_from_seed(seed: u64) -> ShaderGrid {
 
-
     //let mut p = ShaderGrid::from(chunks, 3);
     let width = 40;
 
@@ -26,9 +25,9 @@ pub fn get_grid_from_seed(seed: u64) -> ShaderGrid {
     let origin = [(width * 64) as i32, 640, (width * 64) as i32];
 
     let mut p = ShaderGrid::new(width as u32, origin, seed);
-    p.insert_voxel([3840, 801, 3840], 1);
-
-    p.insert_voxel([3842, 800, 3840], 1);
+    
+    // p.insert_voxel([3840, 801, 3840], 1);
+    // p.insert_voxel([3842, 800, 3840], 1);
 
     // Elavation
     create_flat_with_water(&mut p, width, origin, seed);

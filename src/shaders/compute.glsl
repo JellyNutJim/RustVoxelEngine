@@ -116,13 +116,14 @@ void take_step(ivec3 step, vec3 t_delta, inout vec3 t_max, inout uint hit_axis, 
         bool adjust = false;
 
         // Add to switch
-        // if (dir[hit_axis] < 0.0) {
-        //     adjust = true;
-        //     curr_distance += 0.0001;
-        // }
+        if (dir[hit_axis] < 0.0) {
+            adjust = true;
+            curr_distance += 0.0001;
+        }
         
         // Remove to switch
-        vec3 origin = c.origin + dir * (curr_distance + 0.0001); //(curr_distance + 0.0001);
+        //vec3 origin = c.origin + dir * (curr_distance + 0.0001); //(curr_distance + 0.0001);
+        vec3 origin = c.origin + dir * curr_distance;
 
         // After issues have bee fixed, the next boundary calculation could easily be replaced with hardcoded values for each multi
 
@@ -163,7 +164,7 @@ void take_step(ivec3 step, vec3 t_delta, inout vec3 t_max, inout uint hit_axis, 
         t_max += (abs(temp - world_pos)) * t_delta;
 
         // Remove to switch
-        curr_distance += 0.0001;
+        //curr_distance += 0.0001;
 
         // if (dir[hit_axis] < 0.0) {
         //     curr_distance += 0.0001;
@@ -236,7 +237,7 @@ vec3 grass(uint hit_axis, ivec3 step) {
     //     return vec3(0.7, 0.73, 0.7) * 0.5;
     // }
 
-    return normal + vec3(0.0, 0.5, 0.1) * 0.5;
+    return normal + vec3(0.0, 0.4, 0.1) * 0.5;
 }
 
 bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_delta, ivec3 step, vec3 dir, inout vec3 hit_colour, inout float curr_distance) {
@@ -248,7 +249,7 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
     int transparent_hits = 0;
     vec3 tansparent_mask = vec3(1.0);
 
-    while(min(world_pos.x, world_pos.z) > w_buf.origin.x && max(world_pos.x, world_pos.z) < w_buf.origin.x + 64*40  && steps < 500) {
+    while((world_pos.x > w_buf.origin.x && world_pos.x < w_buf.origin.x + 64*40) && (world_pos.z > w_buf.origin.z && world_pos.z < w_buf.origin.z + 64*40) && steps < 500) {
         // Go through chunks
 
         if (world_pos.y > 1000) {
@@ -379,7 +380,7 @@ void main() {
         // Get lighting
         vec3 hit_pos = c.origin + dir * curr_distance;
         world_pos = floor(hit_pos);
-        dir = normalize((c.sun_loc));
+        dir = normalize((c.sun_loc - hit_pos));
 
         t_delta = abs(vec3(1.0)/dir);
 

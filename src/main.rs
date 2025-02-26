@@ -164,13 +164,17 @@ impl App {
     }
 
     fn place_voxel(&mut self, u: Update) {
-        if let Update::AddVoxel(_, _, _) = u {
+        if let Update::AddVoxel(_, _, _, _) = u {
             self.world_updater.request_update(u);
         }
         else {
             panic!("Tried to add a voxel using incorrect update type");
         }
     }
+
+    fn shift_world(&mut self, axis: usize, dir: i32) {
+        self.world_updater.request_update(Update::Shift(axis, dir));
+    }   
 
     fn new(event_loop: &EventLoop<()>) -> Self {
 
@@ -730,7 +734,7 @@ impl ApplicationHandler for App {
             WindowEvent::KeyboardInput { device_id, event, is_synthetic } => {
                 // Simple movement
 
-                let dis = Vec3::from(0.25, 0.25, 0.25);
+                let dis = Vec3::from(0.25, 0.25, 0.25) * 10.0;
                 let up = Vec3::from(0.0, 1.0, 0.0);
 
                 match event.physical_key {
@@ -740,7 +744,18 @@ impl ApplicationHandler for App {
                     PhysicalKey::Code(KeyCode::KeyD) => { self.camera_location.location = self.camera_location.location + (self.camera_location.direction.cross(up)) * dis }
                     PhysicalKey::Code(KeyCode::Space) => { self.camera_location.location += Vec3::from(0.0, 0.25, 0.0)  }
                     PhysicalKey::Code(KeyCode::ControlLeft) => { self.camera_location.location += Vec3::from(0.0, -0.25, 0.0)  }
-                    PhysicalKey::Code(KeyCode::KeyL) => { self.camera_location.sun_loc -= Vec3::from(100.0, 0.0, 0.0) }
+                    PhysicalKey::Code(KeyCode::ArrowRight) => { self.camera_location.sun_loc -= Vec3::from(100.0, 0.0, 0.0) }
+                    PhysicalKey::Code(KeyCode::ArrowLeft) => { self.camera_location.sun_loc += Vec3::from(100.0, 0.0, 0.0) }
+                    PhysicalKey::Code(KeyCode::ArrowUp) => { self.camera_location.sun_loc += Vec3::from(0.0, 100.0, 0.0) }
+                    PhysicalKey::Code(KeyCode::ArrowDown) => { self.camera_location.sun_loc -= Vec3::from(0.0, 100.0, 0.0) }
+
+                    PhysicalKey::Code(KeyCode::KeyP) => { 
+                        let now = Instant::now();
+                        if self.last_n_press == false {
+                            self.shift_world(0, 1);
+                            self.last_n_press = true;
+                        }
+                    }
 
                     PhysicalKey::Code(KeyCode::KeyN) => {
                         let now = Instant::now();
@@ -753,15 +768,11 @@ impl ApplicationHandler for App {
                     PhysicalKey::Code(KeyCode::KeyM) => {
                         let now = Instant::now();
                         if self.last_n_press == false {
-                            self.last_n_press = true;
                             self.current_voxel_buffer = (self.current_voxel_buffer + 1) % 2; 
                             println!("Set buffer index to {}", self.current_voxel_buffer);
                         }
                     }
-
-
-                    
-                    
+    
                     PhysicalKey::Code(KeyCode::Escape) => { std::process::exit(0) }
                     _ =>  { print!("Non-Assigned Key")}
                 }
@@ -771,7 +782,17 @@ impl ApplicationHandler for App {
                 match button {
                     MouseButton::Left => {
                         let voxel_loc = self.camera_location.location + self.camera_location.direction * 2.0;
-                        let u = Update::AddVoxel(voxel_loc.x as i32, voxel_loc.y as i32, voxel_loc.z as i32);
+                        let u = Update::AddVoxel(voxel_loc.x as i32, voxel_loc.y as i32, voxel_loc.z as i32, 1);
+
+                        let now = Instant::now();
+                        if self.last_n_press == false {
+                            self.place_voxel(u);
+                            self.last_n_press = true;
+                        }
+                    }
+                    MouseButton::Right => {
+                        let voxel_loc = self.camera_location.location + self.camera_location.direction * 2.0;
+                        let u = Update::AddVoxel(voxel_loc.x as i32, voxel_loc.y as i32, voxel_loc.z as i32, 0);
 
                         let now = Instant::now();
                         if self.last_n_press == false {
@@ -911,7 +932,7 @@ impl ApplicationHandler for App {
                         sun_position: [self.camera_location.sun_loc.x as f32, self.camera_location.sun_loc.y as f32, self.camera_location.sun_loc.z as f32, 1.0]
                     };
 
-                    //println!("{:?}", look_from);
+                    println!("{:?}", look_from);
                     
 
                     let subbuffer = self.camera_buffer.allocate_sized().unwrap();
@@ -1058,8 +1079,8 @@ enum WorldUpdateMessage {
 #[derive(Debug)]
 #[allow(unused)]
 enum Update {
-    AddVoxel(i32, i32, i32),
-    Shift(u32, i32),
+    AddVoxel(i32, i32, i32, u32),
+    Shift(usize, i32),
     SwitchSeed(u64),
 }
 
@@ -1149,14 +1170,17 @@ impl WorldUpdater {
                         
                         let i = Instant::now();
                         match update {
-                            Update::AddVoxel(x, y, z ) => {
-                                println!("Adding: {} {} {}", x, y, z);
-                                world.insert_voxel([x,y,z], 1); 
+                            Update::AddVoxel(x, y, z , t) => {
+                                println!("Adding type: {} at: {} {} {}", t, x, y, z);
+                                world.insert_voxel([x,y,z], t); 
                                 world.update_flat_chunk_with_world_pos([x, y, z]);
                             }
                             Update::SwitchSeed(seed) => {
                                 *world = get_grid_from_seed(seed);
                                 world.flatten_world();
+                            }
+                            Update::Shift(axis, dir) => {
+                                world.shift(axis, dir);
                             }
                             _ => { }
                         };
