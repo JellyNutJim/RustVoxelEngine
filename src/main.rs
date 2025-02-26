@@ -1,4 +1,4 @@
-use vulkano::{buffer::allocator::{SubbufferAllocator, SubbufferAllocatorCreateInfo}, device::Features as DeviceFeatures, pipeline::{ComputePipeline, Pipeline}, sync::Sharing};
+use vulkano::{buffer::allocator::{SubbufferAllocator, SubbufferAllocatorCreateInfo}, command_buffer::PrimaryCommandBufferAbstract, device::Features as DeviceFeatures, pipeline::{ComputePipeline, Pipeline}, sync::Sharing};
 use vulkano::pipeline::PipelineBindPoint;
 use vulkano::descriptor_set::{{allocator::{StandardDescriptorSetAllocator, StandardDescriptorSetAllocatorCreateInfo}, WriteDescriptorSet}, PersistentDescriptorSet};
 
@@ -14,6 +14,7 @@ use vulkano::descriptor_set::layout::DescriptorSetLayoutBinding;
 use std::{error::Error, sync::{Arc, Mutex}, f64::consts::PI};
 
 use vulkano::{
+    DeviceSize,
     buffer::{Buffer, BufferContents, BufferCreateInfo, BufferUsage, Subbuffer},
     command_buffer::{
         allocator::StandardCommandBufferAllocator, AutoCommandBufferBuilder, CommandBufferUsage,
@@ -108,7 +109,7 @@ struct App {
     voxel_buffers: [Subbuffer<[u32]>; 2],
     current_voxel_buffer: usize,
 
-    world_meta_data_buffer: Subbuffer<[i32]>,
+    world_meta_data_buffers: [Subbuffer<[i32]>; 2],
     camera_buffer: SubbufferAllocator,
 
     rcx: Option<RenderContext>, 
@@ -225,7 +226,7 @@ impl App {
                     .enumerate()
                     .position(|(_i, q)| {
                         q.queue_flags.contains(QueueFlags::TRANSFER) && 
-                        !q.queue_flags.contains(QueueFlags::GRAPHICS)
+                        !q.queue_flags.contains(QueueFlags::COMPUTE)
                     })
                     .map(|i| i as u32)
                     .or_else(|| {
@@ -316,6 +317,8 @@ impl App {
         let compute_queue = queues.next().unwrap();
         let transfer_queue = if compute_index == transfer_index { queues.next().unwrap() } else { queues.next().unwrap() };
 
+        println!("{} {}", transfer_index, compute_index);
+
         let memory_allocator = Arc::new(StandardMemoryAllocator::new_default(device.clone()));
         
         // Allocators
@@ -347,54 +350,68 @@ impl App {
         //meta_data.resize(1_000_000, 0);  // Pad with zeros
 
         let voxel_buffers = [
-            Buffer::from_iter(
+            Buffer::new_slice::<u32>(
                 memory_allocator.clone(),
                 BufferCreateInfo {
                     usage: BufferUsage::STORAGE_BUFFER | BufferUsage::TRANSFER_DST,
-                    sharing: Sharing::Concurrent(smallvec![compute_index, transfer_index]),
+                    sharing: Sharing::Exclusive,
                     ..Default::default()
                 },
                 AllocationCreateInfo {
-                    memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
-                        | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                    memory_type_filter: MemoryTypeFilter::PREFER_DEVICE,
                     ..Default::default()
                 },
-                voxels.clone(),
+                voxels.len() as DeviceSize,
             ).expect("failed to create buffer"),
-            
-            Buffer::from_iter(
+
+            Buffer::new_slice::<u32>(
                 memory_allocator.clone(),
                 BufferCreateInfo {
                     usage: BufferUsage::STORAGE_BUFFER | BufferUsage::TRANSFER_DST,
-                    sharing: Sharing::Concurrent(smallvec![compute_index, transfer_index]),
+                    sharing: Sharing::Exclusive,
                     ..Default::default()
                 },
                 AllocationCreateInfo {
-                    memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
-                        | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                    memory_type_filter: MemoryTypeFilter::PREFER_DEVICE,
                     ..Default::default()
                 },
-                voxels,
+                voxels.len() as DeviceSize,
             ).expect("failed to create buffer"),
         ];
 
         //println!("{:?}", world.0.flatten());
 
-        let world_meta_data_buffer = Buffer::from_iter(
-            memory_allocator.clone(),
-            BufferCreateInfo {
-                usage: BufferUsage::STORAGE_BUFFER | BufferUsage::TRANSFER_DST,
-                sharing: Sharing::Concurrent(smallvec![compute_index, transfer_index]),
-                ..Default::default()
-            },
-            AllocationCreateInfo {
-                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
-                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
-                ..Default::default()
-            },
-            meta_data,
-        )
-        .expect("failed to create buffer");
+        let world_meta_data_buffers = [
+            Buffer::new_slice::<i32>(
+                memory_allocator.clone(),
+                BufferCreateInfo {
+                    usage: BufferUsage::STORAGE_BUFFER | BufferUsage::TRANSFER_DST,
+                    sharing: Sharing::Exclusive,
+                    ..Default::default()
+                },
+                AllocationCreateInfo {
+                    memory_type_filter: MemoryTypeFilter::PREFER_DEVICE,
+                    ..Default::default()
+                },
+                meta_data.len() as DeviceSize,
+            )
+            .expect("failed to create buffer"),
+
+            Buffer::new_slice::<i32>(
+                memory_allocator.clone(),
+                BufferCreateInfo {
+                    usage: BufferUsage::STORAGE_BUFFER | BufferUsage::TRANSFER_DST,
+                    sharing: Sharing::Exclusive,
+                    ..Default::default()
+                },
+                AllocationCreateInfo {
+                    memory_type_filter: MemoryTypeFilter::PREFER_DEVICE,
+                    ..Default::default()
+                },
+                meta_data.len() as DeviceSize,
+            )
+            .expect("failed to create buffer"),
+        ];
     
         let camera_buffer = SubbufferAllocator::new(
             memory_allocator.clone(),
@@ -406,11 +423,88 @@ impl App {
             },
         );
 
+        let temporary_accessible_buffer = Buffer::from_iter(
+            memory_allocator.clone(),
+            BufferCreateInfo {
+                // Specify that this buffer will be used as a transfer source.
+                usage: BufferUsage::TRANSFER_SRC,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                // Specify use for upload to the device.
+                memory_type_filter: MemoryTypeFilter::PREFER_HOST
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            },
+            voxels,
+        )
+        .unwrap();
+
+        let temporary_accessible_buffer2 = Buffer::from_iter(
+            memory_allocator.clone(),
+            BufferCreateInfo {
+                // Specify that this buffer will be used as a transfer source.
+                usage: BufferUsage::TRANSFER_SRC,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                // Specify use for upload to the device.
+                memory_type_filter: MemoryTypeFilter::PREFER_HOST
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            },
+            meta_data,
+        )
+        .unwrap();
+
+        let i = Instant::now();
+
+        let mut cbb = AutoCommandBufferBuilder::primary(
+            &command_buffer_allocator,
+            transfer_queue.queue_family_index(),
+            CommandBufferUsage::OneTimeSubmit,
+        )
+        .unwrap();
+
+        cbb.copy_buffer(CopyBufferInfo::buffers(
+            temporary_accessible_buffer.clone(),
+            voxel_buffers[0].clone(),
+        ))
+        .unwrap()
+        .copy_buffer(CopyBufferInfo::buffers(
+            temporary_accessible_buffer,
+            voxel_buffers[1].clone(),
+        ))
+        .unwrap()
+        .copy_buffer(CopyBufferInfo::buffers(
+            temporary_accessible_buffer2.clone(),
+            world_meta_data_buffers[0].clone(),
+        ))
+        .unwrap()
+        .copy_buffer(CopyBufferInfo::buffers(
+            temporary_accessible_buffer2,
+            world_meta_data_buffers[1].clone(),
+        ))
+        .unwrap();
+
+        let cb = cbb.build().unwrap();
+        
+        // Execute the copy command and wait for completion before proceeding.
+        cb.execute(transfer_queue.clone())
+            .unwrap()
+            .then_signal_fence_and_flush()
+            .unwrap()
+            .wait(None /* timeout */)
+            .unwrap();
+
+        println!("{}", i.elapsed().as_millis());
+
         let (world_updater, update_receiver) = WorldUpdater::new(
             device.clone(),
+            transfer_queue.clone(),
             compute_queue.clone(),
             voxel_buffers.clone(),
-            world_meta_data_buffer.clone(),
+            world_meta_data_buffers.clone(),
             intial_world,
         );
 
@@ -437,7 +531,7 @@ impl App {
             descriptor_set_allocator,
             voxel_buffers,
             current_voxel_buffer: 0,
-            world_meta_data_buffer,
+            world_meta_data_buffers,
             camera_buffer,
             rcx,
             camera_location,
@@ -676,7 +770,8 @@ impl ApplicationHandler for App {
             WindowEvent::MouseInput { device_id, state, button } => {
                 match button {
                     MouseButton::Left => {
-                        let u = Update::AddVoxel(self.camera_location.location.x as i32, self.camera_location.location.y as i32, self.camera_location.location.z as i32);
+                        let voxel_loc = self.camera_location.location + self.camera_location.direction * 2.0;
+                        let u = Update::AddVoxel(voxel_loc.x as i32, voxel_loc.y as i32, voxel_loc.z as i32);
 
                         let now = Instant::now();
                         if now.duration_since(self.last_n_press) >= Duration::from_secs(1) {
@@ -714,6 +809,12 @@ impl ApplicationHandler for App {
                 
             }
             WindowEvent::RedrawRequested => {
+
+                if let Some(future) = &mut rcx.previous_frame_end {
+                    future.cleanup_finished();
+                    rcx.previous_frame_end = Some(sync::now(self.device.clone()).boxed());
+                }
+                
 
                 //println!("Checking for messages in RedrawRequested");
                 while let Ok(msg) = self.update_receiver.try_recv() {
@@ -847,7 +948,7 @@ impl ApplicationHandler for App {
                     [
                         WriteDescriptorSet::buffer(0, uniform_camera_subbuffer), 
                         WriteDescriptorSet::buffer(1, self.voxel_buffers[self.current_voxel_buffer].clone()),
-                        WriteDescriptorSet::buffer(2, self.world_meta_data_buffer.clone()),
+                        WriteDescriptorSet::buffer(2, self.world_meta_data_buffers[self.current_voxel_buffer].clone()),
                         WriteDescriptorSet::image_view(3, rcx.attachment_image_views[image_index as usize].clone()),
                     ],
                     [],
@@ -973,9 +1074,10 @@ use rand::Rng;
 impl WorldUpdater {
     pub fn new(
         device: Arc<Device>,
-        queue: Arc<Queue>,
+        transfer_queue: Arc<Queue>,
+        compute_queue: Arc<Queue>,
         voxel_buffers: [Subbuffer<[u32]>; 2],
-        world_meta_data_buffer: Subbuffer<[i32]>,
+        world_meta_data_buffers: [Subbuffer<[i32]>; 2],
         intial_world: ShaderGrid,
     ) -> (Self, Receiver<WorldUpdateMessage>) {
         // Create a single channel pair
@@ -1004,7 +1106,7 @@ impl WorldUpdater {
             persistent_meta_buff.resize(1000000, 0);
 
 
-            let mapped_voxel_buffer = Buffer::from_iter(
+            let voxel_transfer_buffer = Buffer::from_iter(
                 memory_allocator.clone(),
                 BufferCreateInfo {
                     usage: BufferUsage::TRANSFER_SRC,
@@ -1012,14 +1114,14 @@ impl WorldUpdater {
                     ..Default::default()
                 },
                 AllocationCreateInfo {
-                    memory_type_filter: MemoryTypeFilter::PREFER_HOST 
-                        | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                    memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
                     ..Default::default()
                 },
                 persistent_voxel_buff.clone(),
             ).unwrap();
 
-            let mapped_meta_buffer = Buffer::from_iter(
+            let meta_transfer_buffer = Buffer::from_iter(
                 memory_allocator.clone(),
                 BufferCreateInfo {
                     usage: BufferUsage::TRANSFER_SRC,
@@ -1027,32 +1129,12 @@ impl WorldUpdater {
                     ..Default::default()
                 },
                 AllocationCreateInfo {
-                    memory_type_filter: MemoryTypeFilter::PREFER_HOST 
+                    memory_type_filter: MemoryTypeFilter::PREFER_DEVICE 
                         | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
                     ..Default::default()
                 },
                 persistent_meta_buff,
             ).unwrap();
-
-            let mut builder = AutoCommandBufferBuilder::primary(
-                &command_buffer_allocator,
-                queue.queue_family_index(),
-                CommandBufferUsage::MultipleSubmit,
-            ).unwrap();
-    
-            builder
-                .copy_buffer(CopyBufferInfo::buffers(
-                    mapped_voxel_buffer.clone(),
-                    voxel_buffers[0].clone(),
-                ))
-                .unwrap()
-                .copy_buffer(CopyBufferInfo::buffers(
-                    mapped_meta_buffer.clone(),
-                    world_meta_data_buffer.clone(),
-                ))
-                .unwrap();
-    
-            let command_buffer = builder.build().unwrap();
     
             while !shutdown {
                 match command_rx.recv() {  // Use rx_worker instead of tx_clone
@@ -1062,7 +1144,7 @@ impl WorldUpdater {
                         // Lock world
                         let mut world = thread_world.lock().unwrap();
                         // Get next buffer index
-                        let next_buffer = current_buffer; //(current_buffer + 1) % 2;
+                        let next_buffer = (current_buffer + 1) % 2;
                         
                         let i = Instant::now();
                         match update {
@@ -1092,38 +1174,64 @@ impl WorldUpdater {
                         //w.resize(150000000, 0);
                         println!("resize time: {}", i.elapsed().as_millis());
                         
-                        
-
+                        let i = Instant::now();
                         {
-                            let mut mapped_ptr = mapped_voxel_buffer.write().unwrap();
-                            for (i, v) in flat_world.1.iter().enumerate() {
-                                mapped_ptr[i] = *v;
-                            }
+                            let mut mapped_ptr = voxel_transfer_buffer.write().unwrap();
+                            mapped_ptr[..flat_world.1.len()].copy_from_slice(&flat_world.1);
                         }
 
                         {
-                            let mut mapped_meta = mapped_meta_buffer.write().unwrap();
-                            for (i, v) in flat_world.0.iter().enumerate() {
-                                mapped_meta[i] = *v;
-                            }
+                            let mut mapped_meta = meta_transfer_buffer.write().unwrap();
+                            mapped_meta[..flat_world.0.len()].copy_from_slice(&flat_world.0);
                         }
+
+                        println!("initial transfer {}", i.elapsed().as_millis());
 
                         let i = Instant::now();
+
+                        let mut builder = AutoCommandBufferBuilder::primary(
+                            &command_buffer_allocator,
+                            transfer_queue.queue_family_index(),
+                            CommandBufferUsage::OneTimeSubmit,
+                        ).unwrap();
+                
+                        builder
+                            .copy_buffer(CopyBufferInfo::buffers(
+                                voxel_transfer_buffer.clone(),
+                                voxel_buffers[next_buffer].clone(),
+                            ))
+                            .unwrap()
+                            .copy_buffer(CopyBufferInfo::buffers(
+                                meta_transfer_buffer.clone(),
+                                world_meta_data_buffers[next_buffer].clone(),
+                            ))
+                            .unwrap();
+                
+                        let command_buffer = builder.build().unwrap();
                             
                         // Execute and wait for completion
-                        let future = sync::now(device.clone())
-                            .then_execute(queue.clone(), command_buffer.clone())
+                        command_buffer.execute(transfer_queue.clone())
                             .unwrap()
                             .then_signal_fence_and_flush()
+                            .unwrap()
+                            .wait(None /* timeout */)
                             .unwrap();
-    
-                        future.wait(None).unwrap();
+
+                        
+                        // let future = sync::now(device.clone())
+                        //     .then_execute(queue.clone(), command_buffer)
+                        //     .unwrap()
+                        //     .then_signal_fence_and_flush()
+                        //     .unwrap();
+
+                        //let _ = future;
+
     
                         // Update current buffer and notify main thread
                         current_buffer = next_buffer;
                         println!("Updated Buffer");
 
-                        println!("buffer time {}", i.elapsed().as_millis());
+                        println!("Copy Time {}", i.elapsed().as_millis());
                         
                         if let Err(_e) = update_tx.send(WorldUpdateMessage::BufferUpdated(next_buffer)) {
                             println!("Failed");
