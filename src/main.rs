@@ -118,7 +118,7 @@ struct App {
     update_receiver: Receiver<WorldUpdateMessage>,
     world_updater: WorldUpdater,
 
-    last_n_press: Instant,
+    last_n_press: bool,
     frame_timer: FrameTimer,
 }
 
@@ -519,7 +519,7 @@ impl App {
 
         println!("{:?}", a);
 
-        let last_n_press = Instant::now() - Duration::from_secs(1);
+        let last_n_press = false;
         let frame_timer = FrameTimer::new(60); 
 
 
@@ -744,18 +744,18 @@ impl ApplicationHandler for App {
 
                     PhysicalKey::Code(KeyCode::KeyN) => {
                         let now = Instant::now();
-                        if now.duration_since(self.last_n_press) >= Duration::from_secs(1) {
+                        if self.last_n_press == false {
+                            self.last_n_press = true;
                             self.update_world();
-                            self.last_n_press = now;
                         }
                     }
 
                     PhysicalKey::Code(KeyCode::KeyM) => {
                         let now = Instant::now();
-                        if now.duration_since(self.last_n_press) >= Duration::from_secs(1) {
-                           self.current_voxel_buffer = (self.current_voxel_buffer + 1) % 2; 
-                           println!("Set buffer index to {}", self.current_voxel_buffer);
-                           self.last_n_press = now;
+                        if self.last_n_press == false {
+                            self.last_n_press = true;
+                            self.current_voxel_buffer = (self.current_voxel_buffer + 1) % 2; 
+                            println!("Set buffer index to {}", self.current_voxel_buffer);
                         }
                     }
 
@@ -774,9 +774,9 @@ impl ApplicationHandler for App {
                         let u = Update::AddVoxel(voxel_loc.x as i32, voxel_loc.y as i32, voxel_loc.z as i32);
 
                         let now = Instant::now();
-                        if now.duration_since(self.last_n_press) >= Duration::from_secs(1) {
+                        if self.last_n_press == false {
                             self.place_voxel(u);
-                            self.last_n_press = now;
+                            self.last_n_press = true;
                         }
                     }
                     _ => {}
@@ -821,6 +821,7 @@ impl ApplicationHandler for App {
                     println!("Received {:?}", msg);
                     if let WorldUpdateMessage::BufferUpdated(new_buffer_index) = msg {
                         println!("Switching buffer to {}", new_buffer_index);
+                        self.last_n_press = false;
                         self.current_voxel_buffer = new_buffer_index;
                     }
                 }
