@@ -1,12 +1,14 @@
 // Shader Usage
 mod shader_chunk;
 mod shader_grid;
+mod chunk_generator;
 
 // Rust usage
 mod chunk;
 
 pub use shader_chunk::ShaderChunk;
 pub use shader_grid::ShaderGrid;
+pub use chunk_generator::*;
 
 
 // VOXEL TYPES
@@ -19,7 +21,7 @@ pub use shader_grid::ShaderGrid;
 pub fn get_grid_from_seed(seed: u64) -> ShaderGrid {
 
     //let mut p = ShaderGrid::from(chunks, 3);
-    let width = 41;
+    let width = 91;
 
 
     let origin = [(width * 64) as i32, 640, (width * 64) as i32];
@@ -30,7 +32,9 @@ pub fn get_grid_from_seed(seed: u64) -> ShaderGrid {
     // p.insert_voxel([3842, 800, 3840], 1);
 
     // Elavation
-    create_flat_with_water(&mut p, width, origin);
+    //create_flat_with_water(&mut p, width, origin);
+
+    create_intial_world_with_continents(&mut p);
 
 
     // let p = p.flatten();
@@ -62,6 +66,18 @@ fn create_continents(p: &mut ShaderGrid, width: usize, origin: [i32; 3], seed: u
     }
 
 
+}
+
+fn create_intial_world_with_continents(world: &mut ShaderGrid) {
+
+    for x in 0..world.width {
+        for z in 0..world.width {
+            let c_x = x * 64 + world.origin[0] as u32;
+            let c_z = z * 64 + world.origin[2] as u32;
+
+            create_large_islands(world, (c_x, c_z));
+        }
+    }
 }
 
 fn create_flat_with_water(p: &mut ShaderGrid, width: usize, origin: [i32; 3]) {
@@ -163,51 +179,52 @@ impl PerlinNoise {
         gradient[0] * x + gradient[1] * y
     }
     
-    pub fn noise(&self, x: f64, y: f64) -> f64 {
+    pub fn noise(&self, x: f64, z: f64) -> f64 {
+
         // Find unit grid cell containing point
         let x_floor = x.floor() as isize;
-        let y_floor = y.floor() as isize;
+        let z_floor = z.floor() as isize;
         
         // Get relative position within cell
         let x = x - x_floor as f64;
-        let y = y - y_floor as f64;
+        let z = z - z_floor as f64;
         
         // Wrap to permutation table
         let x_floor = x_floor & 255;
-        let y_floor = y_floor & 255;
+        let z_floor = z_floor & 255;
         
         // Calculate hashes for each corner
-        let a = self.permutation[x_floor as usize] + y_floor as usize;
+        let a = self.permutation[x_floor as usize] + z_floor as usize;
         let aa = self.permutation[a];
         let ab = self.permutation[a + 1];
-        let b = self.permutation[(x_floor + 1) as usize] + y_floor as usize;
+        let b = self.permutation[(x_floor + 1) as usize] + z_floor as usize;
         let ba = self.permutation[b];
         let bb = self.permutation[b + 1];
         
         // Get fade curves
         let u = Self::fade(x);
-        let v = Self::fade(y);
+        let v = Self::fade(z);
         
         // Interpolate between grid point gradients
-        let x1 = self.grad(aa, x, y);
-        let x2 = self.grad(ba, x - 1.0, y);
-        let y1 = lerp(x1, x2, u);
+        let x1 = self.grad(aa, x, z);
+        let x2 = self.grad(ba, x - 1.0, z);
+        let z1 = lerp(x1, x2, u);
         
-        let x1 = self.grad(ab, x, y - 1.0);
-        let x2 = self.grad(bb, x - 1.0, y - 1.0);
-        let y2 = lerp(x1, x2, u);
+        let x1 = self.grad(ab, x, z - 1.0);
+        let x2 = self.grad(bb, x - 1.0, z - 1.0);
+        let z2 = lerp(x1, x2, u);
         
-        lerp(y1, y2, v)
+        lerp(z1, z2, v)
     }
     
     pub fn generate_grid(&self, width: usize, height: usize, scale: f64) -> Vec<Vec<f64>> {
         let mut grid = vec![vec![0.0; width]; height];
         
-        for y in 0..height {
-            for x in 0..width {
+        for x in 0..height {
+            for z in 0..width {
                 let nx = x as f64 * scale;
-                let ny = y as f64 * scale;
-                grid[y][x] = self.noise(nx, ny);
+                let nz = z as f64 * scale;
+                grid[x][z] = self.noise(nx, nz);
             }
         }
         grid
@@ -215,11 +232,11 @@ impl PerlinNoise {
     pub fn generate_grid_from_point(&self, width: usize, height: usize, scale: f64, pos: (u32, u32)) -> Vec<Vec<f64>> {
         let mut grid = vec![vec![0.0; width]; height];
         
-        for y in 0..height {
-            for x in 0..width {
+        for x in 0..height {
+            for z in 0..width {
                 let nx = (x + pos.0 as usize) as f64 * scale;
-                let ny = (y + pos.1 as usize) as f64 * scale;
-                grid[y][x] = self.noise(nx, ny);
+                let nz = (z + pos.1 as usize) as f64 * scale;
+                grid[x][z] = self.noise(nx, nz);
             }
         }
         grid

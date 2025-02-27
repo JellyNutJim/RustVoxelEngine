@@ -4,13 +4,15 @@ use crate::world::ShaderChunk;
 
 use super::PerlinNoise;
 
+use super::chunk_generator::*;
+
 // Holds data to be placed in the voxel buffer
 // Origin will always be smaller than the current position
 #[repr(C)]
 #[derive(Debug, Clone)]
 pub struct ShaderGrid {
-    origin: [i32; 3],  // Origin of the current grid = the origin of the chunk with the lowest positional value 
-    width: u32,
+    pub origin: [i32; 3],  // Origin of the current grid = the origin of the chunk with the lowest positional value 
+    pub width: u32,
     grid: Vec<u32>, // Grid relating to Shaderchunk Structs
     chunks: Vec<ShaderChunk>,
     pub noise: PerlinNoise,
@@ -43,6 +45,8 @@ impl ShaderGrid {
         let chunk_pos = self.get_chunk_pos(&pos);
         let chunk_index = chunk_pos[0] + chunk_pos[1] * self.width + chunk_pos[2] * (self.width * self.width);
         
+
+
         // Local voxel pos in chunk
         let pos = [
             (((pos[0] % 64) + 64) % 64) as u32,
@@ -197,31 +201,7 @@ impl ShaderGrid {
 
         for i in 0..self.width as usize {
 
-            // Update vertical chunk
-            let grid = self.noise.generate_grid_from_point(64, 64, 0.005, (update_chunk[2] as u32, update_chunk[0] as u32));
-
-            for x in 0..64 {
-                for z in 0..64 {
-                    let y = grid[x as usize][z as usize] * 64.0;
-
-                    let x_adjusted = x + update_chunk[0] as i32;
-                    let z_adjusted = z + update_chunk[2]  as i32;
-
-                    let y = (y + 768.0) as i32;
-                    if y < 768 {
-                        let mut temp = y + 1;
-                        while temp < 769 {
-                            self.insert_voxel([x_adjusted, temp, z_adjusted], 3);
-                            temp += 1;
-                        }
-                    }
-
-                    self.insert_voxel([x_adjusted, y, z_adjusted], 1);
-                    self.insert_voxel([x_adjusted, y - 1, z_adjusted], 2);
-                    self.insert_voxel([x_adjusted, y - 2, z_adjusted], 2);
-                    self.insert_voxel([x_adjusted, y - 3, z_adjusted], 2);
-                }
-            }
+            create_large_islands(self, (update_chunk[0] as u32, update_chunk[2] as u32));
 
             let c_ind = self.get_chunk_pos(&update_chunk);
 
@@ -316,7 +296,7 @@ impl ShaderGrid {
 
         // Add origin to the flat grid
         flat_grid.splice(0..0, Vec::from(self.origin));
-
+        
         (flat_grid, flat_chunks)
     }
 

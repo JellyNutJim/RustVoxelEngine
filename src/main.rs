@@ -512,7 +512,7 @@ impl App {
 
         #[allow(unused_mut)]
         // Default values
-        let width = 41.0;
+        let width = 91.0;
         let middle = Vec3::from(64.0 * width + (64.0 * width)/2.0, 830.0, 64.0 * width + (64.0 * width)/2.0);
         let camera_location = CameraLocation {location: middle, direction: Vec3::new(), old_loc: middle, h_angle: 0.0, v_angle: 0.0, sun_loc: Vec3::from(10000.0, 3000.0, 10000.0)};
         let rcx = None;
