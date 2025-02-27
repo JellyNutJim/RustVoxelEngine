@@ -35,7 +35,7 @@ pub fn generate_hills_and_water(world: &mut ShaderGrid, pos: (u32, u32)) {
 
 pub fn create_large_islands(world: &mut ShaderGrid, pos: (u32, u32)) {
     // Update vertical chunk
-    let grid = world.noise.generate_grid_from_point(4, 4, 0.0003, (pos.0, pos.1));
+    let grid = world.noise.generate_grid_from_point(4, 4, 0.00003, (pos.0, pos.1));
 
     for x in 0..4 {
         for z in 0..4 {

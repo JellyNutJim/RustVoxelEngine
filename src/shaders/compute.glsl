@@ -22,7 +22,12 @@ layout(set = 0, binding = 2) readonly buffer WorldBuffer {
     uint chunks[27];
 } w_buf;
 
-layout(set = 0, binding = 3, rgba8) uniform image2D storageImage;
+layout(set = 0, binding = 3) readonly buffer NoiseBuffer {
+    float perm[512];
+    float grad[512];
+} n_buf;
+
+layout(set = 0, binding = 4, rgba8) uniform image2D storageImage;
 
 uint get_octant(vec3 pos, uint mid) {
     uint octant = 0;
@@ -331,7 +336,57 @@ void apply_shadow(vec3 world_pos, vec3 t_max, vec3 t_delta, ivec3 step, vec3 dir
     return;
 }
 
+float lerp(float a, float b, float t) {
+    return a + t * (b - a);
+}
+
+float fade(float t) {
+    return t * t * t * (t * (t * 6.0 - 15.0) + 10.0);
+}
+
+float grad(uint hash, float x, float z) {
+    uint index = (hash & 255) * 2;
+    return n_buf.grad[index] * x + n_buf.grad[index + 1] * z;
+}
+
+float get_perlin_noise(float x, float z) { 
+    int x_floor = int(floor(x));
+    int z_floor = int(floor(z));
+
+    x = x - x_floor;
+    z = z - z_floor;
+
+    x_floor = x_floor & 255;
+    z_floor = z_floor & 255;
+
+    uint a  = uint(n_buf.perm[x_floor] + z_floor); 
+    uint aa = uint(n_buf.perm[a]);
+    uint ab = uint(n_buf.perm[a + 1]);
+    
+    uint b  = uint(n_buf.perm[x_floor + 1] + z_floor);
+    uint ba = uint(n_buf.perm[b]);
+    uint bb = uint(n_buf.perm[b + 1]); 
+
+    float u = fade(x);
+    float v = fade(z);
+
+    float x1 = grad(aa, x, z);
+    float x2 = grad(ba, x - 1, z);
+    float z1 = lerp(x1, x2, u);
+
+    x1 = grad(ab, x, z - 1.0);
+    x2 = grad(bb, x - 1, z - 1);
+    float z2 = lerp(x1, x2, u);
+
+
+    return lerp(z1, z2, v);
+} 
+
 void main() {
+
+
+
+
     ivec2 pixel_coords = ivec2(gl_GlobalInvocationID.xy);
 
     vec3 origin = c.origin;
@@ -423,6 +478,29 @@ void main() {
         return;
     }
 
+    // Check for world intersection
+    if (origin.y > 768 && dir.y < 0) {
+        float y_hit_dis = (768 - origin.y) / dir.y;
+        vec3 hp = origin + dir * y_hit_dis;
+
+        float scale = 0.00003;
+        float nx = hp.x * scale;
+        float nz = hp.z * scale;
+
+        float y = floor(get_perlin_noise(nx, nz) * 16) * 16;
+
+        if (y > 0.0) {
+            imageStore(storageImage, pixel_coords, vec4(0.0, 1.0, 0.0, 1.0));
+            return;
+        }
+
+        imageStore(storageImage, pixel_coords, vec4(0.31, 0.239, 0.9, 1.0));
+        return;
+    }
+
+
+
+
     // Apply sun
     // Use sphere ray interception from weekend ray tracing, maybe apply normal/multi ray
 
@@ -444,21 +522,3 @@ void main() {
     vec4 output_colour = vec4(colour, 1.0);
     imageStore(storageImage, pixel_coords, output_colour);
 }
-
-
-
-
-
-        // if (current_depth == 0) {
-        //     imageStore(storageImage, pixel_coords, get_colour(hit_axis, step));
-        //     return;
-        // }
-        // if (current_depth >= 1 && current_depth <= 7) {
-        //     vec3 depth_color = mix(
-        //         vec3(0.071, 0.173, 0.365),  // Dark blue
-        //         vec3(0.937, 0.235, 0.251),  // Coral red
-        //         float(current_depth) / 7.0
-        //     );
-        //     imageStore(storageImage, pixel_coords, vec4(depth_color, 1.0));
-        //     return;
-        // }

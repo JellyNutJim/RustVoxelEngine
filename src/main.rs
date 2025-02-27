@@ -110,6 +110,7 @@ struct App {
     current_voxel_buffer: usize,
 
     world_meta_data_buffers: [Subbuffer<[i32]>; 2],
+    noise_buffer: Subbuffer<[f32]>,
     camera_buffer: SubbufferAllocator,
 
     rcx: Option<RenderContext>, 
@@ -414,6 +415,40 @@ impl App {
             )
             .expect("failed to create buffer"),
         ];
+
+        let perm = intial_world.noise.permutation.clone();
+        let grad: Vec<f64> = intial_world.noise.gradients.clone().iter()
+                .flat_map(|&gradient| gradient.into_iter())
+                .collect();
+
+
+
+        println!("p {}", perm.len());
+        println!("g {}", grad.len());
+
+
+        let mut combined_data: Vec<f32> = Vec::with_capacity(perm.len() + grad.len());
+
+        combined_data.extend(perm.iter().map(|&p| p as f32));
+        combined_data.extend(grad.iter().map(|&g| g as f32));
+
+        //println!("com {}", combined_data.len());
+        println!("com {:?}", combined_data);
+
+
+        let noise_buffer = Buffer::from_iter(
+            memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::STORAGE_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            },
+            combined_data,
+        ).expect("failed to create buffer");
     
         let camera_buffer = SubbufferAllocator::new(
             memory_allocator.clone(),
@@ -536,6 +571,7 @@ impl App {
             voxel_buffers,
             current_voxel_buffer: 0,
             world_meta_data_buffers,
+            noise_buffer,
             camera_buffer,
             rcx,
             camera_location,
@@ -656,6 +692,15 @@ impl ApplicationHandler for App {
                 ),
                 (
                     3,
+                    DescriptorSetLayoutBinding {
+                        stages: ShaderStages::COMPUTE,
+                        ..DescriptorSetLayoutBinding::descriptor_type(
+                            DescriptorType::StorageBuffer,
+                        )
+                    }
+                ),
+                (
+                    4,
                     DescriptorSetLayoutBinding {
                         stages: ShaderStages::COMPUTE,
                         ..DescriptorSetLayoutBinding::descriptor_type(
@@ -990,7 +1035,8 @@ impl ApplicationHandler for App {
                         WriteDescriptorSet::buffer(0, uniform_camera_subbuffer), 
                         WriteDescriptorSet::buffer(1, self.voxel_buffers[self.current_voxel_buffer].clone()),
                         WriteDescriptorSet::buffer(2, self.world_meta_data_buffers[self.current_voxel_buffer].clone()),
-                        WriteDescriptorSet::image_view(3, rcx.attachment_image_views[image_index as usize].clone()),
+                        WriteDescriptorSet::buffer(3, self.noise_buffer.clone()), 
+                        WriteDescriptorSet::image_view(4, rcx.attachment_image_views[image_index as usize].clone()),
                     ],
                     [],
                 )

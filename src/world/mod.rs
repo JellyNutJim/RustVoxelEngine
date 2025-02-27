@@ -27,6 +27,10 @@ pub fn get_grid_from_seed(seed: u64) -> ShaderGrid {
     let origin = [(width * 64) as i32, 640, (width * 64) as i32];
 
     let mut p = ShaderGrid::new(width as u32, origin, seed);
+
+    // println!("Perm: {:?}", test.permutation);
+
+    // println!("Gradiants {:?}", test.gradients);
     
     // p.insert_voxel([3840, 801, 3840], 1);
     // p.insert_voxel([3842, 800, 3840], 1);
@@ -135,8 +139,8 @@ use std::f64::consts::PI;
 
 #[derive(Debug, Clone)]
 pub struct PerlinNoise {
-    permutation: Vec<usize>,
-    gradients: Vec<[f64; 2]>,
+    pub permutation: Vec<usize>,
+    pub gradients: Vec<[f64; 2]>,
 }
 
 impl PerlinNoise {
