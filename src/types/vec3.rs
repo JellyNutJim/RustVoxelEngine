@@ -7,6 +7,8 @@ pub struct Vec3 {
     pub z: f64
 }
 
+
+
 impl Add for Vec3 {
     type Output = Self;
 
@@ -105,6 +107,15 @@ impl Vec3 {
     pub fn from(x: f64, y: f64, z: f64) -> Self {
         Vec3 { x, y, z }
     }
+
+    pub fn floor(mut self) -> Self{
+        self.x = self.x.floor();
+        self.y = self.y.floor();
+        self.z = self.z.floor();
+
+        self
+    }
+
     #[allow(dead_code)]
     pub fn dot(self, other: Self) -> f64 {
         {   self.x * other.x +

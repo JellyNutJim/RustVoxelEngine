@@ -19,7 +19,7 @@ pub use shader_grid::ShaderGrid;
 pub fn get_grid_from_seed(seed: u64) -> ShaderGrid {
 
     //let mut p = ShaderGrid::from(chunks, 3);
-    let width = 40;
+    let width = 41;
 
 
     let origin = [(width * 64) as i32, 640, (width * 64) as i32];
@@ -30,7 +30,7 @@ pub fn get_grid_from_seed(seed: u64) -> ShaderGrid {
     // p.insert_voxel([3842, 800, 3840], 1);
 
     // Elavation
-    create_flat_with_water(&mut p, width, origin, seed);
+    create_flat_with_water(&mut p, width, origin);
 
 
     // let p = p.flatten();
@@ -64,13 +64,12 @@ fn create_continents(p: &mut ShaderGrid, width: usize, origin: [i32; 3], seed: u
 
 }
 
-fn create_flat_with_water(p: &mut ShaderGrid, width: usize, origin: [i32; 3], seed: u64) {
-    let noise = PerlinNoise::new(seed); // Use any seed
+fn create_flat_with_water(p: &mut ShaderGrid, width: usize, origin: [i32; 3]) {
     let w = width*64;
     let h = width*64;
     let scale = 0.005; // Adjust this to change the "zoom level" of the noise
     
-    let noise_matrix = noise.generate_grid(w, h, scale);
+    let noise_matrix = p.noise.generate_grid_from_point(w, h, scale, (origin[0] as u32, origin[2] as u32));
 
     // Elavation
     for x in (0..((64*width) as i32)).step_by(1) {
@@ -118,6 +117,7 @@ fn create_flat_with_water(p: &mut ShaderGrid, width: usize, origin: [i32; 3], se
 use rand::{Rng, SeedableRng};
 use std::f64::consts::PI;
 
+#[derive(Debug, Clone)]
 pub struct PerlinNoise {
     permutation: Vec<usize>,
     gradients: Vec<[f64; 2]>,
@@ -155,7 +155,6 @@ impl PerlinNoise {
     }
     
     fn fade(t: f64) -> f64 {
-        // Smoothing function: 6t^5 - 15t^4 + 10t^3
         t * t * t * (t * (t * 6.0 - 15.0) + 10.0)
     }
     
@@ -211,7 +210,18 @@ impl PerlinNoise {
                 grid[y][x] = self.noise(nx, ny);
             }
         }
+        grid
+    }
+    pub fn generate_grid_from_point(&self, width: usize, height: usize, scale: f64, pos: (u32, u32)) -> Vec<Vec<f64>> {
+        let mut grid = vec![vec![0.0; width]; height];
         
+        for y in 0..height {
+            for x in 0..width {
+                let nx = (x + pos.0 as usize) as f64 * scale;
+                let ny = (y + pos.1 as usize) as f64 * scale;
+                grid[y][x] = self.noise(nx, ny);
+            }
+        }
         grid
     }
 }

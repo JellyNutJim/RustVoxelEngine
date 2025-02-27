@@ -55,9 +55,9 @@ use world::{get_grid_from_seed, ShaderGrid};
 
 use std::time::{Instant, Duration};
 
-use smallvec::smallvec;
-
 use types::Vec3;
+
+use vulkano::command_buffer::CopyBufferInfo;
 
 fn main() -> Result<(), impl Error> {
     // Create window
@@ -147,14 +147,12 @@ struct CameraBufferData {
 
 struct CameraLocation {
     location: Vec3,
+    old_loc: Vec3,
     h_angle: f64,
     v_angle: f64,
     direction: Vec3,
     sun_loc: Vec3,
 }
-
-use vulkano::command_buffer::CopyBufferInfo;
-
 
 impl App {
     fn update_world(&mut self) {
@@ -282,7 +280,7 @@ impl App {
             // If they're the same family, request 2 queues from that family
             vec![QueueCreateInfo {
                 queue_family_index: compute_index,
-                queues: vec![1.0, 1.0], // Request 2 queues with priority 1.0
+                queues: vec![1.0], // Request 2 queues with priority 1.0
                 ..Default::default()
             }]
         } else {
@@ -319,9 +317,9 @@ impl App {
 
         // Get quues
         let compute_queue = queues.next().unwrap();
-        let transfer_queue = if compute_index == transfer_index { queues.next().unwrap() } else { queues.next().unwrap() };
+        let transfer_queue = if compute_index == transfer_index { compute_queue.clone() } else { queues.next().unwrap() };
 
-        println!("{} {}", transfer_index, compute_index);
+        //println!("{} {}", transfer_index, compute_index);
 
         let memory_allocator = Arc::new(StandardMemoryAllocator::new_default(device.clone()));
         
@@ -514,7 +512,9 @@ impl App {
 
         #[allow(unused_mut)]
         // Default values
-        let mut camera_location = CameraLocation {location: Vec3::from(3840.0,830.0,3840.0), direction: Vec3::new(), h_angle: 0.0, v_angle: 0.0, sun_loc: Vec3::from(10000.0, 3000.0, 10000.0)};
+        let width = 41.0;
+        let middle = Vec3::from(64.0 * width + (64.0 * width)/2.0, 830.0, 64.0 * width + (64.0 * width)/2.0);
+        let camera_location = CameraLocation {location: middle, direction: Vec3::new(), old_loc: middle, h_angle: 0.0, v_angle: 0.0, sun_loc: Vec3::from(10000.0, 3000.0, 10000.0)};
         let rcx = None;
 
         let p = Vec3::new();
@@ -752,8 +752,8 @@ impl ApplicationHandler for App {
                     PhysicalKey::Code(KeyCode::KeyP) => { 
                         let now = Instant::now();
                         if self.last_n_press == false {
-                            self.shift_world(0, 1);
-                            self.last_n_press = true;
+                            self.shift_world(2, -1);
+                            //self.last_n_press = true;
                         }
                     }
 
@@ -880,16 +880,35 @@ impl ApplicationHandler for App {
 
                 // UPDATE HERE
 
+                // Get current chunk
+                
+
 
                 // Calculate camera buffer variables and set them to the buffer
                 let uniform_camera_subbuffer = {
                     let look_from = self.camera_location.location;
-                    //println!("{:?}", look_from);
+
+                    let curr_pos_chunk = (look_from / 64.0).floor();
+                    let old_pos_chunk = (self.camera_location.old_loc / 64.0).floor();
+
+                    let diff = curr_pos_chunk - old_pos_chunk;
+
+                    if diff.x != 0.0 {
+                        //println!("axis: {}, dir: {}", 0, diff.x);
+                        self.world_updater.request_update(Update::Shift(0, diff.x as i32));
+                    }
+
+                    if diff.z != 0.0 {
+                        //println!("axis: {}, dir: {}", 2, diff.z)
+                        self.world_updater.request_update(Update::Shift(2, diff.z as i32));
+                    }
 
                     // Detect Chunk switch and move world
 
                     let look_distance = 1.0;
                     let look_at = self.camera_location.location + self.camera_location.direction * look_distance;
+                    self.camera_location.old_loc = look_from;
+
 
                     let v_up = Vec3 {x: 0.0, y: 1.0, z: 0.0};
                     //let fov = 90;
@@ -932,7 +951,7 @@ impl ApplicationHandler for App {
                         sun_position: [self.camera_location.sun_loc.x as f32, self.camera_location.sun_loc.y as f32, self.camera_location.sun_loc.z as f32, 1.0]
                     };
 
-                    println!("{:?}", look_from);
+                    //println!("{:?}", look_from);
                     
 
                     let subbuffer = self.camera_buffer.allocate_sized().unwrap();
@@ -1182,7 +1201,6 @@ impl WorldUpdater {
                             Update::Shift(axis, dir) => {
                                 world.shift(axis, dir);
                             }
-                            _ => { }
                         };
                         println!("add time: {}", i.elapsed().as_millis());
 

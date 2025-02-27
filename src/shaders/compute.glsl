@@ -46,7 +46,7 @@ uint get_depth(vec3 pos, inout int multiplier) {
     uvec3 realitive_chunk_location = uvec3((floor((pos) / 64)) - (w_buf.origin) / 64);
 
     // Currently defining here -> Will switch this out for buffer input
-    int WIDTH = 40;
+    int WIDTH = 41;
 
     //vec3 local_pos = mod(mod(pos , 64.0) + vec3(64.0), 64.0);
 
@@ -249,10 +249,10 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
     int transparent_hits = 0;
     vec3 tansparent_mask = vec3(1.0);
 
-    while((world_pos.x > w_buf.origin.x && world_pos.x < w_buf.origin.x + 64*40) && (world_pos.z > w_buf.origin.z && world_pos.z < w_buf.origin.z + 64*40) && steps < 500) {
+    while((world_pos.x > w_buf.origin.x && world_pos.x < w_buf.origin.x + 64*41) && (world_pos.z > w_buf.origin.z && world_pos.z < w_buf.origin.z + 64*41) && steps < 500) {
         // Go through chunks
 
-        if (world_pos.y > 1000) {
+        if (world_pos.y > 64*41) {
             break;
         }
 
