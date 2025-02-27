@@ -480,22 +480,35 @@ void main() {
 
     // Check for world intersection
     if (origin.y > 768 && dir.y < 0) {
-        float y_hit_dis = (768 - origin.y) / dir.y;
-        vec3 hp = origin + dir * y_hit_dis;
+        // float y_hit_dis = (768 - origin.y) / dir.y;
+        // vec3 hp = origin + dir * y_hit_dis;
 
-        float scale = 0.00003;
-        float nx = hp.x * scale;
-        float nz = hp.z * scale;
+        vec3 planet_loc = vec3(origin.x, -1000000.0, origin.y);
+        float radius = 1000768.0;
 
-        float y = floor(get_perlin_noise(nx, nz) * 16) * 16;
+        vec3 oc = planet_loc - c.origin;
+        float a = dot(dir, dir);
+        float b = -2.0 * dot(dir, oc);
+        float c = dot(oc, oc) - radius*radius;
+        float discriminant = b*b - 4*a*c;
 
-        if (y > 0.0) {
-            imageStore(storageImage, pixel_coords, vec4(0.0, 1.0, 0.0, 1.0));
-            return;
+        if (discriminant >= 0) {
+            float y_hit_dis = (768 - origin.y) / dir.y; 
+            vec3 hp = origin + dir * y_hit_dis;
+            float scale = 0.00003;
+            float nx = hp.x * scale;
+            float nz = hp.z * scale;
+
+            float y = floor(get_perlin_noise(nx, nz) * 16) * 16;
+
+            if (y > 0.0) {
+                imageStore(storageImage, pixel_coords, vec4(0.0, 1.0, 0.0, 1.0));
+                return;
+            }
+
+            imageStore(storageImage, pixel_coords, vec4(0.31, 0.239, 0.9, 1.0));
+            return;   
         }
-
-        imageStore(storageImage, pixel_coords, vec4(0.31, 0.239, 0.9, 1.0));
-        return;
     }
 
 
