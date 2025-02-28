@@ -483,8 +483,8 @@ void main() {
         // float y_hit_dis = (768 - origin.y) / dir.y;
         // vec3 hp = origin + dir * y_hit_dis;
 
-        vec3 planet_loc = vec3(origin.x, -1000000.0, origin.y);
-        float radius = 1000768.0;
+        vec3 planet_loc = vec3(origin.x, -900000.0, origin.y);
+        float radius = 900768.0;
 
         vec3 oc = planet_loc - c.origin;
         float a = dot(dir, dir);
@@ -499,10 +499,28 @@ void main() {
             float nx = hp.x * scale;
             float nz = hp.z * scale;
 
-            float y = floor(get_perlin_noise(nx, nz) * 16) * 16;
+            float y = get_perlin_noise(nx, nz) * 16;
+            float stepped_y = floor(y) * 16;
 
-            if (y > 0.0) {
-                imageStore(storageImage, pixel_coords, vec4(0.0, 1.0, 0.0, 1.0));
+            y *= 16;
+
+            if (y > 16.0  && y < 16.3) {
+                imageStore(storageImage, pixel_coords, vec4(1.0, 0.984, 0.0, 1.0));
+                return;
+            }
+
+            if (stepped_y == 16) {
+                imageStore(storageImage, pixel_coords, vec4(0.0, 1.0, 0.1, 1.0));
+                return;
+            }
+
+            if (y > 32.0  && y < 33.5) {
+                imageStore(storageImage, pixel_coords, vec4(0.0, 0.6, 0.0, 1.0));
+                return;
+            }
+
+            if (stepped_y > 16.0) {
+                imageStore(storageImage, pixel_coords, vec4(0.0, 1.0, 0.1, 1.0));
                 return;
             }
 
