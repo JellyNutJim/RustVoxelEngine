@@ -13,9 +13,12 @@ use super::chunk_generator::*;
 pub struct ShaderGrid {
     pub origin: [i32; 3],  // Origin of the current grid = the origin of the chunk with the lowest positional value 
     pub width: u32,
+    pub sea_level: u32,
     grid: Vec<u32>, // Grid relating to Shaderchunk Structs
     chunks: Vec<ShaderChunk>,
     pub noise: PerlinNoise,
+
+    pub height_map: Vec<Vec<f64>>,
 
     flat_chunks: Vec<Vec<u32>>,
     seed: u64,
@@ -102,13 +105,15 @@ impl ShaderGrid {
     }
 
     // Create grid with given origin and size
-    pub fn new(width: u32, origin: [i32; 3], seed: u64 ) -> Self {
+    pub fn new(width: u32, origin: [i32; 3], seed: u64, sea_level: u32) -> Self {
         let mut s = Self {
             origin: origin,
             width: width,
+            sea_level: sea_level,
             grid: vec![0; (width.pow(3)) as usize],
             noise: PerlinNoise::new(seed),
             chunks: Vec::new(),
+            height_map: vec![vec![sea_level as f64; (width * 64) as usize]; (width * 64) as usize],
             flat_chunks: Vec::new(),
             seed: seed,
         };
@@ -125,25 +130,6 @@ impl ShaderGrid {
                 }
             }
         }
-
-        s.set_grid_from_chunks();
-        s
-    }
-
-    // Create grid with existing chunks and width
-    pub fn from(chunks: Vec<ShaderChunk>, width: u32, seed: u64) -> Self {
-        #[cfg(debug_assertions)]
-        if chunks.len() > width.pow(3) as usize { panic!("Chunk depth out of range") }
-
-        let mut s = Self {
-            origin: Self::get_origin_from_chunks(&chunks),
-            width: width,
-            grid: vec![0; (width.pow(3)) as usize],
-            chunks: chunks,
-            noise: PerlinNoise::new(seed),
-            flat_chunks: Vec::new(),
-            seed: seed,
-        };
 
         s.set_grid_from_chunks();
         s
@@ -201,7 +187,7 @@ impl ShaderGrid {
 
         for i in 0..self.width as usize {
 
-            create_large_islands(self, (update_chunk[0] as u32, update_chunk[2] as u32));
+            create_smooth_islands(self, (update_chunk[0] as u32, update_chunk[2] as u32));
 
             let c_ind = self.get_chunk_pos(&update_chunk);
 
@@ -320,5 +306,39 @@ impl ShaderGrid {
 
         flat_grid
     }
+
+    pub fn get_centre_point_in_space(&self) -> [u32; 3] {
+        [ 
+            (self.origin[0] + (((self.width as i32) / 2 + 1) * 64)) as u32,
+            (self.origin[1] + (((self.width as i32) / 2 + 1) * 64)) as u32,
+            (self.origin[2] + (((self.width as i32) / 2 + 1) * 64)) as u32,
+        ]
+    }
+
+    pub fn get_x_z_midpoint_in_space(&self) -> [u32; 2] {
+        [ 
+            (self.origin[0] + (((self.width as i32) / 2 + 1) * 64)) as u32,
+            (self.origin[2] + (((self.width as i32) / 2 + 1) * 64)) as u32,
+        ]
+    }
 }
 
+    // Create grid with existing chunks and width
+    // pub fn from(chunks: Vec<ShaderChunk>, width: u32, seed: u64) -> Self {
+    //     #[cfg(debug_assertions)]
+    //     if chunks.len() > width.pow(3) as usize { panic!("Chunk depth out of range") }
+
+    //     let mut s = Self {
+    //         origin: Self::get_origin_from_chunks(&chunks),
+    //         width: width,
+    //         grid: vec![0; (width.pow(3)) as usize],
+    //         chunks: chunks,
+    //         height_map: Vec::new(),
+    //         noise: PerlinNoise::new(seed),
+    //         flat_chunks: Vec::new(),
+    //         seed: seed,
+    //     };
+
+    //     s.set_grid_from_chunks();
+    //     s
+    // }

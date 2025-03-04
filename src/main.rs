@@ -340,16 +340,23 @@ impl App {
             Default::default(),
         ));
 
+        let width = 201.0;
+        //let middle = Vec3::from(64.0 * width + (64.0 * width)/2.0, 830.0, 64.0 * width + (64.0 * width)/2.0);
 
-        let mut intial_world = get_grid_from_seed(42);
+        let middle = Vec3::from(17728.0,830.0, 10560.0);
+
+        let camera_location = CameraLocation {location: middle, direction: Vec3::new(), old_loc: middle, h_angle: 0.0, v_angle: 0.0, sun_loc: Vec3::from(10000.0, 3000.0, 10000.0)};
+        let mut intial_world = get_grid_from_seed(42, width as i32, [middle.x as i32, middle.y as i32, middle.z as i32]);
 
         // Extend vectors to desired size
         let flat_world = intial_world.flatten_world();
         let mut voxels = flat_world.1;
-        let meta_data = flat_world.0;
+        let mut meta_data = flat_world.0;
 
         // Resize to desired capacity (e.g., 1 million elements)
         voxels.resize(150000000, 0);  // Pad with zeros
+        meta_data.resize(10000000, 0);
+
         //meta_data.resize(1_000_000, 0);  // Pad with zeros
 
         let voxel_buffers = [
@@ -423,8 +430,8 @@ impl App {
 
 
 
-        println!("p {}", perm.len());
-        println!("g {}", grad.len());
+        //println!("p {}", perm.len());
+        //println!("g {}", grad.len());
 
 
         let mut combined_data: Vec<f32> = Vec::with_capacity(perm.len() + grad.len());
@@ -433,7 +440,7 @@ impl App {
         combined_data.extend(grad.iter().map(|&g| g as f32));
 
         //println!("com {}", combined_data.len());
-        println!("com {:?}", combined_data);
+        //println!("com {:?}", combined_data);
 
 
         let noise_buffer = Buffer::from_iter(
@@ -547,9 +554,7 @@ impl App {
 
         #[allow(unused_mut)]
         // Default values
-        let width = 91.0;
-        let middle = Vec3::from(64.0 * width + (64.0 * width)/2.0, 830.0, 64.0 * width + (64.0 * width)/2.0);
-        let camera_location = CameraLocation {location: middle, direction: Vec3::new(), old_loc: middle, h_angle: 0.0, v_angle: 0.0, sun_loc: Vec3::from(10000.0, 3000.0, 10000.0)};
+
         let rcx = None;
 
         let p = Vec3::new();
@@ -996,7 +1001,7 @@ impl ApplicationHandler for App {
                         sun_position: [self.camera_location.sun_loc.x as f32, self.camera_location.sun_loc.y as f32, self.camera_location.sun_loc.z as f32, 1.0]
                     };
 
-                    //println!("{:?}", look_from);
+                    println!("{:?}", look_from);
                     
 
                     let subbuffer = self.camera_buffer.allocate_sized().unwrap();
@@ -1189,8 +1194,8 @@ impl WorldUpdater {
             let mut persistent_voxel_buff: Vec<u32> = Vec::with_capacity(150000000);
             persistent_voxel_buff.resize(150000000, 0);
 
-            let mut persistent_meta_buff: Vec<i32> = Vec::with_capacity(1000000);
-            persistent_meta_buff.resize(1000000, 0);
+            let mut persistent_meta_buff: Vec<i32> = Vec::with_capacity(10000000);
+            persistent_meta_buff.resize(10000000, 0);
 
 
             let voxel_transfer_buffer = Buffer::from_iter(
@@ -1241,7 +1246,8 @@ impl WorldUpdater {
                                 world.update_flat_chunk_with_world_pos([x, y, z]);
                             }
                             Update::SwitchSeed(seed) => {
-                                *world = get_grid_from_seed(seed);
+                                // DOES NOT CURRENTLY WORK NEEDS PLAYER LOCATION
+                                *world = get_grid_from_seed(seed, 201, [0, 0,0]);
                                 world.flatten_world();
                             }
                             Update::Shift(axis, dir) => {

@@ -2,6 +2,7 @@
 #[derive(Debug, Clone)]
 pub struct ShaderChunk {
     pos: [i32; 3], // position in 3d space
+    
     data: ChunkContent,
 }
 
@@ -9,7 +10,7 @@ pub struct ShaderChunk {
 #[derive(Debug, Clone)]
 enum ChunkContent {
     Leaf(VoxelData),
-    Octants(Box<OctantsData>),
+    Octants(Box<OctantsData>, u32),
 }
 
 #[repr(C)]
@@ -117,12 +118,12 @@ impl ShaderChunk {
                         ChunkContent::Leaf(VoxelData(0, is_voxel)),
                         ChunkContent::Leaf(VoxelData(0, is_voxel)),
                         ChunkContent::Leaf(VoxelData(0, is_voxel)),
-                    ]))
+                    ])), 0
                 );
             }
 
             // Set current to the next octant the given position lies in
-            if let ChunkContent::Octants(ref mut octants) = current {
+            if let ChunkContent::Octants(ref mut octants, voxel_type) = current {
                 current = &mut octants.0[Self::get_octant_at_depth(pos, i)];
             }
         }
@@ -139,7 +140,7 @@ impl ShaderChunk {
             // Create octants if they do not already exist
             match current {
                 ChunkContent::Leaf(a) => { println!{"{i}"}; return a.0 }
-                ChunkContent::Octants(ref mut octants) => {
+                ChunkContent::Octants(ref mut octants, voxel_type) => {
                     current = &mut octants.0[Self::get_octant_at_depth(pos, i)];
                 }
             };
@@ -158,7 +159,7 @@ impl ShaderChunk {
         let mut octant_vec: Vec<u32> = Vec::new();
 
         // Otherwise recursively search octree
-        if let ChunkContent::Octants(ref octants) = self.data {
+        if let ChunkContent::Octants(ref octants, voxel_type) = self.data {
             octant_vec = Self::get_flattened_octant(&octants.0);
         }
 
@@ -183,7 +184,7 @@ impl ShaderChunk {
                         octant_vec.push(vec![voxel_data.0]); 
                     } 
                 }
-                ChunkContent::Octants(ref octants) => {
+                ChunkContent::Octants(ref octants, voxel_type) => {
                     octant_vec.push(Self::get_flattened_octant(&octants.0));
                 }
             } 

@@ -51,7 +51,7 @@ uint get_depth(vec3 pos, inout int multiplier) {
     uvec3 realitive_chunk_location = uvec3((floor((pos) / 64)) - (w_buf.origin) / 64);
 
     // Currently defining here -> Will switch this out for buffer input
-    int WIDTH = 91;
+    int WIDTH = 201;
 
     //vec3 local_pos = mod(mod(pos , 64.0) + vec3(64.0), 64.0);
 
@@ -121,10 +121,10 @@ void take_step(ivec3 step, vec3 t_delta, inout vec3 t_max, inout uint hit_axis, 
         bool adjust = false;
 
         // Add to switch
-        if (dir[hit_axis] < 0.0) {
-            adjust = true;
-            curr_distance += 0.01;
-        }
+        // if (dir[hit_axis] < 0.0) {
+        //     adjust = true;
+        //     curr_distance += 0.01;
+        // }
         
         // Remove to switch
         //vec3 origin = c.origin + dir * (curr_distance + 0.0001); //(curr_distance + 0.0001);
@@ -135,14 +135,19 @@ void take_step(ivec3 step, vec3 t_delta, inout vec3 t_max, inout uint hit_axis, 
         // ADJUST SUCH THAT BEING AXIS ALIGNED AND IN A NEGATIVE DIRECTION E.G. AT 0.0 WOULD PLACE YOU IN THE NEXT NEGATIVE CHUNK SO 
         // I DONT HAVE TO ADJUST CURR_DISTANCE
         for (int i = 0; i < 3; i++) {
-            // if (abs(dir[i]) < 0.0001) {
-            //     continue;
-            // }
-            float nextBoundary = dir[i] > 0.0 ? 
-                multiplier * (floor(origin[i] / multiplier) + 1.0) : 
-                multiplier * floor(origin[i] / multiplier);
+            if (dir[i] == 0) {
+                continue;
+            }
+
+            float current_chunk = floor(origin[i] / multiplier);
+
+            float target_chunk = dir[i] > 0.0 ? 
+                current_chunk + 1.0 : 
+                current_chunk - (mod(origin[i], float(multiplier)) <= 0.001 ? 1.0 : 0.0);
+
+            float boundary = target_chunk * multiplier;
             
-            float t = (nextBoundary - origin[i]) / dir[i];
+            float t = (boundary - origin[i]) / dir[i];
             
             if (t < minT) {
                 minT = t;
@@ -245,6 +250,7 @@ vec3 grass(uint hit_axis, ivec3 step) {
     return normal + vec3(0.0, 0.4, 0.1) * 0.5;
 }
 
+
 bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_delta, ivec3 step, vec3 dir, inout vec3 hit_colour, inout float curr_distance) {
 
     uint steps = 0;
@@ -254,7 +260,7 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
     int transparent_hits = 0;
     vec3 tansparent_mask = vec3(1.0);
 
-    int WIDTH = 91;
+    int WIDTH = 201;
 
     while((world_pos.x > w_buf.origin.x && world_pos.x < w_buf.origin.x + 64*WIDTH) && (world_pos.z > w_buf.origin.z && world_pos.z < w_buf.origin.z + 64*WIDTH)) {
         // Go through chunks
@@ -292,8 +298,23 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
             if (fract(hit_pos.z) < 0.5) {
                 hit_colour *= 0.9;
             }
+            return true;
+        }
 
+        if (voxel_type == 4) {
+            hit_colour = vec3(0.969, 0.953, 0.0) * tansparent_mask;
+            vec3 hit_pos = c.origin + dir * curr_distance;
+            if (fract(hit_pos.x) > 0.5) {
+                hit_colour *= 0.96;
+            }
 
+            if (fract(hit_pos.y) < 0.5) {
+                hit_colour *= 0.96;
+            }
+
+            if (fract(hit_pos.z) < 0.5) {
+                hit_colour *= 0.96;
+            }
             return true;
         }
 

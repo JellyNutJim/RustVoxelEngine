@@ -18,27 +18,28 @@ pub use chunk_generator::*;
 // 3 - water
 
 
-pub fn get_grid_from_seed(seed: u64) -> ShaderGrid {
+// WIDTH MUST ALWAYS BE EVEN
+pub fn get_grid_from_seed(seed: u64, width: i32, camera_origin: [i32; 3]) -> ShaderGrid {
 
     //let mut p = ShaderGrid::from(chunks, 3);
-    let width = 91;
+    let camera_chunk = [(camera_origin[0] / 64) * 64, (camera_origin[1] / 64) * 64, (camera_origin[2] / 64) * 64];
 
+    println!("{:?}", camera_chunk);
 
-    let origin = [(width * 64) as i32, 640, (width * 64) as i32];
+    let origin = [camera_chunk[0] - ((width - 1) * 64) / 2 as i32,  camera_chunk[1] - ((width - 1) * 64) / 2 as i32, camera_chunk[2] - ((width - 1) * 64) / 2 as i32];
 
-    let mut p = ShaderGrid::new(width as u32, origin, seed);
+    println!("origin: {:?}", origin);
 
-    // println!("Perm: {:?}", test.permutation);
-
-    // println!("Gradiants {:?}", test.gradients);
-    
-    // p.insert_voxel([3840, 801, 3840], 1);
-    // p.insert_voxel([3842, 800, 3840], 1);
+    let mut p = ShaderGrid::new(width as u32, origin, seed, 768);
 
     // Elavation
     //create_flat_with_water(&mut p, width, origin);
 
     create_intial_world_with_continents(&mut p);
+    create_intial_close_land(&mut p);
+
+    println!("space midpoint: {:?}", p.get_centre_point_in_space()); 
+    println!("xz midpoint: {:?}", p.get_x_z_midpoint_in_space()); 
 
 
     // let p = p.flatten();
@@ -68,18 +69,43 @@ fn create_continents(p: &mut ShaderGrid, width: usize, origin: [i32; 3], seed: u
             p.insert_subchunk([x_adjusted, y + 800, z_adjusted], 1, 1);
         }
     }
-
-
 }
 
+// Layer 1 
 fn create_intial_world_with_continents(world: &mut ShaderGrid) {
-
     for x in 0..world.width {
         for z in 0..world.width {
             let c_x = x * 64 + world.origin[0] as u32;
             let c_z = z * 64 + world.origin[2] as u32;
 
-            create_large_islands(world, (c_x, c_z));
+            create_smooth_islands(world, (c_x, c_z));
+        }
+    }
+}
+
+// Layer 2
+fn create_intial_close_land(world: &mut ShaderGrid) {
+    let layer_width = 21;
+    let layer_half_width = layer_width / 2;
+
+
+    let mid_xz = world.get_x_z_midpoint_in_space();
+    let mid_chunk = [(mid_xz[0] / 64) * 64, (mid_xz[1] / 64) * 64];
+    let starting_point = [
+        mid_chunk[0] - layer_half_width * 64,
+        mid_chunk[1] - layer_half_width * 64
+    ];
+
+    println!("starting : {:?}", starting_point);
+
+    // Calculate current chnuk xz - 5
+
+    for x in 0..layer_width{
+        for z in 0..layer_width {
+            let c_x = x * 64 + starting_point[0] as u32;
+            let c_z = z * 64 + starting_point[1] as u32;
+
+            create_hills(world, (c_x, c_z));
         }
     }
 }
