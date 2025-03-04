@@ -117,23 +117,10 @@ void take_step(ivec3 step, vec3 t_delta, inout vec3 t_max, inout uint hit_axis, 
     if (multiplier > 4) {
         float minT = 1e10;
 
-        // Change so curr_distance adjustment happens here if previous hit dir was negative
-        bool adjust = false;
-
-        // Add to switch
-        // if (dir[hit_axis] < 0.0) {
-        //     adjust = true;
-        //     curr_distance += 0.01;
-        // }
-        
-        // Remove to switch
-        //vec3 origin = c.origin + dir * (curr_distance + 0.0001); //(curr_distance + 0.0001);
         vec3 origin = c.origin + dir * curr_distance;
 
-        // After issues have bee fixed, the next boundary calculation could easily be replaced with hardcoded values for each multi
+        const float adjust = 0.001 * multiplier / 64.0;
 
-        // ADJUST SUCH THAT BEING AXIS ALIGNED AND IN A NEGATIVE DIRECTION E.G. AT 0.0 WOULD PLACE YOU IN THE NEXT NEGATIVE CHUNK SO 
-        // I DONT HAVE TO ADJUST CURR_DISTANCE
         for (int i = 0; i < 3; i++) {
             if (dir[i] == 0) {
                 continue;
@@ -143,25 +130,26 @@ void take_step(ivec3 step, vec3 t_delta, inout vec3 t_max, inout uint hit_axis, 
 
             float target_chunk = dir[i] > 0.0 ? 
                 current_chunk + 1.0 : 
-                current_chunk - (mod(origin[i], float(multiplier)) <= 0.001 ? 1.0 : 0.0);
+                current_chunk - (mod(origin[i], float(multiplier)) <= adjust ? 1.0 : 0.0);
 
             float boundary = target_chunk * multiplier;
             
             float t = (boundary - origin[i]) / dir[i];
             
-            if (t < minT) {
+            if ( t > 1e-6 && t < minT) {
                 minT = t;
                 hit_axis = uint(i);
             }
             
         }
 
-        // if (adjust == true) {
-        //     curr_distance -= 0.01;
-        // }
-        
-        // Get position just before intersection
         curr_distance += minT;
+
+        if (dir.y <= 0.0) {
+            // Apply a tiny backstep only for non-upward rays or non-y-axis hits
+            curr_distance -= 1e-4;
+        }
+        
         vec3 pos = c.origin + (dir) * curr_distance;
         
         vec3 temp = floor(pos);
@@ -172,14 +160,6 @@ void take_step(ivec3 step, vec3 t_delta, inout vec3 t_max, inout uint hit_axis, 
 
         
         t_max += (abs(temp - world_pos)) * t_delta;
-
-        // Remove to switch
-        //curr_distance += 0.0001;
-
-        // if (dir[hit_axis] < 0.0) {
-        //     curr_distance += 0.0001;
-        // }
-        //curr_distance = t_max[hit_axis] - t_delta[hit_axis];
         
         world_pos = temp;
 
@@ -404,10 +384,6 @@ float get_perlin_noise(float x, float z) {
 } 
 
 void main() {
-
-
-
-
     ivec2 pixel_coords = ivec2(gl_GlobalInvocationID.xy);
 
     vec3 origin = c.origin;
@@ -417,9 +393,15 @@ void main() {
 
     vec3 world_pos = c.world_pos_1;
 
-    vec3 t_delta = abs(vec3(1.0) / dir);
+    vec3 t_delta;
     ivec3 step;
     vec3 t_max;
+
+    const float limit = 1e-10;
+    
+    t_delta.x = (abs(dir.x) < limit) ? 1e30 : abs(1.0 / dir.x);
+    t_delta.y = (abs(dir.y) < limit) ? 1e30 : abs(1.0 / dir.y);
+    t_delta.z = (abs(dir.z) < limit) ? 1e30 : abs(1.0 / dir.z);
 
     if (dir.x < 0.0) {
         step.x = -1;
