@@ -1,10 +1,15 @@
-use std::i32::MAX;
+use std::{
+    i32::MAX,
+    collections::VecDeque,
+};
 
 use crate::world::ShaderChunk;
 
-use super::PerlinNoise;
-
-use super::chunk_generator::*;
+use super::{
+    PerlinNoise,
+    HeightMap,
+    chunk_generator::*,
+};
 
 // Holds data to be placed in the voxel buffer
 // Origin will always be smaller than the current position
@@ -18,7 +23,7 @@ pub struct ShaderGrid {
     chunks: Vec<ShaderChunk>,
     pub noise: PerlinNoise,
 
-    pub height_map: Vec<Vec<f64>>,
+    pub height_map: HeightMap,
 
     flat_chunks: Vec<Vec<u32>>,
     seed: u64,
@@ -26,7 +31,37 @@ pub struct ShaderGrid {
 
 #[allow(unused)]
 impl ShaderGrid {
-    
+    // Create grid with given origin and size
+    pub fn new(width: u32, origin: [i32; 3], seed: u64, sea_level: u32) -> Self {
+        let mut s = Self {
+            origin: origin,
+            width: width,
+            sea_level: sea_level,
+            grid: vec![0; (width.pow(3)) as usize],
+            noise: PerlinNoise::new(seed),
+            chunks: Vec::new(),
+            height_map: HeightMap::new(sea_level as f64, (width * 64) as usize),
+            flat_chunks: Vec::new(),
+            seed: seed,
+        };
+
+        let width = width as i32;
+
+        // 64 0 0 
+        
+        // Fill grid with empty chunks
+        for x in 0..width {
+            for y in 0..width {
+                for z in 0..width {
+                    s.chunks.push(ShaderChunk::new([(64 * x) + origin[0], (64 * y) + origin[1], (64 * z) + origin[2]]));
+                }
+            }
+        }
+
+        s.set_grid_from_chunks();
+        s
+    }
+
     // Finds the smallest chunk origin, sets that as the grid origin
     fn get_origin_from_flat(chunk_positions: &Vec<([i32; 3], u32)>) -> [i32; 3]{
         let mut origin = [0, 0, 0];
@@ -112,37 +147,6 @@ impl ShaderGrid {
         ]
     }
 
-    // Create grid with given origin and size
-    pub fn new(width: u32, origin: [i32; 3], seed: u64, sea_level: u32) -> Self {
-        let mut s = Self {
-            origin: origin,
-            width: width,
-            sea_level: sea_level,
-            grid: vec![0; (width.pow(3)) as usize],
-            noise: PerlinNoise::new(seed),
-            chunks: Vec::new(),
-            height_map: vec![vec![sea_level as f64; (width * 64) as usize]; (width * 64) as usize],
-            flat_chunks: Vec::new(),
-            seed: seed,
-        };
-
-        let width = width as i32;
-
-        // 64 0 0 
-        
-        // Fill grid with empty chunks
-        for x in 0..width {
-            for y in 0..width {
-                for z in 0..width {
-                    s.chunks.push(ShaderChunk::new([(64 * x) + origin[0], (64 * y) + origin[1], (64 * z) + origin[2]]));
-                }
-            }
-        }
-
-        s.set_grid_from_chunks();
-        s
-    }
-
     pub fn shift(&mut self, axis: usize, dir: i32) {
 
         if axis == 1 { panic!("Invalid shift axis") }; 
@@ -188,14 +192,14 @@ impl ShaderGrid {
         // Update grid to reflect new chunk positions
         self.set_grid_from_chunks();
 
+        // Update height memory locations to match shifted chunks
+        self.height_map.shift(axis, dir);
+
         // Determine row of chunks to populate with new terrain data
         let mut update_chunk = self.origin;
         if dir == 1 {
             update_chunk[axis] += (self.width - 1) as i32 * 64;
         }
-
-        // Update internal layers
-        self.shift_inner(dir, axis, alt_axis);
 
         // Populate moved chunks with new data
         for i in 0..self.width as usize {
@@ -204,6 +208,7 @@ impl ShaderGrid {
 
             let c_ind = self.get_chunk_pos(&update_chunk);
 
+            // Update Flat Chunks
             for j in 0..self.width {
                 let grid_index = c_ind[0] as u32 + (c_ind[1] as u32 + j)  * self.width + c_ind[2] as u32 * self.width.pow(2);
                 let index = self.grid[grid_index as usize] as usize;
@@ -214,6 +219,10 @@ impl ShaderGrid {
 
             update_chunk[alt_axis] += 64;
         }
+
+        // Update internal layers
+        self.shift_inner(dir, axis, alt_axis);
+
     }
 
 
@@ -230,39 +239,47 @@ impl ShaderGrid {
             (mid_chunk[1] - layer_half_width * 64) as i32
         ];
 
+        let mut delete_chunk = [
+            update_chunk[0],
+            update_chunk[1],
+            update_chunk[2]
+        ];
+
         if dir == 1 {
             update_chunk[axis] += ((layer_width - 1) * 64) as i32;
+        }
+        else {
+            delete_chunk[axis] += ((layer_width - 1) * 64) as i32;
         }
         
         //println!("update chunk: {:?}", update_chunk);
 
 
         // Populate selected chunks with new data
+        // Replace old chunks with lower res data
         for i in 0..layer_width as usize {
 
             create_beach_hills(self, (update_chunk[0] as u32, update_chunk[2] as u32));
+            create_smooth_islands(self, (delete_chunk[0] as u32, delete_chunk[2] as u32));
 
-            let c_ind = self.get_chunk_pos(&update_chunk);
+            let update_chunk_pos   = self.get_chunk_pos(&update_chunk);
+            let delete_chunk_pos = self.get_chunk_pos(&delete_chunk);
 
             // Update Flat Chunk Column
             for j in 0..self.width {
-                let grid_index = c_ind[0] as u32 + (c_ind[1] as u32 + j)  * self.width + c_ind[2] as u32 * self.width.pow(2);
+                let grid_index = update_chunk_pos[0] as u32 + (update_chunk_pos[1] as u32 + j)  * self.width + update_chunk_pos[2] as u32 * self.width.pow(2);
+                let index = self.grid[grid_index as usize] as usize;
+                self.flat_chunks[index] = self.chunks[index].flatten().1;
+
+                let grid_index = delete_chunk_pos[0] as u32 + (delete_chunk_pos[1] as u32 + j)  * self.width + delete_chunk_pos[2] as u32 * self.width.pow(2);
                 let index = self.grid[grid_index as usize] as usize;
                 self.flat_chunks[index] = self.chunks[index].flatten().1;
             }
 
             // Move to next chunk along axis
             update_chunk[alt_axis] += 64;
+            delete_chunk[alt_axis] += 64;
         }
-
-
-        // For now just regenerate the row to remove -> later this should just be able to push the lower resolution version
-        // Kill old chunks
-        //
-        //
-        //
-        //
-
 
     }
 
@@ -383,6 +400,10 @@ impl ShaderGrid {
             (self.origin[0] + (((self.width as i32) / 2 + 1) * 64)) as u32,
             (self.origin[2] + (((self.width as i32) / 2 + 1) * 64)) as u32,
         ]
+    }
+
+    fn shift_height_map(axis: u32, dir: i32) {
+
     }
 }
 

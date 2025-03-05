@@ -2,6 +2,7 @@
 mod shader_chunk;
 mod shader_grid;
 mod chunk_generator;
+mod height_map;
 
 // Rust usage
 mod chunk;
@@ -9,7 +10,7 @@ mod chunk;
 pub use shader_chunk::ShaderChunk;
 pub use shader_grid::ShaderGrid;
 pub use chunk_generator::*;
-
+pub use height_map::HeightMap;
 
 // VOXEL TYPES
 // 0 - air
