@@ -1,4 +1,4 @@
-use super::{ShaderChunk, ShaderGrid};
+use super::ShaderGrid;
 
 
 
@@ -79,22 +79,40 @@ pub fn create_smooth_islands(world: &mut ShaderGrid, pos: (u32, u32)) {
     }
 }
 
-pub fn create_hills(world: &mut ShaderGrid, pos: (u32, u32)) {
+pub fn create_beach_hills(world: &mut ShaderGrid, pos: (u32, u32)) {
     // Update vertical chunk
     let grid = world.noise.generate_grid_from_point(64, 64, 0.005, (pos.0, pos.1));
+    let grid_2_temp = world.noise.generate_grid_from_point(64, 64, 0.00003, (pos.0, pos.1));
+
+    //let grid_alt = world.noise.generate_grid_from_point(64, 64, 0.0003, (pos.0, pos.1));
+
+    let grid_alt = world.noise.generate_grid_from_point(64, 64, 0.001, (pos.0, pos.1));
+
+    let grid_alt_2 = world.noise.generate_grid_from_point(64, 64, 0.01, (pos.0, pos.1));
 
     let chunk_pos = (
         pos.0 - world.origin[0] as u32,
         pos.1 - world.origin[2] as u32,
     );
 
-    println!("{:?}", pos);
-    println!("chunk pos: {:?}", chunk_pos);
+    //println!("{:?}", pos);
+    //println!("chunk pos: {:?}", chunk_pos);
     for x in 0..64 {
         for z in 0..64 {
             let complex_y = grid[x as usize][z as usize] * 16.0;
+
+            // Bays
+            let bay_noise = grid_alt[x as usize][z as usize] * 16.0 * 16.0;
+
+            // Interference
+            let interference = grid_alt_2[x as usize][z as usize] * 16.0 * 16.0;
+
             let x_adj = x + chunk_pos.0 as usize;
             let z_adj = z + chunk_pos.1 as usize; 
+
+
+            let y_2 = grid_2_temp[x as usize][z as usize] * 16.0;
+            world.height_map[x_adj][z_adj] = world.sea_level as f64 + y_2 * 16.0;
 
             //println!("{} {}", x_adj, z_adj);
             //println!("{}", world.height_map[x_adj][z_adj]);
@@ -104,21 +122,30 @@ pub fn create_hills(world: &mut ShaderGrid, pos: (u32, u32)) {
             let x_adj_space = (x + pos.0 as usize) as i32;
             let z_adj_space = (z + pos.1 as usize) as i32;
 
+            // Costal Water Level
             let distance = (world.sea_level as f64 + 16.0 -  world.height_map[x_adj][z_adj]).abs();
             let fall_off: f64 = 1.0; // Controls how quickly it approaches 0 near 768
             let scaling = 1.0 - (-distance.powf(2.0) / fall_off.powf(2.0)).exp();
 
             let y = complex_y * 16.0;
 
-            world.height_map[x_adj][z_adj] += (complex_y * scaling);
+            let add_height = (complex_y + bay_noise + (interference * 0.02)) / 2.0;
+
+            let i_height = world.height_map[x_adj][z_adj];
+            let a_height = world.height_map[x_adj][z_adj] + add_height;
+            world.height_map[x_adj][z_adj] += (add_height * scaling);
 
             if world.height_map[x_adj][z_adj]> (world.sea_level as f64 + 15.9) && world.height_map[x_adj][z_adj] < (world.sea_level as f64 + 16.3) {
                 voxel_type = 4;
-                world.insert_voxel([x_adj_space, world.height_map[x_adj][z_adj] as i32, z_adj_space], voxel_type);
+
+            }
+
+            if i_height < (world.sea_level as f64 + 15.9){
+                world.insert_voxel([x_adj_space, (world.sea_level as f64 + 15.0) as i32, z_adj_space], 3);
                 continue;
             }
 
-            if world.height_map[x_adj][z_adj] < (world.sea_level as f64 + 15.9){
+            else if  world.height_map[x_adj][z_adj] < (world.sea_level as f64 + 15.9) || a_height < (world.sea_level as f64) {
                 world.insert_voxel([x_adj_space, (world.sea_level as f64 + 15.0) as i32, z_adj_space], 3);
                 continue;
             }

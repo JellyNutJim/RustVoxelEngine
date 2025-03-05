@@ -104,6 +104,14 @@ impl ShaderGrid {
         ]
     }
 
+    pub fn get_chunk_pos_u32(&self, pos: &[u32; 3]) -> [u32; 3] {
+        [
+            (((pos[0] - (pos[0] & 63)) / 64) - self.origin[0] as u32 / 64) as u32, 
+            (((pos[1] - (pos[1] & 63)) / 64) - self.origin[1] as u32 / 64) as u32, 
+            (((pos[2] - (pos[2] & 63)) / 64) - self.origin[2] as u32 / 64) as u32
+        ]
+    }
+
     // Create grid with given origin and size
     pub fn new(width: u32, origin: [i32; 3], seed: u64, sea_level: u32) -> Self {
         let mut s = Self {
@@ -177,14 +185,19 @@ impl ShaderGrid {
             }
         }
 
+        // Update grid to reflect new chunk positions
         self.set_grid_from_chunks();
 
+        // Determine row of chunks to populate with new terrain data
         let mut update_chunk = self.origin;
         if dir == 1 {
             update_chunk[axis] += (self.width - 1) as i32 * 64;
         }
 
+        // Update internal layers
+        self.shift_inner(dir, axis, alt_axis);
 
+        // Populate moved chunks with new data
         for i in 0..self.width as usize {
 
             create_smooth_islands(self, (update_chunk[0] as u32, update_chunk[2] as u32));
@@ -201,6 +214,56 @@ impl ShaderGrid {
 
             update_chunk[alt_axis] += 64;
         }
+    }
+
+
+    fn shift_inner(&mut self, dir: i32, axis: usize, alt_axis: usize) {
+        let layer_width = 51;
+        let layer_half_width = layer_width / 2;
+
+        let mid_xz = self.get_x_z_midpoint_in_space();
+        let mid_chunk = [(mid_xz[0] / 64) * 64, (mid_xz[1] / 64) * 64];
+
+        let mut update_chunk = [
+            (mid_chunk[0] - layer_half_width * 64) as i32,
+            self.origin[1],
+            (mid_chunk[1] - layer_half_width * 64) as i32
+        ];
+
+        if dir == 1 {
+            update_chunk[axis] += ((layer_width - 1) * 64) as i32;
+        }
+        
+        //println!("update chunk: {:?}", update_chunk);
+
+
+        // Populate selected chunks with new data
+        for i in 0..layer_width as usize {
+
+            create_beach_hills(self, (update_chunk[0] as u32, update_chunk[2] as u32));
+
+            let c_ind = self.get_chunk_pos(&update_chunk);
+
+            // Update Flat Chunk Column
+            for j in 0..self.width {
+                let grid_index = c_ind[0] as u32 + (c_ind[1] as u32 + j)  * self.width + c_ind[2] as u32 * self.width.pow(2);
+                let index = self.grid[grid_index as usize] as usize;
+                self.flat_chunks[index] = self.chunks[index].flatten().1;
+            }
+
+            // Move to next chunk along axis
+            update_chunk[alt_axis] += 64;
+        }
+
+
+        // For now just regenerate the row to remove -> later this should just be able to push the lower resolution version
+        // Kill old chunks
+        //
+        //
+        //
+        //
+
+
     }
 
     // Assumes grid has be predfined with the needed size

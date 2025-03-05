@@ -1001,7 +1001,7 @@ impl ApplicationHandler for App {
                         sun_position: [self.camera_location.sun_loc.x as f32, self.camera_location.sun_loc.y as f32, self.camera_location.sun_loc.z as f32, 1.0]
                     };
 
-                    println!("{:?}", look_from);
+                    //println!("{:?}", look_from);
                     
 
                     let subbuffer = self.camera_buffer.allocate_sized().unwrap();
@@ -1251,7 +1251,11 @@ impl WorldUpdater {
                                 world.flatten_world();
                             }
                             Update::Shift(axis, dir) => {
+                                // Shift origin
                                 world.shift(axis, dir);
+
+                                // Shift internal layers
+                                
                             }
                         };
                         println!("add time: {}", i.elapsed().as_millis());

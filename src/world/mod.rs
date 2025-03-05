@@ -85,7 +85,7 @@ fn create_intial_world_with_continents(world: &mut ShaderGrid) {
 
 // Layer 2
 fn create_intial_close_land(world: &mut ShaderGrid) {
-    let layer_width = 21;
+    let layer_width = 51;
     let layer_half_width = layer_width / 2;
 
 
@@ -96,16 +96,12 @@ fn create_intial_close_land(world: &mut ShaderGrid) {
         mid_chunk[1] - layer_half_width * 64
     ];
 
-    println!("starting : {:?}", starting_point);
-
-    // Calculate current chnuk xz - 5
-
     for x in 0..layer_width{
         for z in 0..layer_width {
             let c_x = x * 64 + starting_point[0] as u32;
             let c_z = z * 64 + starting_point[1] as u32;
 
-            create_hills(world, (c_x, c_z));
+            create_beach_hills(world, (c_x, c_z));
         }
     }
 }
