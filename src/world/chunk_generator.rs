@@ -67,7 +67,7 @@ pub fn create_smooth_islands(world: &mut ShaderGrid, pos: (u32, u32)) {
 
             // Calculate scaling factor based on sea level
             let distance = (world.sea_level as f64 + 16.0 -  world.height_map.get(x_adj, z_adj));
-            let fall_off: f64 = 1.0;
+            let fall_off: f64 = 2.0;
             let scaling: f64;
             let distance = distance.abs();
             scaling = 1.0 - (-distance.powf(2.0) / fall_off.powf(2.0)).exp();
@@ -105,7 +105,6 @@ pub fn create_smooth_islands(world: &mut ShaderGrid, pos: (u32, u32)) {
 
             let x_adj = (x + pos.0 as usize) as i32;
             let z_adj = (z + pos.1 as usize) as i32;
-
 
             world.insert_subchunk([x_adj, y, z_adj], voxel_type, 3);
         }

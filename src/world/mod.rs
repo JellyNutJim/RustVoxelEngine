@@ -17,9 +17,10 @@ pub use height_map::HeightMap;
 // 1 - grass
 // 2 - stone
 // 3 - water
+// 4 - sand
 
 
-// WIDTH MUST ALWAYS BE EVEN
+// WIDTH MUST ALWAYS BE ODD
 pub fn get_grid_from_seed(seed: u64, width: i32, camera_origin: [i32; 3]) -> ShaderGrid {
 
     //let mut p = ShaderGrid::from(chunks, 3);
@@ -170,21 +171,18 @@ impl PerlinNoise {
     pub fn new(seed: u64) -> Self {
         let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
         
-        // Create permutation table
         let mut permutation: Vec<usize> = (0..256).collect();
         for i in 0..255 {
             let j = rng.random_range(i..256);
             permutation.swap(i, j);
         }
-        
-        // Double the permutation table to avoid overflow
+
         let perm_double: Vec<usize> = permutation.iter()
             .chain(permutation.iter())
             .cloned()
             .collect();
         let permutation = perm_double;
         
-        // Generate random gradient vectors
         let mut gradients = Vec::with_capacity(256);
         for _ in 0..256 {
             let angle = rng.random_range(0.0..2.0 * PI);
@@ -208,31 +206,25 @@ impl PerlinNoise {
     
     pub fn noise(&self, x: f64, z: f64) -> f64 {
 
-        // Find unit grid cell containing point
         let x_floor = x.floor() as isize;
         let z_floor = z.floor() as isize;
         
-        // Get relative position within cell
         let x = x - x_floor as f64;
         let z = z - z_floor as f64;
         
-        // Wrap to permutation table
         let x_floor = x_floor & 255;
         let z_floor = z_floor & 255;
         
-        // Calculate hashes for each corner
         let a = self.permutation[x_floor as usize] + z_floor as usize;
         let aa = self.permutation[a];
         let ab = self.permutation[a + 1];
         let b = self.permutation[(x_floor + 1) as usize] + z_floor as usize;
         let ba = self.permutation[b];
         let bb = self.permutation[b + 1];
-        
-        // Get fade curves
+
         let u = Self::fade(x);
         let v = Self::fade(z);
         
-        // Interpolate between grid point gradients
         let x1 = self.grad(aa, x, z);
         let x2 = self.grad(ba, x - 1.0, z);
         let z1 = lerp(x1, x2, u);
@@ -256,6 +248,7 @@ impl PerlinNoise {
         }
         grid
     }
+
     pub fn generate_grid_from_point(&self, width: usize, height: usize, scale: f64, pos: (u32, u32)) -> Vec<Vec<f64>> {
         let mut grid = vec![vec![0.0; width]; height];
         

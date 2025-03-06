@@ -174,8 +174,6 @@ impl ShaderGrid {
             self.origin[axis] += 64;
         }
 
-        // println!("new {new_axis} remove {remove_axis}");
-
         // INSTEAD OF SERACHING THROUGH SHIZ I CAN JUST DO X Y * W Z * W * W WITH SPECIFIC X OR Z !!!
 
         // Replace uneeded chunks with new chunks
@@ -247,9 +245,10 @@ impl ShaderGrid {
 
         if dir == 1 {
             update_chunk[axis] += ((layer_width - 1) * 64) as i32;
+            delete_chunk[axis] += (-1 * 64) as i32;
         }
         else {
-            delete_chunk[axis] += ((layer_width - 1) * 64) as i32;
+            delete_chunk[axis] += ((layer_width + 1) * 64) as i32;
         }
         
         //println!("update chunk: {:?}", update_chunk);

@@ -346,18 +346,18 @@ impl App {
         let middle = Vec3::from(17728.0,830.0, 10560.0);
 
         let camera_location = CameraLocation {location: middle, direction: Vec3::new(), old_loc: middle, h_angle: 0.0, v_angle: 0.0, sun_loc: Vec3::from(10000.0, 3000.0, 10000.0)};
-        let mut intial_world = get_grid_from_seed(42, width as i32, [middle.x as i32, middle.y as i32, middle.z as i32]);
+        let mut intial_world = get_grid_from_seed(72, width as i32, [middle.x as i32, middle.y as i32, middle.z as i32]);
 
-        // Extend vectors to desired size
+        // Get Vector World Data
         let flat_world = intial_world.flatten_world();
         let mut voxels = flat_world.1;
         let mut meta_data = flat_world.0;
 
-        // Resize to desired capacity (e.g., 1 million elements)
-        voxels.resize(150000000, 0);  // Pad with zeros
+        // Resize
+        voxels.resize(150000000, 0);  
         meta_data.resize(10000000, 0);
 
-        //meta_data.resize(1_000_000, 0);  // Pad with zeros
+        //meta_data.resize(1_000_000, 0);  
 
         let voxel_buffers = [
             Buffer::new_slice::<u32>(
@@ -427,11 +427,6 @@ impl App {
         let grad: Vec<f64> = intial_world.noise.gradients.clone().iter()
                 .flat_map(|&gradient| gradient.into_iter())
                 .collect();
-
-
-
-        //println!("p {}", perm.len());
-        //println!("g {}", grad.len());
 
 
         let mut combined_data: Vec<f32> = Vec::with_capacity(perm.len() + grad.len());
@@ -740,15 +735,12 @@ impl ApplicationHandler for App {
         )
         .unwrap();
 
-
-        // Dynamic viewports allow us to recreate just the viewport when the window is resized.
-        // Otherwise we would have to recreate the whole pipeline.
+        // Dynamic viewports
         let viewport = Viewport {
             offset: [0.0, 0.0],
             extent: window_size.into(),
             depth_range: 0.0..=1.0,
         };
-
 
         let recreate_swapchain = false;
         let previous_frame_end = Some(sync::now(self.device.clone()).boxed());
