@@ -55,7 +55,7 @@ use world::{get_grid_from_seed, ShaderGrid};
 
 use std::time::{Instant, Duration};
 
-use types::Vec3;
+use types::{Vec3, Voxel};
 
 use vulkano::command_buffer::CopyBufferInfo;
 

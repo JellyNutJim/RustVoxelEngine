@@ -266,51 +266,56 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
             steps += 1;
             take_step(step, t_delta, t_max, hit_axis, world_pos, multiplier, dir, curr_distance);
             continue;
-        }
+        } else {
+            if (voxel_type == 1) {
+                hit_colour = grass(hit_axis, step) * tansparent_mask;
+                vec3 hit_pos = c.origin + dir * curr_distance;
+                if (fract(hit_pos.x) > 0.5) {
+                    hit_colour *= 0.9;
+                }
 
-        if (voxel_type == 1) {
-            hit_colour = grass(hit_axis, step) * tansparent_mask;
-            vec3 hit_pos = c.origin + dir * curr_distance;
-            if (fract(hit_pos.x) > 0.5) {
-                hit_colour *= 0.9;
+                if (fract(hit_pos.y) < 0.5) {
+                    hit_colour *= 0.9;
+                }
+
+                if (fract(hit_pos.z) < 0.5) {
+                    hit_colour *= 0.9;
+                }
+                return true;
             }
 
-            if (fract(hit_pos.y) < 0.5) {
-                hit_colour *= 0.9;
+            if (voxel_type == 4) {
+                hit_colour = vec3(0.969, 0.953, 0.0) * tansparent_mask;
+                vec3 hit_pos = c.origin + dir * curr_distance;
+                if (fract(hit_pos.x) > 0.5) {
+                    hit_colour *= 0.96;
+                }
+
+                if (fract(hit_pos.y) < 0.5) {
+                    hit_colour *= 0.96;
+                }
+
+                if (fract(hit_pos.z) < 0.5) {
+                    hit_colour *= 0.96;
+                }
+                return true;
             }
 
-            if (fract(hit_pos.z) < 0.5) {
-                hit_colour *= 0.9;
-            }
-            return true;
-        }
-
-        if (voxel_type == 4) {
-            hit_colour = vec3(0.969, 0.953, 0.0) * tansparent_mask;
-            vec3 hit_pos = c.origin + dir * curr_distance;
-            if (fract(hit_pos.x) > 0.5) {
-                hit_colour *= 0.96;
+            if (voxel_type == 2) {
+                hit_colour = stone(hit_axis, step) * tansparent_mask;
+                return true;
             }
 
-            if (fract(hit_pos.y) < 0.5) {
-                hit_colour *= 0.96;
+            if (voxel_type == 3) {
+                hit_colour = vec3(0.31, 0.239, 0.9);
+                return true; 
             }
 
-            if (fract(hit_pos.z) < 0.5) {
-                hit_colour *= 0.96;
-            }
-            return true;
-        }
-
-        if (voxel_type == 2) {
             hit_colour = stone(hit_axis, step) * tansparent_mask;
             return true;
+
         }
 
-        if (voxel_type == 3) {
-            hit_colour = vec3(0.31, 0.239, 0.9);
-            return true; 
-        }
     }
     return false;
 }

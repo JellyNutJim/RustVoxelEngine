@@ -1,3 +1,6 @@
+use crate::Voxel;
+
+
 #[repr(C)]
 #[derive(Debug, Clone)]
 pub struct ShaderChunk {
@@ -15,7 +18,10 @@ enum ChunkContent {
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
-struct VoxelData(u32, bool);
+struct VoxelData(
+    u32, 
+    bool // Determine whether the current "voxel" is a voxel or an octant
+);
 
 #[repr(C)]
 #[derive(Debug, Clone)]

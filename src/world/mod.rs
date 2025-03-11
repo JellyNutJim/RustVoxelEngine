@@ -11,6 +11,7 @@ pub use shader_chunk::ShaderChunk;
 pub use shader_grid::ShaderGrid;
 pub use chunk_generator::*;
 pub use height_map::HeightMap;
+use crate::Voxel;
 
 // VOXEL TYPES
 // 0 - air
@@ -22,6 +23,15 @@ pub use height_map::HeightMap;
 
 // WIDTH MUST ALWAYS BE ODD
 pub fn get_grid_from_seed(seed: u64, width: i32, camera_origin: [i32; 3]) -> ShaderGrid {
+
+    let mut l = Voxel::new();
+    l.set_octant(0, 15);
+    l.set_octant(7, 3);
+
+    println!("{:032b}", l.update_voxel());
+
+
+
 
     //let mut p = ShaderGrid::from(chunks, 3);
     let camera_chunk = [(camera_origin[0] / 64) * 64, (camera_origin[1] / 64) * 64, (camera_origin[2] / 64) * 64];
