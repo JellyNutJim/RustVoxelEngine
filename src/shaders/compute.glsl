@@ -387,6 +387,41 @@ float get_perlin_noise(float x, float z) {
     return lerp(z1, z2, v);
 } 
 
+// Triangle intercept
+bool intersection_test(vec3 origin, vec3 dir, vec3 v0, vec3 v1, vec3 v2) {
+
+    vec3 v0v1 = v1 - v0;
+    vec3 v0v2 = v2 - v0;
+    vec3 pvec = cross(dir, v0v2);
+    float det = dot(v0v1, pvec);
+
+    if (abs(det) < 0.0001) { return false; }
+
+    float invDet = 1 / det;
+
+    vec3 tvec = origin - v0;
+    float u = dot(tvec, pvec) * invDet;
+    if (u < 0 || u > 1) { return false; }
+
+    vec3 qvec = cross(tvec, v0v1);
+    float v = dot(dir, qvec) * invDet;
+    if (v < 0 || u + v > 1) { return false; }
+
+    float t;
+    vec3 barycentricCoords;
+    
+    t = dot(v0v2, qvec) * invDet;
+    
+    // Ray intersection
+    if (t > 0.0001) {
+        barycentricCoords = vec3(1.0 - u - v, u, v);
+        return true;
+    }
+
+
+    return false;
+}
+
 
 void main() {
     ivec2 pixel_coords = ivec2(gl_GlobalInvocationID.xy);
@@ -395,6 +430,16 @@ void main() {
 
     vec3 pixel_center = c.pixel00_loc + (c.pixel_delta_u * float(pixel_coords.x)) + (c.pixel_delta_v * float(pixel_coords.y));
     vec3 dir = pixel_center - origin;
+
+
+    vec3 v0 = vec3(17738.0, 830.0, 10580.0);
+    vec3 v1 = vec3(17729.0, 831.0, 10621.0);
+    vec3 v2 = vec3(17720.0, 820.0, 10550.0);
+
+    if (intersection_test(origin, dir, v0, v1, v2) == true) {
+        imageStore(storageImage, pixel_coords, vec4(1.0, 0.984, 0.0, 1.0));
+        return;
+    }
 
     vec3 world_pos = c.world_pos_1;
 
@@ -565,3 +610,5 @@ void main() {
 // Sub voxel render
 
 // Sub triangle render
+
+
