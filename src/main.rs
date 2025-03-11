@@ -340,22 +340,26 @@ impl App {
             Default::default(),
         ));
 
-        let width = 201.0;
+        let width = 321.0;
         //let middle = Vec3::from(64.0 * width + (64.0 * width)/2.0, 830.0, 64.0 * width + (64.0 * width)/2.0);
-
+        let mid = u32::max_value() as f64 / 100.0;  // Basically i32 mid untio
+        println!("{}", mid); 
+        //let middle = Vec3::from(mid,830.0, mid);
         let middle = Vec3::from(17728.0,830.0, 10560.0);
 
         let camera_location = CameraLocation {location: middle, direction: Vec3::new(), old_loc: middle, h_angle: 0.0, v_angle: 0.0, sun_loc: Vec3::from(10000.0, 3000.0, 10000.0)};
-        let mut intial_world = get_grid_from_seed(72, width as i32, [middle.x as i32, middle.y as i32, middle.z as i32]);
+        let mut intial_world = get_grid_from_seed(42, width as i32, [middle.x as i32, middle.y as i32, middle.z as i32]);
 
         // Get Vector World Data
         let flat_world = intial_world.flatten_world();
         let mut voxels = flat_world.1;
         let mut meta_data = flat_world.0;
 
+        println!("{} {}", voxels.len(), meta_data.len());
+
         // Resize
         voxels.resize(150000000, 0);  
-        meta_data.resize(10000000, 0);
+        meta_data.resize(40000000, 0);
 
         //meta_data.resize(1_000_000, 0);  
 
@@ -1186,8 +1190,8 @@ impl WorldUpdater {
             let mut persistent_voxel_buff: Vec<u32> = Vec::with_capacity(150000000);
             persistent_voxel_buff.resize(150000000, 0);
 
-            let mut persistent_meta_buff: Vec<i32> = Vec::with_capacity(10000000);
-            persistent_meta_buff.resize(10000000, 0);
+            let mut persistent_meta_buff: Vec<i32> = Vec::with_capacity(40000000);
+            persistent_meta_buff.resize(40000000, 0);
 
 
             let voxel_transfer_buffer = Buffer::from_iter(

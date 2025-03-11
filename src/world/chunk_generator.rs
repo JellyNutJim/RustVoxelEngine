@@ -87,7 +87,7 @@ pub fn create_smooth_islands(world: &mut ShaderGrid, pos: (u32, u32)) {
             }
 
             // Update low resolution terrain
-            if !(x % 4 == 0 && z % 4 == 0) {
+            if !(x % 16 == 0 && z % 16 == 0) {
                 continue;
             }
 
@@ -99,14 +99,14 @@ pub fn create_smooth_islands(world: &mut ShaderGrid, pos: (u32, u32)) {
 
                 voxel_type = 3;
 
-                world.insert_subchunk([x_adj, sea_level as i32, z_adj], voxel_type, 3);
+                world.insert_subchunk([x_adj, sea_level as i32, z_adj], voxel_type, 1);
                 continue;
             }
 
             let x_adj = (x + pos.0 as usize) as i32;
             let z_adj = (z + pos.1 as usize) as i32;
 
-            world.insert_subchunk([x_adj, y, z_adj], voxel_type, 3);
+            world.insert_subchunk([x_adj, y, z_adj], voxel_type, 1);
         }
     }
 }

@@ -218,7 +218,7 @@ impl ShaderGrid {
             update_chunk[alt_axis] += 64;
         }
 
-        // Update internal layers
+        // Now the world has been shifted, multiresolution work can take place
         self.shift_inner(dir, axis, alt_axis);
 
     }

@@ -29,6 +29,8 @@ layout(set = 0, binding = 3) readonly buffer NoiseBuffer {
 
 layout(set = 0, binding = 4, rgba8) uniform image2D storageImage;
 
+const int WIDTH = 321;
+
 uint get_octant(vec3 pos, uint mid) {
     uint octant = 0;
     if (pos.x > mid) {
@@ -46,14 +48,9 @@ uint get_octant(vec3 pos, uint mid) {
     return octant;
 }
 
-
 uint get_depth(vec3 pos, inout int multiplier) {
+    
     uvec3 realitive_chunk_location = uvec3((floor((pos) / 64)) - (w_buf.origin) / 64);
-
-    // Currently defining here -> Will switch this out for buffer input
-    int WIDTH = 201;
-
-    //vec3 local_pos = mod(mod(pos , 64.0) + vec3(64.0), 64.0);
 
     vec3 local_pos = mod(pos, 64.0);
 
@@ -240,7 +237,10 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
     int transparent_hits = 0;
     vec3 tansparent_mask = vec3(1.0);
 
-    int WIDTH = 201;
+    float accumculated_curve = 0.0;
+    float curve = 0.01;
+
+    int curr_chunk = 0;
 
     while((world_pos.x > w_buf.origin.x && world_pos.x < w_buf.origin.x + 64*WIDTH) && (world_pos.z > w_buf.origin.z && world_pos.z < w_buf.origin.z + 64*WIDTH)) {
         // Go through chunks
@@ -250,6 +250,10 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
         }
 
         uint voxel_type = get_depth(world_pos, multiplier);
+
+        // if (floor(curr_distance / 64) * 64 == 960) {
+        //     world_pos.y += 1;
+        // }
 
         if (steps > 2000) {
             hit_colour = vec3(0.0, 0.0, 0.0);
@@ -320,7 +324,7 @@ void apply_shadow(vec3 world_pos, vec3 t_max, vec3 t_delta, ivec3 step, vec3 dir
     take_step(step, t_delta, t_max, hit_axis, world_pos, 1, dir, curr_distance);
     //world_pos += step;
 
-    while(steps < 10) {
+    while(steps < 30) {
         // Go through chunks
 
         uint voxel_type = get_depth(world_pos, multiplier);
@@ -382,6 +386,7 @@ float get_perlin_noise(float x, float z) {
 
     return lerp(z1, z2, v);
 } 
+
 
 void main() {
     ivec2 pixel_coords = ivec2(gl_GlobalInvocationID.xy);
@@ -533,11 +538,6 @@ void main() {
     }
 
 
-
-
-    // Apply sun
-    // Use sphere ray interception from weekend ray tracing, maybe apply normal/multi ray
-
     float radius = 500;
 
     vec3 oc = c.sun_loc - c.origin;
@@ -546,13 +546,22 @@ void main() {
     float c = dot(oc, oc) - radius*radius;
     float discriminant = b*b - 4*a*c;
 
-    if (discriminant >= 0) {
+    if (discriminant > 0) {
         imageStore(storageImage, pixel_coords, vec4(1.0, 1.0, 0.0, 1.0));
         return;
     }
-
+    
+    // Calculate sky color (your existing sky gradient)
     float k = (normalize(dir).y + 1.0) * 0.5;
     vec3 colour = vec3(1.0) * (1.0 - k) + vec3(0.5, 0.7, 1.0) * (k);
     vec4 output_colour = vec4(colour, 1.0);
     imageStore(storageImage, pixel_coords, output_colour);
+    
 }
+
+
+// In voxel search and render
+
+// Sub voxel render
+
+// Sub triangle render
