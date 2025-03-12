@@ -78,48 +78,9 @@ impl PerlinNoise {
         
         lerp(z1, z2, v)
     }
-    
-    pub fn generate_grid(&self, width: usize, height: usize, scale: f64) -> Vec<Vec<f64>> {
-        let mut grid = vec![vec![0.0; width]; height];
-        
-        for x in 0..height {
-            for z in 0..width {
-                let nx = x as f64 * scale;
-                let nz = z as f64 * scale;
-                grid[x][z] = self.noise(nx, nz);
-            }
-        }
-        grid
-    }
 
-    pub fn generate_grid_from_point(&self, width: usize, height: usize, scale: f64, pos: (u32, u32)) -> Vec<Vec<f64>> {
-        let mut grid = vec![vec![0.0; width]; height];
-        
-        for x in 0..height {
-            for z in 0..width {
-                let nx = (x + pos.0 as usize) as f64 * scale;
-                let nz = (z + pos.1 as usize) as f64 * scale;
-                grid[x][z] = self.noise(nx, nz);
-            }
-        }
-        grid
-    }
-
-    pub fn generate_grid_from_point_with_half_steps(&self, width: usize, height: usize, scale: f64, pos: (u32, u32)) -> Vec<Vec<f64>> {
-        let mut grid = vec![vec![0.0; width * 2]; height * 2];
-        
-        for x in 0..height*2 {
-            for z in 0..width*2 {
-                let nx = ((x / 2) as f64 + pos.0 as f64) * scale;
-                let nz = ((z / 2) as f64 + pos.1 as f64) * scale;
-                grid[x][z] = self.noise(nx, nz);
-            }
-        }
-        grid
-    }
-
-    pub fn get_noise_at_point(&self, x: f64, z: f64, scale: f64) -> f64 {
-        self.noise(x * scale, z * scale)
+    pub fn get_noise_at_point(&self, x: f64, z: f64) -> f64 {
+        self.noise(x * self.scale, z * self.scale)
     }
 }
 

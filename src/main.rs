@@ -361,7 +361,7 @@ impl App {
         println!("{} {}", voxels.len(), meta_data.len());
 
         // Resize
-        voxels.resize(150000000, 0);  
+        voxels.resize(500000000, 0);  
         meta_data.resize(40000000, 0);
 
         //meta_data.resize(1_000_000, 0);  
@@ -1191,8 +1191,8 @@ impl WorldUpdater {
             let mut shutdown = false;
             let mut current_buffer = 0;
 
-            let mut persistent_voxel_buff: Vec<u32> = Vec::with_capacity(150000000);
-            persistent_voxel_buff.resize(150000000, 0);
+            let mut persistent_voxel_buff: Vec<u32> = Vec::with_capacity(500000000);
+            persistent_voxel_buff.resize(500000000, 0);
 
             let mut persistent_meta_buff: Vec<i32> = Vec::with_capacity(40000000);
             persistent_meta_buff.resize(40000000, 0);
@@ -1272,6 +1272,8 @@ impl WorldUpdater {
 
                         //w.resize(150000000, 0);
                         println!("resize time: {}", i.elapsed().as_millis());
+
+                        println!("LENGTH: {}", flat_world.1.len());
                         
                         let i = Instant::now();
                         {

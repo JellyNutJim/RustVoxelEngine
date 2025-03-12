@@ -343,8 +343,7 @@ impl ShaderGrid {
         self.set_grid_from_chunks();
 
         // Update height memory locations to match shifted chunks
-        self.generator.height_map.shift(axis, dir, 128);
-        self.generator.biome_map.shift(axis, dir, 64);
+        self.generator.shift_maps(axis, dir);
 
         // Determine row of chunks to populate with new terrain data
         let mut update_chunk = self.origin;
@@ -352,12 +351,21 @@ impl ShaderGrid {
             update_chunk[axis] += (self.width - 1) as i32 * 64;
         }
 
+        let temp = [
+            self.origin[0] as u32,
+            self.origin[1] as u32,
+            self.origin[2] as u32,
+        ];
+
         // Populate moved chunks with new data, loops through the row of chunks to be generated
         for _i in 0..self.width as usize {
 
             // Update Biome MaP for this chunk
             //gen_biome(&mut self.biome_map, update_chunk[0] as u32,  update_chunk[2] as u32);
-            create_smooth_islands(self, (update_chunk[0] as u32, update_chunk[2] as u32));
+
+            
+
+            generate_res_16(self, update_chunk[0] as u32, update_chunk[2] as u32, true);
 
             let c_ind = self.get_chunk_pos(&update_chunk);
 
@@ -374,7 +382,7 @@ impl ShaderGrid {
 
         // Now the world has been shifted, multiresolution work can take place
         self.update_inner(dir, axis, alt_axis);
-        self.generator.generate_biome_chunk(&mut self.chunks);
+
 
     }
 
@@ -416,11 +424,23 @@ impl ShaderGrid {
         // Replace old chunks with lower res data
         for i in 0..layer_width as usize {
 
-            create_beach_hills(self, (update_chunk[0] as u32, update_chunk[2] as u32));
-            create_smooth_islands(self, (delete_chunk[0] as u32, delete_chunk[2] as u32));
-
             let update_chunk_pos   = self.get_chunk_pos(&update_chunk);
             let delete_chunk_pos = self.get_chunk_pos(&delete_chunk);
+
+            // Temp solution of just deleting chunks at layer boundaries
+            for j in 0..self.width {
+                let grid_index = update_chunk_pos[0] as u32 + (update_chunk_pos[1] as u32 + j)  * self.width + update_chunk_pos[2] as u32 * self.width.pow(2);
+                let index = self.grid[grid_index as usize] as usize;
+                self.chunks[index] = ShaderChunk::new(self.chunks[index].get_origin());
+
+                let grid_index = delete_chunk_pos[0] as u32 + (delete_chunk_pos[1] as u32 + j)  * self.width + delete_chunk_pos[2] as u32 * self.width.pow(2);
+                let index = self.grid[grid_index as usize] as usize;
+                self.chunks[index] = ShaderChunk::new(self.chunks[index].get_origin());
+            }
+
+            generate_res_1(self, update_chunk[0] as u32, update_chunk[2] as u32);
+            generate_res_16(self, delete_chunk[0] as u32, delete_chunk[2] as u32, true);
+
 
             // Update Flat Chunk Column
             for j in 0..self.width {

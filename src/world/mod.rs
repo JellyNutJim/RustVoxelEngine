@@ -60,6 +60,9 @@ pub fn get_grid_from_seed(seed: u64, width: i32, camera_origin: [i32; 3]) -> Sha
     p
 }
 
+
+// Intial World Gen Helper Functions
+
 // Layer 1 
 fn create_intial_world_with_continents(world: &mut ShaderGrid) {
     for x in 0..world.width {
@@ -67,7 +70,16 @@ fn create_intial_world_with_continents(world: &mut ShaderGrid) {
             let c_x = x * 64 + world.origin[0] as u32;
             let c_z = z * 64 + world.origin[2] as u32;
 
-            create_smooth_islands(world, (c_x, c_z));
+            let mut b = true;
+
+            if x > 130 && x < 170 {
+                if z > 130 && z < 170 {
+                    b = false;
+                }
+            }
+
+
+            generate_res_16(world, c_x, c_z, b);
         }
     }
 }
@@ -90,7 +102,7 @@ fn create_intial_close_land(world: &mut ShaderGrid) {
             let c_x = x * 64 + starting_point[0] as u32;
             let c_z = z * 64 + starting_point[1] as u32;
 
-            create_beach_hills(world, (c_x, c_z));
+            generate_res_1(world, c_x, c_z);
         }
     }
 }
