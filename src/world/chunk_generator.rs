@@ -1,66 +1,72 @@
-use super::{HeightMap, PerlinNoise, ShaderGrid, Voxel};
+use super::{HeightMap, PerlinNoise, ScalablePerlin, ShaderChunk, ShaderGrid, Voxel};
 
 // Contains all noises used throughout the generation process
 #[allow(unused)]
 #[derive(Debug, Clone)]
 pub struct GenPipeLine {
-    pub landmass: PerlinNoise,
 
-    // Biome Determination
+    // Set Scale Perlin
+    pub landmass: PerlinNoise,
     pub temperature: PerlinNoise,
     pub humidity: PerlinNoise,
 
     // Biome Specific Noise
-    pub height: PerlinNoise,
+    pub height: ScalablePerlin,
 
     // Extras
-    pub interference: PerlinNoise,
-    pub features: PerlinNoise,
+    pub interference: ScalablePerlin,
+    pub features: ScalablePerlin,
+
+    // Meta Data
+    pub height_map: HeightMap,
+    pub biome_map: HeightMap,
 }
 
 // Useful Functions
 impl GenPipeLine {
-    pub fn new(seed: u64) -> Self{
+    pub fn new(seed: u64, width: usize, sea_level: f64) -> Self{
         Self {
-            landmass: PerlinNoise::new(seed),
+            landmass: PerlinNoise::new(seed, 0.00003),
 
-            temperature: PerlinNoise::new(seed + 1),
-            humidity: PerlinNoise::new(seed - 1),
+            temperature: PerlinNoise::new(seed + 1, 0.003),
+            humidity: PerlinNoise::new(seed - 1, 0.003),
 
-            height: PerlinNoise::new(seed - 2),
+            height: ScalablePerlin::new(seed - 2),
 
-            interference: PerlinNoise::new(seed + 2),
-            features: PerlinNoise::new(seed + 3),
+            interference: ScalablePerlin::new(seed + 2),
+            features: ScalablePerlin::new(seed + 3),
+
+            height_map: HeightMap::new(sea_level, width * 64 * 2), // Double the grid size to account for sub voxels
+            biome_map: HeightMap::new(0.0,width * 64) // Biomes placed per voxel
         }
     }
 }
 
 // Voxel Generation
 impl GenPipeLine {
-    pub fn get_biome_at(&self) -> f64 {
-        32.1
+    fn is_continent(&self, x: u32, z: u32) -> bool {
+        //self.landmass
+        false
+    }
+
+    fn get_biome_at(&self, x: u32, z: u32) -> f64 {
+        23.0
     }
 }
 
 // Chunk Generation
 impl GenPipeLine {
-    pub fn generate_biome_chunk(&self, m: &mut HeightMap) -> f64 {
-        *m.get_mut(0, 0) = 32.0;
-        m.get(0, 0)
+    pub fn generate_biome_chunk(&mut self, m: &mut Vec<ShaderChunk>) -> f64 {
+        self.get_biome_at(32, 32);
+        32.0
     }
 }
 
 
-// Other Generation
+// Base Biome Heightmap Generation
 
 
-
-// Generates and inserts one chunk of biome data
-pub fn gen_biome(biome_map: &mut HeightMap, x: u32, z: u32) {
-
-}
-
-
+// Multiresolution Context Based Generation
 
 // Resets heightmap level then adds continent height
 pub fn create_smooth_islands(world: &mut ShaderGrid, pos: (u32, u32)) {
@@ -92,30 +98,30 @@ pub fn create_smooth_islands(world: &mut ShaderGrid, pos: (u32, u32)) {
             let mut voxel_type = 1;
 
             // Set intial height to continent height
-            *world.height_map.get_mut(x_adj, z_adj) = world.sea_level as f64 + continent_noise;
+            *world.generator.height_map.get_mut(x_adj, z_adj) = world.sea_level as f64 + continent_noise;
 
             // Beach change
             let change = (beach_noise + bay_noise) / 2.0;
-            let initial = world.height_map.get(x_adj, z_adj);
+            let initial = world.generator.height_map.get(x_adj, z_adj);
 
             // Calculate scaling factor based on sea level
-            let distance = world.sea_level as f64 + 16.0 -  world.height_map.get(x_adj, z_adj);
+            let distance = world.sea_level as f64 + 16.0 -  world.generator.height_map.get(x_adj, z_adj);
             let fall_off: f64 = 2.0;
             let scaling: f64;
             let distance = distance.abs();
             scaling = 1.0 - (-distance.powf(2.0) / fall_off.powf(2.0)).exp();
 
             if change > 0.0 {
-                *world.height_map.get_mut(x_adj, z_adj) += change * scaling;
+                *world.generator.height_map.get_mut(x_adj, z_adj) += change * scaling;
             }
             else {
-                *world.height_map.get_mut(x_adj, z_adj) += change;
+                *world.generator.height_map.get_mut(x_adj, z_adj) += change;
             }
 
-            if initial < sea_level + 15.9 || world.height_map.get(x_adj, z_adj) < sea_level + 15.9 {
+            if initial < sea_level + 15.9 || world.generator.height_map.get(x_adj, z_adj) < sea_level + 15.9 {
                 
-                if initial < world.height_map.get(x_adj, z_adj) {
-                    *world.height_map.get_mut(x_adj, z_adj) = initial;
+                if initial < world.generator.height_map.get(x_adj, z_adj) {
+                    *world.generator.height_map.get_mut(x_adj, z_adj) = initial;
                 }
             }
 
@@ -124,9 +130,9 @@ pub fn create_smooth_islands(world: &mut ShaderGrid, pos: (u32, u32)) {
                 continue;
             }
 
-            let y = ((world.height_map.get(x_adj, z_adj) as i32 - 3) / 4) * 4;
+            let y = ((world.generator.height_map.get(x_adj, z_adj) as i32 - 3) / 4) * 4;
 
-            if world.height_map.get(x_adj, z_adj) < sea_level + 15.9 {
+            if world.generator.height_map.get(x_adj, z_adj) < sea_level + 15.9 {
                 let x_adj = (x + pos.0 as usize) as i32;
                 let z_adj = (z + pos.1 as usize) as i32;
 
@@ -168,24 +174,24 @@ pub fn create_beach_hills(world: &mut ShaderGrid, pos: (u32, u32)) {
             let x_adj_space = (x + pos.0 as usize) as i32;
             let z_adj_space = (z + pos.1 as usize) as i32;
 
-            let distance = (world.sea_level as f64 + 16.0 -  world.height_map.get(x_adj, z_adj)).abs();
+            let distance = (world.sea_level as f64 + 16.0 -  world.generator.height_map.get(x_adj, z_adj)).abs();
             let fall_off: f64 = 1.0; 
             let scaling = 1.0 - (-distance.powf(2.0) / fall_off.powf(2.0)).exp();
-            *world.height_map.get_mut(x_adj, z_adj) += interference * 0.01 * scaling;
+            *world.generator.height_map.get_mut(x_adj, z_adj) += interference * 0.01 * scaling;
 
             let mut v = Voxel::new();
             let mut v_type = 1;
-            let mut pos = [0.0 as f64, world.height_map.get(x_adj, z_adj).fract(), 0.0 as f64];
+            let mut pos = [0.0 as f64, world.generator.height_map.get(x_adj, z_adj).fract(), 0.0 as f64];
             
             
-            if world.height_map.get(x_adj, z_adj) > (world.sea_level as f64 + 15.7) {
-                if world.height_map.get(x_adj, z_adj) < (world.sea_level as f64 + 16.3) {
+            if world.generator.height_map.get(x_adj, z_adj) > (world.sea_level as f64 + 15.7) {
+                if world.generator.height_map.get(x_adj, z_adj) < (world.sea_level as f64 + 16.3) {
                     v_type = 4;
                 }
             }
 
             // Water level
-            if world.height_map.get(x_adj, z_adj) < (world.sea_level as f64 + 15.7) {
+            if world.generator.height_map.get(x_adj, z_adj) < (world.sea_level as f64 + 15.7) {
                 world.insert_voxel([x_adj_space, world.sea_level as i32 + 15, z_adj_space], Voxel::from_type(3), false);
                 continue
             }
@@ -212,7 +218,7 @@ pub fn create_beach_hills(world: &mut ShaderGrid, pos: (u32, u32)) {
 
             v.update_voxel();
 
-            world.insert_voxel([x_adj_space, world.height_map.get(x_adj, z_adj) as i32, z_adj_space], v, true);
+            world.insert_voxel([x_adj_space, world.generator.height_map.get(x_adj, z_adj) as i32, z_adj_space], v, true);
 
         }
     }

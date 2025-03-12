@@ -26,8 +26,6 @@ pub struct ShaderGrid {
 
 
     // World Data
-    pub height_map: HeightMap,
-    pub biome_map: HeightMap,
     chunks: Vec<ShaderChunk>,
 
     // Chunks as array of u32
@@ -50,10 +48,8 @@ impl ShaderGrid {
             width: width,
             sea_level: sea_level,
             grid: vec![0; (width.pow(3)) as usize],
-            generator: GenPipeLine::new(seed),
+            generator: GenPipeLine::new(seed, width as usize, sea_level as f64),
             chunks: Vec::new(),
-            height_map: HeightMap::new(sea_level as f64, (width * 64) as usize * 2), // Double the grid size to account for sub voxels
-            biome_map: HeightMap::new(sea_level as f64, (width * 64) as usize), // Biomes placed per voxel
             flat_chunks: Vec::new(),
             seed: seed,
         };
@@ -347,8 +343,8 @@ impl ShaderGrid {
         self.set_grid_from_chunks();
 
         // Update height memory locations to match shifted chunks
-        self.height_map.shift(axis, dir, 128);
-        self.biome_map.shift(axis, dir, 64);
+        self.generator.height_map.shift(axis, dir, 128);
+        self.generator.biome_map.shift(axis, dir, 64);
 
         // Determine row of chunks to populate with new terrain data
         let mut update_chunk = self.origin;
@@ -360,7 +356,7 @@ impl ShaderGrid {
         for _i in 0..self.width as usize {
 
             // Update Biome MaP for this chunk
-            gen_biome(&mut self.biome_map, update_chunk[0] as u32,  update_chunk[2] as u32);
+            //gen_biome(&mut self.biome_map, update_chunk[0] as u32,  update_chunk[2] as u32);
             create_smooth_islands(self, (update_chunk[0] as u32, update_chunk[2] as u32));
 
             let c_ind = self.get_chunk_pos(&update_chunk);
@@ -378,7 +374,7 @@ impl ShaderGrid {
 
         // Now the world has been shifted, multiresolution work can take place
         self.update_inner(dir, axis, alt_axis);
-        self.generator.generate_biome_chunk(&mut self.height_map);
+        self.generator.generate_biome_chunk(&mut self.chunks);
 
     }
 

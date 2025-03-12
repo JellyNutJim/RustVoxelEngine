@@ -48,6 +48,7 @@ use std::thread;
 use crossbeam_channel::{unbounded, Sender, Receiver};
 
 mod asset_load;
+mod noise_gen;
 mod types;
 mod world;
 
@@ -58,6 +59,8 @@ use std::time::{Instant, Duration};
 use types::{Vec3, Voxel};
 
 use vulkano::command_buffer::CopyBufferInfo;
+
+use noise_gen::{PerlinNoise, ScalablePerlin};
 
 fn main() -> Result<(), impl Error> {
     // Create window
