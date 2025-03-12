@@ -70,14 +70,7 @@ fn create_intial_world_with_continents(world: &mut ShaderGrid) {
             let c_x = x * 64 + world.origin[0] as u32;
             let c_z = z * 64 + world.origin[2] as u32;
 
-            let mut b = true;
-
-            if x > 130 && x < 170 {
-                if z > 130 && z < 170 {
-                    b = false;
-                }
-            }
-
+            let b = true;
 
             generate_res_16(world, c_x, c_z, b);
         }

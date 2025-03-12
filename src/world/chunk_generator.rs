@@ -100,7 +100,7 @@ impl GenPipeLine {
 
 // Complex Biome Height Generators
 impl GenPipeLine {
-    fn generate_beach(&mut self, x: f64, z: f64, map_coords: (usize, usize)) -> u32 {
+    fn generate_beach(&mut self, x: f64, z: f64, map_coords: (usize, usize), update: bool) -> (u32, f64) {
         let change = self.get_beach_noise(x, z);
         let height = self.height_map.get_mut(map_coords.0, map_coords.1);
         let original = *height;
@@ -109,27 +109,34 @@ impl GenPipeLine {
 
         let mut fall_off: f64 = 3.5;
         if original > self.sea_level && change < 0.0{
-            fall_off = 4.0;
+            fall_off = 6.0;
+        }
+
+        if original < self.sea_level + 15.0 {
+            fall_off = 10.0;
         }
 
 
         let distance = distance.abs();
         let scaling = 1.0 - (-distance.powf(2.0) / fall_off.powf(2.0)).exp();
 
-        *height += change * scaling;
-
-        if *height < 16.6 + self.sea_level || original < self.sea_level + 16.0{
-            return 4
+        let updated_height = *height + change * scaling;
+        
+        if update == true {
+            *height = updated_height;
         }
 
-        1
+        if *height < 16.6 + self.sea_level || original < self.sea_level + 16.0{
+            return (4, updated_height)
+        }
+
+        (1, updated_height)
     }
 
     fn generate_bays(&mut self, x: f64, z: f64, map_coords: (usize, usize), update: bool) -> (u32, f64) {
 
         let change  = self.get_beach_with_bays_noise(x, z);
         let height = self.height_map.get_mut(map_coords.0, map_coords.1);
-        let original = *height;
 
         let distance = self.sea_level - *height;
 
@@ -191,7 +198,7 @@ impl GenPipeLine {
     fn apply_full_biome_height(&mut self, x_pos: u32, z_pos: u32, map_coords: (usize, usize), update: bool) -> (u32, f64) {
 
         // Select correct biomes (for now just beach)
-        self.generate_bays(
+        self.generate_beach(
             (x_pos) as f64, 
             (z_pos) as f64, 
             map_coords,
@@ -209,7 +216,7 @@ impl GenPipeLine {
 
 // Intialises the base heightmap, intialises the base biome map, inserts 16x16 voxels
 pub fn generate_res_16(world: &mut ShaderGrid, x_pos: u32, z_pos: u32, insert: bool) {
-    let map_c = world.generator.get_map_coords(x_pos, z_pos, world.origin);
+    let mut map_c = world.generator.get_map_coords(x_pos, z_pos, world.origin);
 
     // Update intial biome and heightmap
     world.generator.new_chunk_map_gen(x_pos, z_pos, map_c);
@@ -218,19 +225,27 @@ pub fn generate_res_16(world: &mut ShaderGrid, x_pos: u32, z_pos: u32, insert: b
         return;
     }
 
+    map_c.0 *= 2;
+    map_c.1 *= 2;
+
     for x in 0..8 {
         for z in 0..8 {
             let x_adj = x * 8;
             let z_adj = z * 8;
 
-            let map_x = map_c.0 * 2 + x_adj;
-            let map_z = map_c.1 * 2 + z_adj;
+            let map_x = map_c.0 + (x_adj * 2);
+            let map_z = map_c.1 + (z_adj * 2);
 
-            //let (voxel_type,)world.generator.apply_full_biome_height(x_pos + x as u32, z_pos + z as u32, (map_x, map_z), false);
+            let (mut voxel_type, mut y) = world.generator.apply_full_biome_height(x_pos + x_adj as u32, z_pos + z_adj as u32, (map_x, map_z), false);
 
-            let y = ((world.generator.height_map.get(map_x , map_z) as i32 - 3) / 8) * 8;
+            if y < 15.7 + world.generator.sea_level {
+                voxel_type = 3;
+                y = world.generator.sea_level;
+            }
 
-            let v = Voxel::from_type(1);
+            let y = ((y as i32 - 3) / 8) * 8;
+
+            let v = Voxel::from_type(voxel_type as u8);
 
             world.insert_subchunk([
                     (x_pos + x_adj as u32) as i32,
@@ -239,6 +254,8 @@ pub fn generate_res_16(world: &mut ShaderGrid, x_pos: u32, z_pos: u32, insert: b
                 ], 
                 v, 2, true
             );
+
+            
         }
     }
 }
