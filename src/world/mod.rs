@@ -24,11 +24,9 @@ use crate::Voxel;
 // WIDTH MUST ALWAYS BE ODD
 pub fn get_grid_from_seed(seed: u64, width: i32, camera_origin: [i32; 3]) -> ShaderGrid {
 
-    let mut l = Voxel::new();
-    l.set_octant(0, 15);
-    l.set_octant(7, 3);
+    let x = Voxel::from_type(1);
 
-    println!("{:032b}", l.update_voxel());
+    println!("{:032b}", x.get_voxel());
 
 
 
@@ -44,9 +42,8 @@ pub fn get_grid_from_seed(seed: u64, width: i32, camera_origin: [i32; 3]) -> Sha
 
     let mut p = ShaderGrid::new(width as u32, origin, seed, 768);
 
-    // Elavation
-    //create_flat_with_water(&mut p, width, origin);
 
+    // Intial World Builder Pipelin
     create_intial_world_with_continents(&mut p);
     create_intial_close_land(&mut p);
 
@@ -57,30 +54,6 @@ pub fn get_grid_from_seed(seed: u64, width: i32, camera_origin: [i32; 3]) -> Sha
     // let p = p.flatten();
     // println!("Grid: {}", p.1.len());
     p
-}
-
-#[allow(dead_code)]
-fn create_continents(p: &mut ShaderGrid, width: usize, origin: [i32; 3], seed: u64) {
-    let noise = PerlinNoise::new(seed); // Use any seed
-    let w = width*4;
-    let h = width*4;
-    let scale = 0.01; // Adjust this to change the "zoom level" of the noise
-    
-    let noise_matrix = noise.generate_grid(w, h, scale);
-
-    for x in 0..(w as i32) {
-        for z in 0..(h  as i32) {
-            let y = ((noise_matrix[x as usize][z as usize] * 16.0).floor()) as i32;
-            let x_adjusted = x * 16 + origin[0] as i32;
-            let z_adjusted = z * 16 + origin[2] as i32;
-
-            //p.insert_subchunk([x_adjusted, y, z_adjusted], 1, 1);
-
-            //println!("{y}");
- 
-            p.insert_subchunk([x_adjusted, y + 800, z_adjusted], 1, 1);
-        }
-    }
 }
 
 // Layer 1 
@@ -118,56 +91,6 @@ fn create_intial_close_land(world: &mut ShaderGrid) {
     }
 }
 
-fn create_flat_with_water(p: &mut ShaderGrid, width: usize, origin: [i32; 3]) {
-    let w = width*64;
-    let h = width*64;
-    let scale = 0.005; // Adjust this to change the "zoom level" of the noise
-    
-    let noise_matrix = p.noise.generate_grid_from_point(w, h, scale, (origin[0] as u32, origin[2] as u32));
-
-    // Elavation
-    for x in (0..((64*width) as i32)).step_by(1) {
-        for z in (0..((64*width) as i32)).step_by(1) {
-            let y = noise_matrix[x as usize][z as usize] * 64.0;
-
-            let x_adjusted = x + origin[0] as i32;
-            let z_adjusted = z + origin[2]  as i32;
-
-            let y = (y + 768.0) as i32;
-            if y < 768 {
-                let mut temp = y + 1;
-                while temp < 769 {
-                    p.insert_voxel([x_adjusted, temp, z_adjusted], 3);
-                    temp += 1;
-                }
-            }
-
-            p.insert_voxel([x_adjusted, y, z_adjusted], 1);
-            p.insert_voxel([x_adjusted, y - 1, z_adjusted], 2);
-            p.insert_voxel([x_adjusted, y - 2, z_adjusted], 2);
-            p.insert_voxel([x_adjusted, y - 3, z_adjusted], 2);
-        }
-    }
-}
-
-// pub fn get_empty() -> (Vec<i32>, Vec<u32>) {
-//     let width = 20;
-//     let mut p = ShaderGrid::new(width as u32, [-64 * (width as i32 / 2), -64, -64 * (width as i32/ 2)]);
-//     p.insert_voxel([0,0,0], 1);
-
-//     let p = p.flatten();
-
-//     p
-// }
-
-// fn perlin(x: u32, y: u32, seed: u32) {
-//     let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
-
-
-// }
-
-
-
 use rand::{Rng, SeedableRng};
 use std::f64::consts::PI;
 
@@ -177,6 +100,7 @@ pub struct PerlinNoise {
     pub gradients: Vec<[f64; 2]>,
 }
 
+#[allow(unused)]
 impl PerlinNoise {
     pub fn new(seed: u64) -> Self {
         let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
@@ -266,6 +190,19 @@ impl PerlinNoise {
             for z in 0..width {
                 let nx = (x + pos.0 as usize) as f64 * scale;
                 let nz = (z + pos.1 as usize) as f64 * scale;
+                grid[x][z] = self.noise(nx, nz);
+            }
+        }
+        grid
+    }
+
+    pub fn generate_grid_from_point_with_half_steps(&self, width: usize, height: usize, scale: f64, pos: (u32, u32)) -> Vec<Vec<f64>> {
+        let mut grid = vec![vec![0.0; width * 2]; height * 2];
+        
+        for x in 0..height*2 {
+            for z in 0..width*2 {
+                let nx = ((x / 2) as f64 + pos.0 as f64) * scale;
+                let nz = ((z / 2) as f64 + pos.1 as f64) * scale;
                 grid[x][z] = self.noise(nx, nz);
             }
         }

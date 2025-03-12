@@ -30,6 +30,7 @@ layout(set = 0, binding = 3) readonly buffer NoiseBuffer {
 layout(set = 0, binding = 4, rgba8) uniform image2D storageImage;
 
 const int WIDTH = 321;
+const bool DETAIL = false;
 
 uint get_octant(vec3 pos, uint mid) {
     uint octant = 0;
@@ -260,6 +261,11 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
             return true;
             break;
         }
+
+        if (DETAIL == false) {
+            voxel_type = voxel_type & 0xFu;
+        }
+
 
         // Air
         if (voxel_type == 0) {  

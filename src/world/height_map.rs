@@ -5,6 +5,7 @@ pub struct HeightMap {
     map: VecDeque<VecDeque<f64>>,
 }
 
+#[allow(unused)]
 impl HeightMap {
     pub fn new(initial_height: f64, width: usize) -> Self {
         Self {
@@ -25,8 +26,7 @@ impl HeightMap {
     }
 
     // Always assumes single chunk shift
-    pub fn shift(&mut self, axis: usize, dir: i32) {
-        let shift_length = 64;
+    pub fn shift(&mut self, axis: usize, dir: i32, shift_length: usize) {
 
         if axis == 0 {
             self.shift_x(dir, shift_length);

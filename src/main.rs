@@ -427,8 +427,8 @@ impl App {
             .expect("failed to create buffer"),
         ];
 
-        let perm = intial_world.noise.permutation.clone();
-        let grad: Vec<f64> = intial_world.noise.gradients.clone().iter()
+        let perm = intial_world.generator.landmass.permutation.clone();
+        let grad: Vec<f64> = intial_world.generator.landmass.gradients.clone().iter()
                 .flat_map(|&gradient| gradient.into_iter())
                 .collect();
 
@@ -1163,6 +1163,7 @@ impl WorldUpdater {
     pub fn new(
         device: Arc<Device>,
         transfer_queue: Arc<Queue>,
+        #[allow(unused)]
         compute_queue: Arc<Queue>,
         voxel_buffers: [Subbuffer<[u32]>; 2],
         world_meta_data_buffers: [Subbuffer<[i32]>; 2],
@@ -1238,7 +1239,7 @@ impl WorldUpdater {
                         match update {
                             Update::AddVoxel(x, y, z , t) => {
                                 println!("Adding type: {} at: {} {} {}", t, x, y, z);
-                                world.insert_voxel([x,y,z], t); 
+                                world.insert_voxel([x,y,z], Voxel::from_type(t as u8), false); 
                                 world.update_flat_chunk_with_world_pos([x, y, z]);
                             }
                             Update::SwitchSeed(seed) => {

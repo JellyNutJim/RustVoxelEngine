@@ -1,9 +1,12 @@
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
 pub struct Voxel {
     octants: [u8; 8], // High resolution voxel components
-    voxel: u32, // Low resolution voxel type
-    low_res_type: u32,
+    voxel: u32, // Combined octants
 }
 
+#[allow(unused)]
 impl Voxel {
     pub fn new() -> Self{
         Self {
@@ -11,23 +14,20 @@ impl Voxel {
                 0, 0, 0, 0, 0, 0, 0, 0,
             ],
             voxel: 0,
-            low_res_type: 0,
         }
     }
 
-    pub fn from(v: [u8; 8], t: u32) -> Self {
+    pub fn from(v: [u8; 8], t: u8) -> Self {
         Self {
             octants: v,
-            voxel: 0,
-            low_res_type: t,
+            voxel: t as u32,
         }
     }
 
-    pub fn from_voxel(t: u32) -> Self {
+    pub fn from_type(t: u8) -> Self {
         Self {
-            octants: [0; 8],
-            voxel: 0,
-            low_res_type: t,
+            octants: [t; 8],
+            voxel: u8s_to_u32([t; 8]),
         }
     }
 
@@ -35,7 +35,6 @@ impl Voxel {
         Self {
             octants: v,
             voxel: u8s_to_u32(v),
-            low_res_type: 0,
         }
     }
 
@@ -48,10 +47,12 @@ impl Voxel {
     }
 
     pub fn update_voxel(&mut self) -> u32 {
-        let mut result: u32 = 0;
-        
         self.voxel = u8s_to_u32(self.octants);
         return self.voxel;
+    }
+
+    pub fn get_voxel(&self) -> u32 {
+        self.voxel
     }
 }
 

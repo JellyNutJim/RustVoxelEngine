@@ -19,7 +19,7 @@ enum ChunkContent {
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
 struct VoxelData(
-    u32, 
+    Voxel, 
     bool // Determine whether the current "voxel" is a voxel or an octant
 );
 
@@ -48,14 +48,14 @@ impl ShaderChunk {
     pub fn new(pos: [i32; 3]) -> Self {
         Self {
             pos,
-            data: ChunkContent::Leaf(VoxelData(0, false)),
+            data: ChunkContent::Leaf(VoxelData(Voxel::new(), false)),
         }
     }
 
     pub fn new_with_type(pos: [i32; 3], data: u32) -> Self {
         Self {
             pos,
-            data: ChunkContent::Leaf(VoxelData(data, false)),
+            data: ChunkContent::Leaf(VoxelData(Voxel::from_type(data as u8), false)),
         }
     }
 
@@ -99,43 +99,63 @@ impl ShaderChunk {
     }
 
     // Insert a single voxel at the given position2 -> Voxels are just leaf nodes at a depth 4
-    pub fn insert_voxel(&mut self, pos: [u32; 3], voxel_type: u32) {
-        self.insert_subchunk(pos, 5, voxel_type);
+    pub fn insert_voxel(&mut self, pos: [u32; 3], voxel: Voxel, ground_insert: bool) {
+        self.insert_subchunk(pos, 5, voxel, ground_insert);
     }
 
     // Create a subchunk of a specific type at a specific depth
-    pub fn insert_subchunk(&mut self, pos: [u32; 3], depth: u32, voxel_type: u32) {
+    pub fn insert_subchunk(&mut self, pos: [u32; 3], depth: u32, voxel: Voxel, ground_insert: bool) {
         #[cfg(debug_assertions)]
         if depth > 6 { panic!("Depth out of range") }
 
         let mut current = &mut self.data;       
         let mut is_voxel = false;
+        let mut curr_octant = 0;
+
         for i in 0..=depth {
             // Create octants if they do not already exist
             is_voxel = if i == 5 { true } else { false };
+
             if let ChunkContent::Leaf(_) = current {
                 *current = ChunkContent::Octants( Box::new(
                     OctantsData([ 
-                        ChunkContent::Leaf(VoxelData(0, is_voxel)),
-                        ChunkContent::Leaf(VoxelData(0, is_voxel)),
-                        ChunkContent::Leaf(VoxelData(0, is_voxel)),
-                        ChunkContent::Leaf(VoxelData(0, is_voxel)),
-                        ChunkContent::Leaf(VoxelData(0, is_voxel)),
-                        ChunkContent::Leaf(VoxelData(0, is_voxel)),
-                        ChunkContent::Leaf(VoxelData(0, is_voxel)),
-                        ChunkContent::Leaf(VoxelData(0, is_voxel)),
+                        ChunkContent::Leaf(VoxelData(Voxel::new(), is_voxel)),
+                        ChunkContent::Leaf(VoxelData(Voxel::new(), is_voxel)),
+                        ChunkContent::Leaf(VoxelData(Voxel::new(), is_voxel)),
+                        ChunkContent::Leaf(VoxelData(Voxel::new(), is_voxel)),
+                        ChunkContent::Leaf(VoxelData(Voxel::new(), is_voxel)),
+                        ChunkContent::Leaf(VoxelData(Voxel::new(), is_voxel)),
+                        ChunkContent::Leaf(VoxelData(Voxel::new(), is_voxel)),
+                        ChunkContent::Leaf(VoxelData(Voxel::new(), is_voxel)),
                     ])), 0
                 );
             }
 
             // Set current to the next octant the given position lies in
             if let ChunkContent::Octants(ref mut octants, voxel_type) = current {
-                current = &mut octants.0[Self::get_octant_at_depth(pos, i)];
+                curr_octant = Self::get_octant_at_depth(pos, i);
+                if ground_insert == true && i == depth { 
+                    if curr_octant > 3 {
+                        octants.0[curr_octant - 4] = ChunkContent::Leaf(VoxelData(Voxel::from_type(2), is_voxel));
+                    }
+                }
+
+                current = &mut octants.0[curr_octant];
             }
         }
 
         // Set current octants value to the given voxel type
-        *current = ChunkContent::Leaf(VoxelData(voxel_type, is_voxel));
+        *current = ChunkContent::Leaf(VoxelData(voxel, is_voxel));
+
+        // Fill underneath if ground insert is requested, AND there is space under this octant
+        // if ground_insert {
+        //     if curr_octant > 3 {
+        //         curr_octant -= 4;
+
+        //     }
+        // }
+
+
     }
 
     // Returns the voxel type at the given position, accounts for subchunks
@@ -145,7 +165,7 @@ impl ShaderChunk {
         for i in 0..=5 {
             // Create octants if they do not already exist
             match current {
-                ChunkContent::Leaf(a) => { println!{"{i}"}; return a.0 }
+                ChunkContent::Leaf(a) => { println!{"{i}"}; return a.0.get_voxel() }
                 ChunkContent::Octants(ref mut octants, voxel_type) => {
                     current = &mut octants.0[Self::get_octant_at_depth(pos, i)];
                 }
@@ -159,7 +179,7 @@ impl ShaderChunk {
     pub fn flatten(&self) -> ([i32; 3], Vec<u32>){
         // Check if chunk has no depth
         if let ChunkContent::Leaf(voxel_data) = self.data {
-            return (self.pos, vec![0, voxel_data.0])
+            return (self.pos, vec![0, voxel_data.0.get_voxel()])
         }
 
         let mut octant_vec: Vec<u32> = Vec::new();
@@ -183,11 +203,11 @@ impl ShaderChunk {
             match octant { 
                 ChunkContent::Leaf(voxel_data) => { 
                     if voxel_data.1 == false {
-                        octant_vec.push(vec![0, voxel_data.0]); 
+                        octant_vec.push(vec![0, voxel_data.0.get_voxel()]); 
                     }
                     else {
                         voxel_depth = true;
-                        octant_vec.push(vec![voxel_data.0]); 
+                        octant_vec.push(vec![voxel_data.0.get_voxel()]); 
                     } 
                 }
                 ChunkContent::Octants(ref octants, voxel_type) => {

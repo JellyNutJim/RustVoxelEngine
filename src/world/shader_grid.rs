@@ -1,7 +1,4 @@
-use std::{
-    i32::MAX,
-    collections::VecDeque,
-};
+use std::i32::MAX;
 
 use crate::world::ShaderChunk;
 
@@ -9,25 +6,40 @@ use super::{
     PerlinNoise,
     HeightMap,
     chunk_generator::*,
+    Voxel,
 };
+
 
 // Holds data to be placed in the voxel buffer
 // Origin will always be smaller than the current position
 #[repr(C)]
 #[derive(Debug, Clone)]
 pub struct ShaderGrid {
+
+    // Meta Data
     pub origin: [i32; 3],  // Origin of the current grid = the origin of the chunk with the lowest positional value 
     pub width: u32,
     pub sea_level: u32,
-    grid: Vec<u32>, // Grid relating to Shaderchunk Structs
-    chunks: Vec<ShaderChunk>,
-    pub noise: PerlinNoise,
-
-    pub height_map: HeightMap,
-
-    flat_chunks: Vec<Vec<u32>>,
+    pub generator: GenPipeLine,
+    grid: Vec<u32>, // Grid to relate world location to memory location
     seed: u64,
+
+
+    // World Data
+    pub height_map: HeightMap,
+    pub biome_map: HeightMap,
+    chunks: Vec<ShaderChunk>,
+
+    // Chunks as array of u32
+    flat_chunks: Vec<Vec<u32>>,
 }
+
+// Layer sizes -> Will be dynamically determined at some point
+
+static LAYER_ONE: u32 = 251;
+static LAYER_TWO: u32 = 201;
+static LAYER_THREE: u32 = 151;
+static INNER: u32 = 51;
 
 #[allow(unused)]
 impl ShaderGrid {
@@ -38,9 +50,10 @@ impl ShaderGrid {
             width: width,
             sea_level: sea_level,
             grid: vec![0; (width.pow(3)) as usize],
-            noise: PerlinNoise::new(seed),
+            generator: GenPipeLine::new(seed),
             chunks: Vec::new(),
-            height_map: HeightMap::new(sea_level as f64, (width * 64) as usize),
+            height_map: HeightMap::new(sea_level as f64, (width * 64) as usize * 2), // Double the grid size to account for sub voxels
+            biome_map: HeightMap::new(sea_level as f64, (width * 64) as usize), // Biomes placed per voxel
             flat_chunks: Vec::new(),
             seed: seed,
         };
@@ -78,13 +91,11 @@ impl ShaderGrid {
         origin
     }
 
-    pub fn insert_voxel(&mut self, pos: [i32; 3], voxel_type: u32) {
+    pub fn insert_voxel(&mut self, pos: [i32; 3], voxel: Voxel, ground_insert: bool) {
 
         let chunk_pos = self.get_chunk_pos(&pos);
         let chunk_index = chunk_pos[0] + chunk_pos[1] * self.width + chunk_pos[2] * (self.width * self.width);
         
-
-
         // Local voxel pos in chunk
         let pos = [
             (((pos[0] % 64) + 64) % 64) as u32,
@@ -92,13 +103,10 @@ impl ShaderGrid {
             (((pos[2] % 64) + 64) % 64) as u32
         ];
 
-        //println!("{:?}", chunk_pos);
-
-        self.chunks[self.grid[chunk_index as usize] as usize].insert_voxel(pos, voxel_type);
+        self.chunks[self.grid[chunk_index as usize] as usize].insert_voxel(pos, voxel, ground_insert);
     }
 
-    pub fn insert_subchunk(&mut self, pos: [i32; 3], voxel_type: u32, depth: u32) {
-
+    pub fn insert_subchunk(&mut self, pos: [i32; 3], voxel: Voxel, depth: u32, ground_insert: bool) {
         let chunk_pos = self.get_chunk_pos(&pos);
         let chunk_index = chunk_pos[0] + chunk_pos[1] * self.width + chunk_pos[2] * (self.width * self.width);
         
@@ -109,9 +117,29 @@ impl ShaderGrid {
             (((pos[2] % 64) + 64) % 64) as u32
         ];
 
-        //println!("{:?}", chunk_pos);
+        self.chunks[self.grid[chunk_index as usize] as usize].insert_subchunk(pos, depth, voxel, ground_insert);
+    }
 
-        self.chunks[self.grid[chunk_index as usize] as usize].insert_subchunk(pos, depth, voxel_type);
+    pub fn insert_simple_voxel(&mut self, pos: [i32; 3], voxel_type: u8) {
+        let chunk_pos = self.get_chunk_pos(&pos);
+        let chunk_index = chunk_pos[0] + chunk_pos[1] * self.width + chunk_pos[2] * (self.width * self.width);
+        let pos = [
+            (((pos[0] % 64) + 64) % 64) as u32,
+            (((pos[1] % 64) + 64) % 64) as u32,
+            (((pos[2] % 64) + 64) % 64) as u32
+        ];
+        self.chunks[self.grid[chunk_index as usize] as usize].insert_voxel(pos, Voxel::from_type(voxel_type), false);
+    }
+
+    pub fn insert_simple_subchunk(&mut self, pos: [i32; 3], voxel_type: u8, depth: u32) {
+        let chunk_pos = self.get_chunk_pos(&pos);
+        let chunk_index = chunk_pos[0] + chunk_pos[1] * self.width + chunk_pos[2] * (self.width * self.width);
+        let pos = [
+            (((pos[0] % 64) + 64) % 64) as u32,
+            (((pos[1] % 64) + 64) % 64) as u32,
+            (((pos[2] % 64) + 64) % 64) as u32
+        ];
+        self.chunks[self.grid[chunk_index as usize] as usize].insert_subchunk(pos, depth, Voxel::from_type(voxel_type as u8), false);
     }
 
     // Finds the smallest chunk origin, and sets that to the grid origin
@@ -147,141 +175,6 @@ impl ShaderGrid {
         ]
     }
 
-    pub fn shift(&mut self, axis: usize, dir: i32) {
-
-        if axis == 1 { panic!("Invalid shift axis") }; 
-
-        let new_axis: i32;
-        let remove_axis: i32;
-
-        let alt_axis: usize;
-
-        if axis == 0 {
-            alt_axis = 2;
-        } else {
-            alt_axis = 0;
-        }
-
-        // Determine row to chanage, and update origin
-        if dir == -1 {
-            new_axis = self.origin[axis] - 64;
-            remove_axis = self.origin[axis] + (self.width - 1) as i32 * 64;
-            self.origin[axis] -= 64;
-        }
-        else {
-            new_axis = self.origin[axis] + (self.width) as i32 * 64;
-            remove_axis = self.origin[axis];
-            self.origin[axis] += 64;
-        }
-
-        // INSTEAD OF SERACHING THROUGH SHIZ I CAN JUST DO X Y * W Z * W * W WITH SPECIFIC X OR Z !!!
-
-        // Replace uneeded chunks with new chunks
-        for i in 0..self.chunks.len() {
-            let mut origin = self.chunks[i].get_origin();
-
-            if origin[axis] == remove_axis {
-                origin[axis] = new_axis;
-                self.chunks[i] = ShaderChunk::new(origin);
-
-            }
-        }
-
-        // Update grid to reflect new chunk positions
-        self.set_grid_from_chunks();
-
-        // Update height memory locations to match shifted chunks
-        self.height_map.shift(axis, dir);
-
-        // Determine row of chunks to populate with new terrain data
-        let mut update_chunk = self.origin;
-        if dir == 1 {
-            update_chunk[axis] += (self.width - 1) as i32 * 64;
-        }
-
-        // Populate moved chunks with new data
-        for i in 0..self.width as usize {
-
-            create_smooth_islands(self, (update_chunk[0] as u32, update_chunk[2] as u32));
-
-            let c_ind = self.get_chunk_pos(&update_chunk);
-
-            // Update Flat Chunks
-            for j in 0..self.width {
-                let grid_index = c_ind[0] as u32 + (c_ind[1] as u32 + j)  * self.width + c_ind[2] as u32 * self.width.pow(2);
-                let index = self.grid[grid_index as usize] as usize;
-                self.flat_chunks[index] = self.chunks[index].flatten().1;
-            }
-
-            //println!("{:?}", update_chunk);
-
-            update_chunk[alt_axis] += 64;
-        }
-
-        // Now the world has been shifted, multiresolution work can take place
-        self.shift_inner(dir, axis, alt_axis);
-
-    }
-
-
-    fn shift_inner(&mut self, dir: i32, axis: usize, alt_axis: usize) {
-        let layer_width = 51;
-        let layer_half_width = layer_width / 2;
-
-        let mid_xz = self.get_x_z_midpoint_in_space();
-        let mid_chunk = [(mid_xz[0] / 64) * 64, (mid_xz[1] / 64) * 64];
-
-        let mut update_chunk = [
-            (mid_chunk[0] - layer_half_width * 64) as i32,
-            self.origin[1],
-            (mid_chunk[1] - layer_half_width * 64) as i32
-        ];
-
-        let mut delete_chunk = [
-            update_chunk[0],
-            update_chunk[1],
-            update_chunk[2]
-        ];
-
-        if dir == 1 {
-            update_chunk[axis] += ((layer_width - 1) * 64) as i32;
-            delete_chunk[axis] += (-1 * 64) as i32;
-        }
-        else {
-            delete_chunk[axis] += ((layer_width + 1) * 64) as i32;
-        }
-        
-        //println!("update chunk: {:?}", update_chunk);
-
-
-        // Populate selected chunks with new data
-        // Replace old chunks with lower res data
-        for i in 0..layer_width as usize {
-
-            create_beach_hills(self, (update_chunk[0] as u32, update_chunk[2] as u32));
-            create_smooth_islands(self, (delete_chunk[0] as u32, delete_chunk[2] as u32));
-
-            let update_chunk_pos   = self.get_chunk_pos(&update_chunk);
-            let delete_chunk_pos = self.get_chunk_pos(&delete_chunk);
-
-            // Update Flat Chunk Column
-            for j in 0..self.width {
-                let grid_index = update_chunk_pos[0] as u32 + (update_chunk_pos[1] as u32 + j)  * self.width + update_chunk_pos[2] as u32 * self.width.pow(2);
-                let index = self.grid[grid_index as usize] as usize;
-                self.flat_chunks[index] = self.chunks[index].flatten().1;
-
-                let grid_index = delete_chunk_pos[0] as u32 + (delete_chunk_pos[1] as u32 + j)  * self.width + delete_chunk_pos[2] as u32 * self.width.pow(2);
-                let index = self.grid[grid_index as usize] as usize;
-                self.flat_chunks[index] = self.chunks[index].flatten().1;
-            }
-
-            // Move to next chunk along axis
-            update_chunk[alt_axis] += 64;
-            delete_chunk[alt_axis] += 64;
-        }
-
-    }
-
     // Assumes grid has be predfined with the needed size
     fn set_grid_from_chunks(&mut self) {
 
@@ -296,6 +189,7 @@ impl ShaderGrid {
         }
     }
 
+    // Intial world flatten
     pub fn flatten_world(&mut self) -> (Vec<i32>, Vec<u32>) {
         let mut flat_chunks: Vec<u32> = Vec::new();
         let mut flat_grid: Vec<i32> = vec![0; (self.width.pow(3)) as usize];
@@ -401,27 +295,152 @@ impl ShaderGrid {
         ]
     }
 
-    fn shift_height_map(axis: u32, dir: i32) {
+
+}
+
+
+
+
+// GENERATION PIPELINE
+impl ShaderGrid {
+    pub fn shift(&mut self, axis: usize, dir: i32) {
+
+        if axis == 1 { panic!("Invalid shift axis") }; 
+
+        let new_axis: i32;
+        let remove_axis: i32;
+
+        let alt_axis: usize;
+
+        if axis == 0 {
+            alt_axis = 2;
+        } else {
+            alt_axis = 0;
+        }
+
+        // Determine row to chanage, and update origin
+        if dir == -1 {
+            new_axis = self.origin[axis] - 64;
+            remove_axis = self.origin[axis] + (self.width - 1) as i32 * 64;
+            self.origin[axis] -= 64;
+        }
+        else {
+            new_axis = self.origin[axis] + (self.width) as i32 * 64;
+            remove_axis = self.origin[axis];
+            self.origin[axis] += 64;
+        }
+
+        // INSTEAD OF SERACHING THROUGH I CAN JUST DO X Y * W Z * W * W WITH SPECIFIC X OR Z !!!
+
+        // Replace uneeded chunks with new chunks
+        for i in 0..self.chunks.len() {
+            let mut origin = self.chunks[i].get_origin();
+
+            if origin[axis] == remove_axis {
+                origin[axis] = new_axis;
+                self.chunks[i] = ShaderChunk::new(origin);
+
+            }
+        }
+
+        // Update grid to reflect new chunk positions
+        self.set_grid_from_chunks();
+
+        // Update height memory locations to match shifted chunks
+        self.height_map.shift(axis, dir, 128);
+        self.biome_map.shift(axis, dir, 64);
+
+        // Determine row of chunks to populate with new terrain data
+        let mut update_chunk = self.origin;
+        if dir == 1 {
+            update_chunk[axis] += (self.width - 1) as i32 * 64;
+        }
+
+        // Populate moved chunks with new data, loops through the row of chunks to be generated
+        for _i in 0..self.width as usize {
+
+            // Update Biome MaP for this chunk
+            gen_biome(&mut self.biome_map, update_chunk[0] as u32,  update_chunk[2] as u32);
+            create_smooth_islands(self, (update_chunk[0] as u32, update_chunk[2] as u32));
+
+            let c_ind = self.get_chunk_pos(&update_chunk);
+
+            // Update Flat Chunks
+            for j in 0..self.width {
+                let grid_index = c_ind[0] as u32 + (c_ind[1] as u32 + j)  * self.width + c_ind[2] as u32 * self.width.pow(2);
+                let index = self.grid[grid_index as usize] as usize;
+                self.flat_chunks[index] = self.chunks[index].flatten().1;
+            }
+
+            // Move to next chunk
+            update_chunk[alt_axis] += 64;
+        }
+
+        // Now the world has been shifted, multiresolution work can take place
+        self.update_inner(dir, axis, alt_axis);
+        self.generator.generate_biome_chunk(&mut self.height_map);
+
+    }
+
+    // Updates
+    fn update_layer() {
+
+    }
+
+
+    // Close Detail
+    fn update_inner(&mut self, dir: i32, axis: usize, alt_axis: usize) {
+        let layer_width = 51;
+        let layer_half_width = layer_width / 2;
+
+        let mid_xz = self.get_x_z_midpoint_in_space();
+        let mid_chunk = [(mid_xz[0] / 64) * 64, (mid_xz[1] / 64) * 64];
+
+        let mut update_chunk = [
+            (mid_chunk[0] - layer_half_width * 64) as i32,
+            self.origin[1],
+            (mid_chunk[1] - layer_half_width * 64) as i32
+        ];
+
+        let mut delete_chunk = [
+            update_chunk[0],
+            update_chunk[1],
+            update_chunk[2]
+        ];
+
+        if dir == 1 {
+            update_chunk[axis] += ((layer_width - 1) * 64) as i32;
+            delete_chunk[axis] += (-1 * 64) as i32;
+        }
+        else {
+            delete_chunk[axis] += ((layer_width + 1) * 64) as i32;
+        }
+        
+        // Populate selected chunks with new data
+        // Replace old chunks with lower res data
+        for i in 0..layer_width as usize {
+
+            create_beach_hills(self, (update_chunk[0] as u32, update_chunk[2] as u32));
+            create_smooth_islands(self, (delete_chunk[0] as u32, delete_chunk[2] as u32));
+
+            let update_chunk_pos   = self.get_chunk_pos(&update_chunk);
+            let delete_chunk_pos = self.get_chunk_pos(&delete_chunk);
+
+            // Update Flat Chunk Column
+            for j in 0..self.width {
+                let grid_index = update_chunk_pos[0] as u32 + (update_chunk_pos[1] as u32 + j)  * self.width + update_chunk_pos[2] as u32 * self.width.pow(2);
+                let index = self.grid[grid_index as usize] as usize;
+                self.flat_chunks[index] = self.chunks[index].flatten().1;
+
+                let grid_index = delete_chunk_pos[0] as u32 + (delete_chunk_pos[1] as u32 + j)  * self.width + delete_chunk_pos[2] as u32 * self.width.pow(2);
+                let index = self.grid[grid_index as usize] as usize;
+                self.flat_chunks[index] = self.chunks[index].flatten().1;
+            }
+
+            // Move to next chunk along axis
+            update_chunk[alt_axis] += 64;
+            delete_chunk[alt_axis] += 64;
+        }
 
     }
 }
-
-    // Create grid with existing chunks and width
-    // pub fn from(chunks: Vec<ShaderChunk>, width: u32, seed: u64) -> Self {
-    //     #[cfg(debug_assertions)]
-    //     if chunks.len() > width.pow(3) as usize { panic!("Chunk depth out of range") }
-
-    //     let mut s = Self {
-    //         origin: Self::get_origin_from_chunks(&chunks),
-    //         width: width,
-    //         grid: vec![0; (width.pow(3)) as usize],
-    //         chunks: chunks,
-    //         height_map: Vec::new(),
-    //         noise: PerlinNoise::new(seed),
-    //         flat_chunks: Vec::new(),
-    //         seed: seed,
-    //     };
-
-    //     s.set_grid_from_chunks();
-    //     s
-    // }
