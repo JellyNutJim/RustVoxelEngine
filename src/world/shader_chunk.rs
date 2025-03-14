@@ -5,7 +5,8 @@ use crate::Voxel;
 #[derive(Debug, Clone)]
 pub struct ShaderChunk {
     pos: [i32; 3], // position in 3d space
-    
+    generation_level: u32, // Level of detail to send to gpu
+    max_generation_level: u32, // Highest level of terrain generated
     data: ChunkContent,
 }
 
@@ -43,11 +44,17 @@ struct OctantsData([ChunkContent; 8]);
 // layer 2: 5 7
 //          4 6
 
+
+// Generation Levels
+// same as depth, but 2 is the smallest as terrain lower than that wont be generated for now
+
 #[allow(unused)]
 impl ShaderChunk {
     pub fn new(pos: [i32; 3]) -> Self {
         Self {
             pos,
+            generation_level: 0,
+            max_generation_level: 0,
             data: ChunkContent::Leaf(VoxelData(Voxel::new(), false)),
         }
     }
@@ -55,6 +62,8 @@ impl ShaderChunk {
     pub fn new_with_type(pos: [i32; 3], data: u32) -> Self {
         Self {
             pos,
+            generation_level: 0,
+            max_generation_level: 0,
             data: ChunkContent::Leaf(VoxelData(Voxel::from_type(data as u8), false)),
         }
     }
@@ -98,6 +107,22 @@ impl ShaderChunk {
         octant
     }
 
+    pub fn set_generation_level(&mut self, level: u32) {
+        self.generation_level = level;
+
+        if level > self.max_generation_level {
+            self.max_generation_level = level;
+        }
+    }
+
+    pub fn get_generation_level(&self) -> u32 {
+        self.generation_level
+    }
+
+    pub fn get_max_generation_level(&self) -> u32 {
+        self.max_generation_level
+    }
+
     // Insert a single voxel at the given position2 -> Voxels are just leaf nodes at a depth 4
     pub fn insert_voxel(&mut self, pos: [u32; 3], voxel: Voxel, ground_insert: bool) {
         self.insert_subchunk(pos, 5, voxel, ground_insert);
@@ -116,7 +141,7 @@ impl ShaderChunk {
             // Create octants if they do not already exist
             is_voxel = if i == 5 { true } else { false };
 
-            if let ChunkContent::Leaf(_) = current {
+            if let ChunkContent::Leaf(data) = current {
                 *current = ChunkContent::Octants( Box::new(
                     OctantsData([ 
                         ChunkContent::Leaf(VoxelData(Voxel::new(), is_voxel)),
@@ -127,7 +152,7 @@ impl ShaderChunk {
                         ChunkContent::Leaf(VoxelData(Voxel::new(), is_voxel)),
                         ChunkContent::Leaf(VoxelData(Voxel::new(), is_voxel)),
                         ChunkContent::Leaf(VoxelData(Voxel::new(), is_voxel)),
-                    ])), 0
+                    ])), data.0.get_voxel()
                 );
             }
 
@@ -146,15 +171,6 @@ impl ShaderChunk {
 
         // Set current octants value to the given voxel type
         *current = ChunkContent::Leaf(VoxelData(voxel, is_voxel));
-
-        // Fill underneath if ground insert is requested, AND there is space under this octant
-        // if ground_insert {
-        //     if curr_octant > 3 {
-        //         curr_octant -= 4;
-
-        //     }
-        // }
-
 
     }
 
@@ -183,16 +199,18 @@ impl ShaderChunk {
         }
 
         let mut octant_vec: Vec<u32> = Vec::new();
+        let mut curr_depth = 0;
+        let mut max_depth = self.get_generation_level(); 
 
         // Otherwise recursively search octree
         if let ChunkContent::Octants(ref octants, voxel_type) = self.data {
-            octant_vec = Self::get_flattened_octant(&octants.0);
+            octant_vec = Self::get_flattened_octant(&octants.0, curr_depth, max_depth);
         }
 
         (self.pos, octant_vec)
     }
 
-    fn get_flattened_octant(octants: &[ChunkContent; 8]) -> Vec<u32>{
+    fn get_flattened_octant(octants: &[ChunkContent; 8], mut curr_depth: u32, max_depth: u32) -> Vec<u32>{
         let mut octant_vec: Vec<Vec<u32>> = Vec::new(); 
         let mut result: Vec<u32> = Vec::new();
         let mut curr_len = 0;
@@ -211,7 +229,12 @@ impl ShaderChunk {
                     } 
                 }
                 ChunkContent::Octants(ref octants, voxel_type) => {
-                    octant_vec.push(Self::get_flattened_octant(&octants.0));
+                    if curr_depth == max_depth {
+                        octant_vec.push(vec![0, *voxel_type]);
+                        continue;
+                    } 
+
+                    octant_vec.push(Self::get_flattened_octant(&octants.0, curr_depth + 1, max_depth));
                 }
             } 
         }

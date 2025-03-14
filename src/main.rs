@@ -90,10 +90,8 @@ impl FrameTimer {
         let delta = now - self.last_frame;
         self.last_frame = now;
         
-        // Add the time since last frame to our accumulator
         self.accumulated_time += delta;
         
-        // Check if enough time has passed for a new frame
         if self.accumulated_time >= self.frame_duration {
             self.accumulated_time -= self.frame_duration;
             return true;
@@ -188,8 +186,7 @@ impl App {
         let instance = Instance::new(
             library,
             InstanceCreateInfo {
-                // Enable enumerating devices that use non-conformant Vulkan implementations. --------------> maybe remove
-                // (e.g. MoltenVK)
+                // Enable enumerating --------------> maybe remove
                 flags: InstanceCreateFlags::ENUMERATE_PORTABILITY,
                 enabled_extensions: required_extensions,
                 ..Default::default()
@@ -203,7 +200,7 @@ impl App {
             ..DeviceExtensions::empty()
         };
 
-        // Select physical device -> Ideally a discrete gpu, will allow selection at a later date
+        // Select physical device -> Ideally a discrete gpu, will allow selection at a later date (probably never)
         let (physical_device, queue_family_indicies) = instance
             .enumerate_physical_devices()
             .unwrap()
@@ -254,7 +251,7 @@ impl App {
                 }
             })
             .min_by_key(|(p, _)| {
-                // We assign a lower score to device types that are likely to be faster/better.
+                // GPU Ideally
                 match p.properties().device_type {
                     PhysicalDeviceType::DiscreteGpu => 0,
                     PhysicalDeviceType::IntegratedGpu => 1,
@@ -281,23 +278,21 @@ impl App {
 
         // Create info prrior to initialisation
         let queue_create_infos = if compute_index == transfer_index {
-            // If they're the same family, request 2 queues from that family
             vec![QueueCreateInfo {
                 queue_family_index: compute_index,
-                queues: vec![1.0], // Request 2 queues with priority 1.0
+                queues: vec![1.0], 
                 ..Default::default()
             }]
         } else {
-            // If they're different families, create separate queue infos
             vec![
                 QueueCreateInfo {
                     queue_family_index: compute_index,
-                    queues: vec![1.0], // One compute queue
+                    queues: vec![1.0], 
                     ..Default::default()
                 },
                 QueueCreateInfo {
                     queue_family_index: transfer_index,
-                    queues: vec![1.0], // One transfer queue
+                    queues: vec![1.0],
                     ..Default::default()
                 }
             ]
@@ -348,10 +343,36 @@ impl App {
         let mid = u32::max_value() as f64 / 100.0;  // Basically i32 mid untio
         println!("{}", mid); 
         //let middle = Vec3::from(mid,830.0, mid);
-        let middle = Vec3::from(17728.0,830.0, 10560.0);
+
+
+        let mut x = 17728.0;
+        let y = 830.0;
+        let z = 10560.0;
+
+        //let seed = 42;
+        //let seed = 1023;
+
+        let seed = 42;
+
+
+        let temp = PerlinNoise::new(seed, 0.00003);
+        let mut found = false;
+        
+        // Ensures camera always starts on land
+        while !found {
+            if temp.get_noise_at_point(x, z) > 0.11 {
+                found = true;
+            } else {
+                x += 1.0;
+            }
+        }
+
+        let middle = Vec3::from(x, y, z);
 
         let camera_location = CameraLocation {location: middle, direction: Vec3::new(), old_loc: middle, h_angle: 0.0, v_angle: 0.0, sun_loc: Vec3::from(10000.0, 3000.0, 10000.0)};
-        let mut intial_world = get_grid_from_seed(42, width as i32, [middle.x as i32, middle.y as i32, middle.z as i32]);
+        let mut intial_world = get_grid_from_seed(seed, width as i32, [middle.x as i32, middle.y as i32, middle.z as i32]);
+
+
 
         // Get Vector World Data
         let flat_world = intial_world.flatten_world();

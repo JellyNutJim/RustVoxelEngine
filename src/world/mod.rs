@@ -49,6 +49,7 @@ pub fn get_grid_from_seed(seed: u64, width: i32, camera_origin: [i32; 3]) -> Sha
 
     // Intial World Builder Pipelin
     create_intial_world_with_continents(&mut p);
+    create_full_generated_land(&mut p);
     create_intial_close_land(&mut p);
 
     println!("space midpoint: {:?}", p.get_centre_point_in_space()); 
@@ -72,12 +73,50 @@ fn create_intial_world_with_continents(world: &mut ShaderGrid) {
 
             let b = true;
 
-            generate_res_16(world, c_x, c_z, b);
+            for y in 0..world.width { 
+                let grid_index = x + (y) * world.width  + z * world.width.pow(2);
+                let index = world.grid[grid_index as usize] as usize;
+                world.chunks[index].set_generation_level(2);
+            }
+
+            generate_res_8(world, c_x, c_z, b);
         }
     }
 }
 
-// Layer 2
+// Second Inner Most
+fn create_full_generated_land(world: &mut ShaderGrid) {
+    let layer_width = 121;
+    let layer_half_width = layer_width / 2;
+
+
+    let mid_xz = world.get_x_z_midpoint_in_space();
+    let mid_chunk = [(mid_xz[0] / 64) * 64, (mid_xz[1] / 64) * 64];
+    let starting_point = [
+        mid_chunk[0] - layer_half_width * 64,
+        mid_chunk[1] - layer_half_width * 64
+    ];
+
+    let sp_c = world.get_chunk_pos_u32(&[starting_point[0], 0 , starting_point[1]]);
+
+    for x in 0..layer_width{
+        for z in 0..layer_width {
+            let c_x = x * 64 + starting_point[0] as u32;
+            let c_z = z * 64 + starting_point[1] as u32;
+
+            for y in 0..world.width { 
+                let grid_index = (sp_c[0] + x) + (y) * world.width  + (sp_c[2] + z) * world.width.pow(2);
+                let index = world.grid[grid_index as usize] as usize;
+                world.chunks[index].set_generation_level(4);
+            }
+
+            generate_res_2(world, c_x, c_z);
+        }
+    }
+}
+
+
+// InnerMost
 fn create_intial_close_land(world: &mut ShaderGrid) {
     let layer_width = 51;
     let layer_half_width = layer_width / 2;
@@ -90,10 +129,19 @@ fn create_intial_close_land(world: &mut ShaderGrid) {
         mid_chunk[1] - layer_half_width * 64
     ];
 
+    let sp_c = world.get_chunk_pos_u32(&[starting_point[0], 0 , starting_point[1]]);
+
     for x in 0..layer_width{
         for z in 0..layer_width {
             let c_x = x * 64 + starting_point[0] as u32;
             let c_z = z * 64 + starting_point[1] as u32;
+
+
+            for y in 0..world.width { 
+                let grid_index = (sp_c[0] + x) + (y) * world.width  + (sp_c[2] + z) * world.width.pow(2);
+                let index = world.grid[grid_index as usize] as usize;
+                world.chunks[index].set_generation_level(5);
+            }
 
             generate_res_1(world, c_x, c_z);
         }

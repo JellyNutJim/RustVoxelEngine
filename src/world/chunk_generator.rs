@@ -96,6 +96,16 @@ impl GenPipeLine {
             self.height.get_noise_at_point(x, z, 0.001) * 16.0 * 16.0 
         ) / 2.0
     }
+
+    fn get_interference(&self, x: f64, z: f64) -> f64 {
+        let i = self.interference.get_noise_at_point(x, z, 0.5) * 16.0 * 16.0;
+
+        if i < 0.0 {
+            0.0
+        } else {
+            i
+        }
+    }
 }
 
 // Complex Biome Height Generators
@@ -133,7 +143,7 @@ impl GenPipeLine {
         (1, updated_height)
     }
 
-    fn generate_bays(&mut self, x: f64, z: f64, map_coords: (usize, usize), update: bool) -> (u32, f64) {
+    fn generate_fjords(&mut self, x: f64, z: f64, map_coords: (usize, usize), update: bool) -> (u32, f64) {
 
         let change  = self.get_beach_with_bays_noise(x, z);
         let height = self.height_map.get_mut(map_coords.0, map_coords.1);
@@ -161,6 +171,15 @@ impl GenPipeLine {
 
         (1, updated_height)
     }       
+
+    fn apply_interference(&mut self, x: f64, z: f64, map_coords: (usize, usize)) -> f64 {
+        let change = self.get_interference(x, z);
+        let height = self.height_map.get_mut(map_coords.0, map_coords.1);
+
+        *height += change * 0.01;
+
+        *height
+    }
 }
 
 // Height map application functions, combines different height levels to produce more varies terrain
@@ -198,13 +217,15 @@ impl GenPipeLine {
     fn apply_full_biome_height(&mut self, x_pos: u32, z_pos: u32, map_coords: (usize, usize), update: bool) -> (u32, f64) {
 
         // Select correct biomes (for now just beach)
-        self.generate_beach(
+        let res = self.generate_fjords(
             (x_pos) as f64, 
             (z_pos) as f64, 
             map_coords,
             update,
-        )
-    }
+        );
+
+        res
+    }   
 
     fn apply_biome_merging() {
 
@@ -215,7 +236,7 @@ impl GenPipeLine {
 // Visible API, 
 
 // Intialises the base heightmap, intialises the base biome map, inserts 16x16 voxels
-pub fn generate_res_16(world: &mut ShaderGrid, x_pos: u32, z_pos: u32, insert: bool) {
+pub fn generate_res_8(world: &mut ShaderGrid, x_pos: u32, z_pos: u32, insert: bool) {
     let mut map_c = world.generator.get_map_coords(x_pos, z_pos, world.origin);
 
     // Update intial biome and heightmap
@@ -268,11 +289,7 @@ pub fn generate_res_16(world: &mut ShaderGrid, x_pos: u32, z_pos: u32, insert: b
 
 // }
 
-// pub fn generate_res_2(&mut self) {
-
-// }
-
-pub fn generate_res_1(world: &mut ShaderGrid, x_pos: u32, z_pos: u32) {
+pub fn generate_res_2(world: &mut ShaderGrid, x_pos: u32, z_pos: u32) {
     let mut map_c = world.generator.get_map_coords(x_pos, z_pos, world.origin);
     map_c.0 *= 2;
     map_c.1 *= 2;
@@ -298,8 +315,70 @@ pub fn generate_res_1(world: &mut ShaderGrid, x_pos: u32, z_pos: u32) {
                     true
                 );
                 
-            
-            //let y = world.generator.height_map.get(c0, c1);
+            if x % 2 != 0 {
+                continue;
+            }
+
+            if z % 2 != 0 {
+                continue;
+            }
+
+            let y = ((y - 1.0) / 2.0) * 2.0;
+            let v = Voxel::from_type(voxel_type as u8);
+
+            world.insert_subchunk([
+                    x_adj as i32,
+                    y as i32,
+                    z_adj as i32,
+                ], 
+                v,  
+                4,
+                true
+            );
+
+            if y < 15.7 + world.generator.sea_level {
+                world.insert_subchunk([
+                        x_adj as i32,
+                        (world.generator.sea_level + 15.0) as i32,
+                        z_adj  as i32,
+                    ], 
+                    Voxel::from_type(3), 
+                    4, 
+                    false
+                );
+            }
+
+        }
+    }
+}
+
+pub fn generate_res_1(world: &mut ShaderGrid, x_pos: u32, z_pos: u32) {
+    let mut map_c = world.generator.get_map_coords(x_pos, z_pos, world.origin);
+    map_c.0 *= 2;
+    map_c.1 *= 2;
+    // Apply biomes
+
+    for x in 0..64 {
+        for z in 0..64 {
+
+            let c0 =  map_c.0 + (x * 2) as usize;
+            let c1 =  map_c.1 + (z * 2) as usize;
+
+            let x_adj = x_pos + x;
+            let z_adj = z_pos + z;
+
+            let y = world.generator.height_map.get(c0, c1);
+            // let tree = world.generator.get_interference((x_pos + x) as f64, (z_pos + z) as f64);
+
+            // if y > 16.5 + world.sea_level as f64 && tree > 120.0 {
+            //     insert_tree(world, x_adj, y as u32, z_adj);
+            // }
+
+            let mut voxel_type = 1;
+
+            if y < 16.1 + world.sea_level as f64  {
+                voxel_type = 4;
+            }
 
             let v = Voxel::from_type(voxel_type as u8);
 
@@ -326,7 +405,38 @@ pub fn generate_res_1(world: &mut ShaderGrid, x_pos: u32, z_pos: u32) {
         }
     }
 }
-   
+
+use rand::{Rng, SeedableRng};
+
+fn insert_tree(world: &mut ShaderGrid, x: u32, y: u32, z: u32) {
+    let mut rng = rand::rngs::StdRng::seed_from_u64(world.seed + x as u64 + z as u64);
+    let height = rng.random_range(5..10);
+
+    for i in 0..height {
+        world.insert_voxel([
+            x as i32,
+            (y + i) as i32,
+            z as i32,
+        ], 
+        Voxel::from_type(2),  
+        false
+        );
+    }
+
+    world.insert_voxel([
+        x as i32,
+        (y + height) as i32,
+        z as i32,
+    ], 
+    Voxel::from_type(1),  
+    false
+    );
+
+    for i in 0..4 {
+
+    }
+
+}
 
     
 

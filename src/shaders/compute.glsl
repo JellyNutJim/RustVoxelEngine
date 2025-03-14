@@ -236,7 +236,7 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
     steps = 0;
     int multiplier = 1;
     int transparent_hits = 0;
-    vec3 tansparent_mask = vec3(1.0);
+    vec3 tansparent_mask = vec3(0.0);
 
     float accumculated_curve = 0.0;
     float curve = 0.01;
@@ -274,7 +274,13 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
             continue;
         } else {
             if (voxel_type == 1) {
-                hit_colour = grass(hit_axis, step) * tansparent_mask;
+                hit_colour = grass(hit_axis, step);
+
+                if (transparent_hits > 0) {
+                    hit_colour = (hit_colour + tansparent_mask) / 2;
+                }
+
+
                 vec3 hit_pos = c.origin + dir * curr_distance;
                 if (fract(hit_pos.x) > 0.5) {
                     hit_colour *= 0.9;
@@ -291,7 +297,14 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
             }
 
             if (voxel_type == 4) {
-                hit_colour = vec3(0.969, 0.953, 0.0) * tansparent_mask;
+                hit_colour = vec3(0.969, 0.953, 0.0);
+
+                if (transparent_hits > 0) {
+                    hit_colour = (hit_colour * 0.1 + tansparent_mask * 0.9);
+                    return true;
+                }
+
+
                 vec3 hit_pos = c.origin + dir * curr_distance;
                 if (fract(hit_pos.x) > 0.5) {
                     hit_colour *= 0.96;
@@ -304,20 +317,45 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
                 if (fract(hit_pos.z) < 0.5) {
                     hit_colour *= 0.96;
                 }
+
                 return true;
             }
 
             if (voxel_type == 2) {
-                hit_colour = stone(hit_axis, step) * tansparent_mask;
+                hit_colour = stone(hit_axis, step);
+
+                if (transparent_hits > 0) {
+                    hit_colour = (hit_colour + tansparent_mask) / 2;
+                }
+
                 return true;
             }
 
             if (voxel_type == 3) {
-                hit_colour = vec3(0.31, 0.239, 0.9);
-                return true; 
+                transparent_hits = 1;
+                tansparent_mask = vec3(0.2, 0.5, 0.91);
+                steps += 1;
+
+                vec3 hit_pos = c.origin + dir * curr_distance;
+                if (fract(hit_pos.x) > 0.5) {
+                    tansparent_mask *= 0.96;
+                }
+
+                if (fract(hit_pos.y) < 0.5) {
+                    tansparent_mask *= 0.96;
+                }
+
+                if (fract(hit_pos.z) < 0.5) {
+                    tansparent_mask *= 0.96;
+                }
+
+
+                take_step(step, t_delta, t_max, hit_axis, world_pos, multiplier, dir, curr_distance);
+                continue;
             }
 
-            hit_colour = stone(hit_axis, step) * tansparent_mask;
+            hit_colour = stone(hit_axis, step);
+
             return true;
 
         }
@@ -340,7 +378,7 @@ void apply_shadow(vec3 world_pos, vec3 t_max, vec3 t_delta, ivec3 step, vec3 dir
 
         uint voxel_type = get_depth(world_pos, multiplier);
 
-        if (voxel_type != 0) {
+        if (voxel_type != 0 && voxel_type != 3) {
             hit_colour *= 0.5;
             return;
         }
