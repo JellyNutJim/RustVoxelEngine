@@ -363,8 +363,6 @@ impl ShaderGrid {
             // Update Biome MaP for this chunk
             //gen_biome(&mut self.biome_map, update_chunk[0] as u32,  update_chunk[2] as u32);
 
-            
-
             generate_res_8(self, update_chunk[0] as u32, update_chunk[2] as u32, true);
 
             let c_ind = self.get_chunk_pos(&update_chunk);

@@ -197,8 +197,8 @@ impl GenPipeLine {
                 self.biome_map.set(map_coords.0 + x as usize, map_coords.1 + z as usize, self.get_biome_at(x_adj, z_adj));
     
                 // set base heightmap values
-                for i in 0..1 {
-                    for j in 0..1 {
+                for i in 0..2 {
+                    for j in 0..2 {
                         x_adj += 0.5 * i as f64;
                         z_adj += 0.5 * j as f64;
     
@@ -214,12 +214,12 @@ impl GenPipeLine {
         }
     }
 
-    fn apply_full_biome_height(&mut self, x_pos: u32, z_pos: u32, map_coords: (usize, usize), update: bool) -> (u32, f64) {
+    fn apply_full_biome_height(&mut self, x_pos: f64, z_pos: f64, map_coords: (usize, usize), update: bool) -> (u32, f64) {
 
         // Select correct biomes (for now just beach)
         let res = self.generate_fjords(
-            (x_pos) as f64, 
-            (z_pos) as f64, 
+            x_pos, 
+            z_pos, 
             map_coords,
             update,
         );
@@ -257,7 +257,7 @@ pub fn generate_res_8(world: &mut ShaderGrid, x_pos: u32, z_pos: u32, insert: bo
             let map_x = map_c.0 + (x_adj * 2);
             let map_z = map_c.1 + (z_adj * 2);
 
-            let (mut voxel_type, mut y) = world.generator.apply_full_biome_height(x_pos + x_adj as u32, z_pos + z_adj as u32, (map_x, map_z), false);
+            let (mut voxel_type, mut y) = world.generator.apply_full_biome_height((x_pos + x_adj as u32) as f64, (z_pos + z_adj as u32) as f64, (map_x, map_z), false);
 
             if y < 15.7 + world.generator.sea_level {
                 voxel_type = 3;
@@ -288,6 +288,7 @@ pub fn generate_res_8(world: &mut ShaderGrid, x_pos: u32, z_pos: u32, insert: bo
 // pub fn generate_res_4(&mut self) {
 
 // }
+static POSITIONS: [(usize, usize); 3] = [(0, 1), (1, 0), (1, 1)];
 
 pub fn generate_res_2(world: &mut ShaderGrid, x_pos: u32, z_pos: u32) {
     let mut map_c = world.generator.get_map_coords(x_pos, z_pos, world.origin);
@@ -304,16 +305,28 @@ pub fn generate_res_2(world: &mut ShaderGrid, x_pos: u32, z_pos: u32) {
             let x_adj = x_pos + x;
             let z_adj = z_pos + z;
 
-            //let y = world.generator.get_landmass_noise((x_pos + x) as f64, (z_pos + z) as f64);
-            let (voxel_type, y) = world.generator.apply_full_biome_height(
-                x_adj, 
-                z_adj,
-        (
-                        c0,
-                        c1,
+            for &(i, j) in &POSITIONS {
+                world.generator.apply_full_biome_height(
+                    x_adj as f64 + 0.5 * i as f64, 
+                    z_adj as f64 + 0.5 * j as f64,
+                    ( 
+                        c0 + i,
+                        c1 + j,
                     ),
                     true
                 );
+            }
+    
+
+            let (voxel_type, y) = world.generator.apply_full_biome_height(
+                x_adj as f64, 
+                z_adj as f64,
+                (
+                    c0,
+                    c1,
+                ),
+                true
+            );
                 
             if x % 2 != 0 {
                 continue;
@@ -358,6 +371,8 @@ pub fn generate_res_1(world: &mut ShaderGrid, x_pos: u32, z_pos: u32) {
     map_c.1 *= 2;
     // Apply biomes
 
+    let mut voxels: [(f64, Voxel); 4] = Default::default();
+
     for x in 0..64 {
         for z in 0..64 {
 
@@ -367,29 +382,87 @@ pub fn generate_res_1(world: &mut ShaderGrid, x_pos: u32, z_pos: u32) {
             let x_adj = x_pos + x;
             let z_adj = z_pos + z;
 
-            let y = world.generator.height_map.get(c0, c1);
-            // let tree = world.generator.get_interference((x_pos + x) as f64, (z_pos + z) as f64);
-
-            // if y > 16.5 + world.sea_level as f64 && tree > 120.0 {
-            //     insert_tree(world, x_adj, y as u32, z_adj);
-            // }
-
             let mut voxel_type = 1;
+            let mut y = world.generator.height_map.get(c0, c1);
 
             if y < 16.1 + world.sea_level as f64  {
                 voxel_type = 4;
             }
 
-            let v = Voxel::from_type(voxel_type as u8);
+            let mut v = Voxel::from_type(voxel_type);
+            let mut v_len = 1;
+            v.set_surface_octant(get_vertical_octant(y.fract()), 1);
 
-            world.insert_voxel([
-                    x_adj as i32,
-                    y as i32,
-                    z_adj as i32,
-                ], 
-                v,  
-                true
-            );
+            if x_adj == 54585 && z_adj == 10370 { 
+                println!("1");
+                println!("0 0 {}", world.generator.height_map.get(c0, c1));
+                println!("1 0 {}", world.generator.height_map.get(c0 + 1, c1 + 0));
+                println!("0 1 {}", world.generator.height_map.get(c0 + 0, c1 + 1));
+                println!("1 1 {}", world.generator.height_map.get(c0 + 1, c1 + 1));
+            }
+
+            if x_adj == 54582 && z_adj == 10382 { 
+                println!("2");
+                println!("0 0 {}", world.generator.height_map.get(c0, c1));
+                println!("1 0 {}", world.generator.height_map.get(c0 + 1, c1 + 0));
+                println!("0 1 {}", world.generator.height_map.get(c0 + 0, c1 + 1));
+                println!("1 1 {}", world.generator.height_map.get(c0 + 1, c1 + 1));
+            }
+
+            // 820
+
+            voxels[0] = (y.trunc(), v);
+
+            // Cover all 8 sub voxels -> 2x2 heightmap 
+            for &(i, j) in &POSITIONS { 
+                y = world.generator.height_map.get(c0 + i, c1 + j);
+
+                voxel_type = 1;
+                let mut octant = i + j * 2;
+                octant += get_vertical_octant(y.fract());
+
+                if y < 16.1 + world.sea_level as f64  {
+                    voxel_type = 4;
+                }
+
+                let mut exists = false;
+
+                for k in 0..v_len {
+                    if y.trunc() == voxels[k].0 {
+                        voxels[k].1.set_surface_octant(octant, voxel_type);
+                        exists = true;
+                        break;
+                    } 
+                }
+
+                if !exists {
+                    let mut temp_v = Voxel::new();
+                    temp_v.set_surface_octant(octant, voxel_type);
+                    voxels[v_len] = (y.trunc(), temp_v);
+
+                    v_len += 1;
+                }
+            }
+
+            for k in 0..v_len {
+                world.insert_voxel([
+                        x_adj as i32,
+                        voxels[k].0 as i32,
+                        z_adj as i32,
+                    ], 
+                    voxels[k].1,  
+                    true
+                );
+            }
+
+        //     world.insert_voxel([
+        //         x_adj as i32,
+        //         y as i32,
+        //         z_adj as i32,
+        //     ], 
+        //     Voxel::from_type(1),  
+        //     true
+        // );
 
             if y < 15.7 + world.generator.sea_level {
                 world.insert_voxel([
@@ -401,12 +474,18 @@ pub fn generate_res_1(world: &mut ShaderGrid, x_pos: u32, z_pos: u32) {
                     false
                 );
             }
-
         }
     }
 }
 
 use rand::{Rng, SeedableRng};
+
+
+// let tree = world.generator.get_interference((x_pos + x) as f64, (z_pos + z) as f64);
+
+// if y > 16.5 + world.sea_level as f64 && tree > 120.0 {
+//     insert_tree(world, x_adj, y as u32, z_adj);
+// }
 
 fn insert_tree(world: &mut ShaderGrid, x: u32, y: u32, z: u32) {
     let mut rng = rand::rngs::StdRng::seed_from_u64(world.seed + x as u64 + z as u64);
@@ -439,163 +518,6 @@ fn insert_tree(world: &mut ShaderGrid, x: u32, y: u32, z: u32) {
 }
 
     
-
-//Resets heightmap level then adds continent height
-// pub fn create_smooth_islands(world: &mut ShaderGrid, pos: (u32, u32)) {
-//     // Update vertical chunk
-//     //let large_scale_sea = world.sea_level - 16;
-
-//     let continent_perlin = world.generator.landmass.generate_grid_from_point(64, 64, 0.00003, (pos.0, pos.1));
-//     let beach_perlin = world.generator.landmass.generate_grid_from_point(64, 64, 0.005, (pos.0, pos.1));
-//     let bay_perlin = world.generator.landmass.generate_grid_from_point(64, 64, 0.001, (pos.0, pos.1));
-
-//     let chunk_pos = (
-//         pos.0 - world.origin[0] as u32,
-//         pos.1 - world.origin[2] as u32,
-//     );
-
-//     let sea_level = world.sea_level as f64;
-
-//     //println!("{:?}", pos);
-//     for x in 0..64 {
-//         for z in 0..64 {
-//             // Get noise at pos
-//             let continent_noise = continent_perlin[x as usize][z as usize] * 16.0 * 16.0 *1.1;
-//             let beach_noise = beach_perlin[x as usize][z as usize] * 16.0;
-//             let bay_noise = bay_perlin[x as usize][z as usize] * 16.0 * 16.0;
-            
-//             let x_adj = x + chunk_pos.0 as usize;
-//             let z_adj = z + chunk_pos.1 as usize; 
-
-//             let mut voxel_type = 1;
-
-//             // Set intial height to continent height
-//             *world.generator.height_map.get_mut(x_adj, z_adj) = world.sea_level as f64 + continent_noise;
-
-//             // Beach change
-//             let change = (beach_noise + bay_noise) / 2.0;
-//             let initial = world.generator.height_map.get(x_adj, z_adj);
-
-//             // Calculate scaling factor based on sea level
-//             let distance = world.sea_level as f64 + 16.0 -  world.generator.height_map.get(x_adj, z_adj);
-//             let fall_off: f64 = 2.0;
-//             let scaling: f64;
-//             let distance = distance.abs();
-//             scaling = 1.0 - (-distance.powf(2.0) / fall_off.powf(2.0)).exp();
-
-//             if change > 0.0 {
-//                 *world.generator.height_map.get_mut(x_adj, z_adj) += change * scaling;
-//             }
-//             else {
-//                 *world.generator.height_map.get_mut(x_adj, z_adj) += change;
-//             }
-
-//             if initial < sea_level + 15.9 || world.generator.height_map.get(x_adj, z_adj) < sea_level + 15.9 {
-                
-//                 if initial < world.generator.height_map.get(x_adj, z_adj) {
-//                     *world.generator.height_map.get_mut(x_adj, z_adj) = initial;
-//                 }
-//             }
-
-//             // Update low resolution terrain
-//             if !(x % 16 == 0 && z % 16 == 0) {
-//                 continue;
-//             }
-
-//             let y = ((world.generator.height_map.get(x_adj, z_adj) as i32 - 3) / 4) * 4;
-
-//             if world.generator.height_map.get(x_adj, z_adj) < sea_level + 15.9 {
-//                 let x_adj = (x + pos.0 as usize) as i32;
-//                 let z_adj = (z + pos.1 as usize) as i32;
-
-//                 voxel_type = 3;
-
-//                 world.insert_subchunk([x_adj, sea_level as i32, z_adj], Voxel::from_type(voxel_type), 1, false);
-//                 continue;
-//             }
-
-//             let x_adj = (x + pos.0 as usize) as i32;
-//             let z_adj = (z + pos.1 as usize) as i32;
-
-//             world.insert_subchunk([x_adj, y, z_adj], Voxel::from_type(voxel_type), 1, true);
-//         }
-//     }
-// }
-
-// pub fn create_beach_hills(world: &mut ShaderGrid, pos: (u32, u32)) {
-
-//     // Update vertical chunk
-//     let interference_grid = world.generator.interference.generate_grid_from_point(64, 64, 0.01, (pos.0, pos.1));
-
-//     let chunk_pos = (
-//         pos.0 - world.origin[0] as u32,
-//         pos.1 - world.origin[2] as u32,
-//     );
-
-//     //println!("{:?}", pos);
-//     //println!("chunk pos: {:?}", chunk_pos);
-//     for x in 0..64 {
-//         for z in 0..64 {
-
-//             // Interference
-//             let interference = interference_grid[x as usize][z as usize] * 16.0 * 16.0;
-
-//             let x_adj = x + chunk_pos.0 as usize;
-//             let z_adj = z + chunk_pos.1 as usize; 
-
-//             let x_adj_space = (x + pos.0 as usize) as i32;
-//             let z_adj_space = (z + pos.1 as usize) as i32;
-
-//             let distance = (world.sea_level as f64 + 16.0 -  world.generator.height_map.get(x_adj, z_adj)).abs();
-//             let fall_off: f64 = 1.0; 
-//             let scaling = 1.0 - (-distance.powf(2.0) / fall_off.powf(2.0)).exp();
-//             *world.generator.height_map.get_mut(x_adj, z_adj) += interference * 0.01 * scaling;
-
-//             let mut v = Voxel::new();
-//             let mut v_type = 1;
-//             let mut pos = [0.0 as f64, world.generator.height_map.get(x_adj, z_adj).fract(), 0.0 as f64];
-            
-            
-//             if world.generator.height_map.get(x_adj, z_adj) > (world.sea_level as f64 + 15.7) {
-//                 if world.generator.height_map.get(x_adj, z_adj) < (world.sea_level as f64 + 16.3) {
-//                     v_type = 4;
-//                 }
-//             }
-
-//             // Water level
-//             if world.generator.height_map.get(x_adj, z_adj) < (world.sea_level as f64 + 15.7) {
-//                 world.insert_voxel([x_adj_space, world.sea_level as i32 + 15, z_adj_space], Voxel::from_type(3), false);
-//                 continue
-//             }
-
-//             // Set up sub voxels
-//             for i in 0..1 {
-//                 for j in 0..1 {
-//                     pos[0] = i as f64 * 0.5;
-//                     pos[2] = j as f64 * 0.5;
-
-//                     // temp to visualise difference
-
-//                     pos[1] += 0.01;
-
-//                     let octant = get_voxel_octant(pos);
-
-//                     if octant > 3 {
-//                         v.set_octant(octant - 4, 2);
-//                     }
-
-//                     v.set_octant(octant, v_type);
-//                 }   
-//             }
-
-//             v.update_voxel();
-
-//             world.insert_voxel([x_adj_space, world.generator.height_map.get(x_adj, z_adj) as i32, z_adj_space], v, true);
-
-//         }
-//     }
-// }
-
 // Assuming pos within - 0 - 1
 fn get_voxel_octant(pos: [f64; 3]) -> usize {
     
@@ -615,4 +537,12 @@ fn get_voxel_octant(pos: [f64; 3]) -> usize {
     }
     
     octant
+}
+
+fn get_vertical_octant(y: f64) -> usize {
+    if y > 0.5 {
+        4
+    } else  {
+        0
+    }
 }

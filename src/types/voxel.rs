@@ -42,6 +42,15 @@ impl Voxel {
         self.octants[octant] = v_type;
     }
 
+    // Same as set octant, but inserts stone in the octant below, if there is an octant below
+    pub fn set_surface_octant(&mut self, octant: usize, v_type: u8) {
+        self.octants[octant] = v_type;
+        if octant > 3 {
+            self.octants[octant - 4] = 2;
+        }
+    }
+
+
     pub fn set_voxel(&mut self, v_type: u32) {
         self.voxel = v_type;
     }
@@ -53,6 +62,15 @@ impl Voxel {
 
     pub fn get_voxel(&self) -> u32 {
         self.voxel
+    }
+}
+
+impl Default for Voxel {
+    fn default() -> Self {
+        Self {
+            octants: [0; 8],
+            voxel: 0,
+        }
     }
 }
 
@@ -68,3 +86,4 @@ fn u8s_to_u32(o: [u8; 8]) -> u32 {
 
     result
 }
+
