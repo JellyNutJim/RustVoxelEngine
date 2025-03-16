@@ -27,7 +27,7 @@ impl Voxel {
     pub fn from_type(t: u8) -> Self {
         Self {
             octants: [t; 8],
-            voxel: u8s_to_u32([t; 8]),
+            voxel: t as u32,
         }
     }
 

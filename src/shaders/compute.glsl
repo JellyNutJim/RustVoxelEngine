@@ -29,6 +29,8 @@ layout(set = 0, binding = 3) readonly buffer NoiseBuffer {
 
 layout(set = 0, binding = 4, rgba8) uniform image2D storageImage;
 
+#include "triangle.glsl"
+
 const int WIDTH = 321;
 const bool DETAIL = false;
 
@@ -196,11 +198,6 @@ void take_step(ivec3 step, vec3 t_delta, inout vec3 t_max, inout uint hit_axis, 
 
 vec3 get_colour(uint hit_axis, ivec3 step, vec3 c) {
     vec3 normal;
-
-    // if(hit_axis == 0) normal = vec3(-step.x, 0.0, 0.0);
-    // else if(hit_axis == 1) normal = vec3(0.0, -step.y, 0.0);
-    // else normal = vec3(0.0, 0.0, -step.z);
-
     return vec3(0.1, 0.1, 0.1);
 }
 
@@ -214,19 +211,98 @@ vec3 stone(uint hit_axis, ivec3 step) {
     return vec3(0.7, 0.71, 0.7) * 0.3 + normal * 0.1;
 }
 
-vec3 grass(uint hit_axis, ivec3 step) {
+vec3 grass(uint hit_axis, ivec3 step, vec3 hit_pos) {
         vec3 normal;
 
     if(hit_axis == 0) normal = vec3(0.0, 0.0, 0.0);
     else if(hit_axis == 1) normal = vec3(0.0, -step.y, 0.0);
     else normal = vec3(0.0, 0.0, 0.0);
 
-    // if (hit_axis == 1) {
-    //     return vec3(0.7, 0.73, 0.7) * 0.5;
-    // }
+    vec3 hit_colour = normal + vec3(0.0, 0.4, 0.1) * 0.5;
 
-    return normal + vec3(0.0, 0.4, 0.1) * 0.5;
+    if (fract(hit_pos.x) > 0.5) {
+        hit_colour *= 0.9;
+    }
+
+    if (fract(hit_pos.y) < 0.5) {
+        hit_colour *= 0.9;
+    }
+
+    if (fract(hit_pos.z) < 0.5) {
+        hit_colour *= 0.9;
+    }
+
+    return hit_colour;
 }
+
+vec3 grass2(vec3 hit_pos) {
+
+    vec3 hit_colour = vec3(0.2, 0.94, 0.2);
+
+    if (fract(hit_pos.x) > 0.5) {
+        hit_colour *= 0.94;
+    }
+
+    if (fract(hit_pos.z) > 0.5) {
+        hit_colour *= 0.94;
+    }
+
+    return hit_colour;
+}
+
+vec3 sand(vec3 hit_pos) {
+    vec3 hit_colour = vec3(0.969, 0.953, 0.0);
+
+
+    if (fract(hit_pos.x) > 0.5) {
+        hit_colour *= 0.96;
+    }
+
+    if (fract(hit_pos.y) < 0.5) {
+        hit_colour *= 0.96;
+    }
+
+    if (fract(hit_pos.z) < 0.5) {
+        hit_colour *= 0.96;
+    }
+
+    return hit_colour;
+}
+
+// Triangle intercept
+bool intersection_test(vec3 origin, vec3 dir, vec3 v0, vec3 v1, vec3 v2, inout float t) {
+
+    vec3 v0v1 = v1 - v0;
+    vec3 v0v2 = v2 - v0;
+    vec3 pvec = cross(dir, v0v2);
+    float det = dot(v0v1, pvec);
+
+    if (abs(det) < 0.0001) { return false; }
+
+    float invDet = 1 / det;
+
+    vec3 tvec = origin - v0;
+    float u = dot(tvec, pvec) * invDet;
+    if (u < 0 || u > 1) { return false; }
+
+    vec3 qvec = cross(tvec, v0v1);
+    float v = dot(dir, qvec) * invDet;
+    if (v < 0 || u + v > 1) { return false; }
+
+    vec3 barycentricCoords;
+    
+    t = dot(v0v2, qvec) * invDet;
+    
+    // Ray intersection
+    if (t > 0.0001) {
+        barycentricCoords = vec3(1.0 - u - v, u, v);
+        return true;
+    }
+
+
+    return false;
+}
+
 
 
 bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_delta, ivec3 step, vec3 dir, inout vec3 hit_colour, inout float curr_distance) {
@@ -262,10 +338,126 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
             break;
         }
 
-        if (DETAIL == false) {
-            voxel_type = voxel_type & 0xFu;
+        // Smoothing test -> only drawing top surfaces
+        if ( multiplier == 1 && voxel_type != 3) { //world_pos == vec3(54732, 830, 10561) // multiplier == 1
+            if (voxel_type == 0) {
+                steps += 1;
+                take_step(step, t_delta, t_max, hit_axis, world_pos, multiplier, dir, curr_distance);
+                continue;
+            }
+
+
+            uint voxel = voxel_type;
+
+            uint n0 = voxel_type & 0xFu;                 // Bottom back left (origin)
+            uint n1 = (voxel_type & 0xF0u) >> 4u;        // Bottom front left
+            uint n2 = (voxel_type & 0xF00u) >> 8u;       // Bottom back right
+            uint n3 = (voxel_type & 0xF000u) >> 12u;     // Bottom front right
+
+            uint n4 = (voxel_type & 0xF0000u) >> 16u;    // Top back left
+            uint n5 = (voxel_type & 0xF00000u) >> 20u;   // Top front left
+            uint n6 = (voxel_type & 0xF000000u) >> 24u;  // Top back right
+            uint n7 = (voxel_type & 0xF0000000u) >> 28u; // Top front right
+            
+            // For 
+            uint height_0 = n4 != 0u ? n4 + 15 : n0;
+            uint height_1 = n5 != 0u ? n5 + 15 : n1;
+            uint height_2 = n6 != 0u ? n6 + 15 : n2;
+            uint height_3 = n7 != 0u ? n7 + 15 : n3;
+
+
+            // Temp fix to deal with missing voxels
+            if (height_0 == 0) { 
+                height_0 = 1;
+            }
+
+            if (height_1 == 0) { 
+                height_1 = 1;
+            }
+
+            if (height_2 == 0) { 
+                height_2 = 1;
+            }
+
+            if (height_3 == 0) { 
+                height_3 = 1;
+            }
+
+            vec3 v0 = world_pos + vec3(0, (float(height_0 - 1) / 29), 0);
+            vec3 v1 = world_pos + vec3(1, (float(height_1 - 1) / 29), 0);
+            vec3 v2 = world_pos + vec3(0, (float(height_2 - 1) / 29), 1);
+            vec3 v3 = world_pos + vec3(1, (float(height_3 - 1) / 29), 1);
+
+
+
+            // vec3 v0 = world_pos + vec3(0, 0.7, 0);
+            // vec3 v1 = world_pos + vec3(1, 0.8, 0);
+            // vec3 v2 = world_pos + vec3(0, 0.9, 1);
+            // vec3 v3 = world_pos + vec3(1, 1.0, 1);
+            float t = 0.0;
+
+            if (intersection_test(c.origin, dir, v0, v1, v2, t) == true) {
+                vec3 hit_pos = c.origin + dir * t;
+
+                if (hit_pos.y > 788) {
+                    hit_colour = grass2(hit_pos) * pow((hit_pos.y / 840), 3);
+                }
+                else if (hit_pos.y < 784) {
+                    hit_colour = sand(hit_pos) * pow((hit_pos.y / 784), 3);
+                }
+                else {
+                    float ratio = (hit_pos.y - 784) / 4;
+
+                    hit_colour = sand(hit_pos) * (1 - ratio) + grass2(hit_pos) * ratio;  //((sand(hit_pos) * (1 - ratio)) + (grass2(hit_pos) * ratio)) / 2;
+
+
+                }
+
+
+
+                if (transparent_hits > 0) {
+                    hit_colour = (hit_colour + tansparent_mask) / 2;
+                }
+
+                return true;
+            }
+
+            
+            if (intersection_test(c.origin, dir, v1, v2, v3, t) == true) {
+                vec3 hit_pos = c.origin + dir * t;
+
+                if (hit_pos.y > 788) {
+                    hit_colour = grass2(hit_pos) * pow((hit_pos.y / 840), 3);
+                }
+                else if (hit_pos.y < 784) {
+                    hit_colour = sand(hit_pos) * pow((hit_pos.y / 784), 3);
+                }
+                else {
+                    float ratio = (hit_pos.y - 784) / 4;
+
+                    hit_colour = sand(hit_pos) * (1 - ratio) + grass2(hit_pos) * ratio;  //((sand(hit_pos) * (1 - ratio)) + (grass2(hit_pos) * ratio)) / 2;
+
+
+                }
+
+                if (transparent_hits > 0) {
+                    hit_colour = (hit_colour + tansparent_mask) / 2;
+                }
+
+                return true;
+            }
+
+
+            voxel_type = 4;
+
+            steps += 1;
+            take_step(step, t_delta, t_max, hit_axis, world_pos, multiplier, dir, curr_distance);
+            continue;
         }
 
+
+        // if detail == false
+        voxel_type = voxel_type & 0xFu;
 
         // Air
         if (voxel_type == 0) {  
@@ -274,25 +466,12 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
             continue;
         } else {
             if (voxel_type == 1) {
-                hit_colour = grass(hit_axis, step);
+                hit_colour = grass(hit_axis, step, c.origin + dir * curr_distance);
 
                 if (transparent_hits > 0) {
                     hit_colour = (hit_colour + tansparent_mask) / 2;
                 }
 
-
-                vec3 hit_pos = c.origin + dir * curr_distance;
-                if (fract(hit_pos.x) > 0.5) {
-                    hit_colour *= 0.9;
-                }
-
-                if (fract(hit_pos.y) < 0.5) {
-                    hit_colour *= 0.9;
-                }
-
-                if (fract(hit_pos.z) < 0.5) {
-                    hit_colour *= 0.9;
-                }
                 return true;
             }
 
@@ -436,41 +615,6 @@ float get_perlin_noise(float x, float z) {
     return lerp(z1, z2, v);
 } 
 
-// Triangle intercept
-bool intersection_test(vec3 origin, vec3 dir, vec3 v0, vec3 v1, vec3 v2) {
-
-    vec3 v0v1 = v1 - v0;
-    vec3 v0v2 = v2 - v0;
-    vec3 pvec = cross(dir, v0v2);
-    float det = dot(v0v1, pvec);
-
-    if (abs(det) < 0.0001) { return false; }
-
-    float invDet = 1 / det;
-
-    vec3 tvec = origin - v0;
-    float u = dot(tvec, pvec) * invDet;
-    if (u < 0 || u > 1) { return false; }
-
-    vec3 qvec = cross(tvec, v0v1);
-    float v = dot(dir, qvec) * invDet;
-    if (v < 0 || u + v > 1) { return false; }
-
-    float t;
-    vec3 barycentricCoords;
-    
-    t = dot(v0v2, qvec) * invDet;
-    
-    // Ray intersection
-    if (t > 0.0001) {
-        barycentricCoords = vec3(1.0 - u - v, u, v);
-        return true;
-    }
-
-
-    return false;
-}
-
 
 void main() {
     ivec2 pixel_coords = ivec2(gl_GlobalInvocationID.xy);
@@ -480,15 +624,16 @@ void main() {
     vec3 pixel_center = c.pixel00_loc + (c.pixel_delta_u * float(pixel_coords.x)) + (c.pixel_delta_v * float(pixel_coords.y));
     vec3 dir = pixel_center - origin;
 
+    //[54732, 830, 10560]
 
-    vec3 v0 = vec3(17738.0, 830.0, 10580.0);
-    vec3 v1 = vec3(17729.0, 831.0, 10621.0);
-    vec3 v2 = vec3(17720.0, 820.0, 10550.0);
+    // vec3 v0 = vec3(54742.0, 830.0, 10530.0);
+    // vec3 v1 = vec3(54752.0, 840.0, 10520.0);
+    // vec3 v2 = vec3(54732.0, 850.0, 10580.0);
 
-    if (intersection_test(origin, dir, v0, v1, v2) == true) {
-        imageStore(storageImage, pixel_coords, vec4(1.0, 0.984, 0.0, 1.0));
-        return;
-    }
+    // if (intersection_test(origin, dir, v0, v1, v2) == true) {
+    //     imageStore(storageImage, pixel_coords, vec4(1.0, 0.984, 0.0, 1.0));
+    //     return;
+    // }
 
     vec3 world_pos = c.world_pos_1;
 
@@ -573,7 +718,7 @@ void main() {
 
         t_max /= dir;
 
-        apply_shadow(world_pos, t_max, t_delta, step, dir, hit_colour, curr_distance);
+        //apply_shadow(world_pos, t_max, t_delta, step, dir, hit_colour, curr_distance);
 
         imageStore(storageImage, pixel_coords, vec4(hit_colour, 1.0));
 

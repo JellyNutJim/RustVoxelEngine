@@ -52,7 +52,7 @@ mod noise_gen;
 mod types;
 mod world;
 
-use world::{get_grid_from_seed, ShaderGrid};
+use world::{get_grid_from_seed, ShaderChunk, ShaderGrid};
 
 use std::time::{Instant, Duration};
 
@@ -63,7 +63,25 @@ use vulkano::command_buffer::CopyBufferInfo;
 use noise_gen::{PerlinNoise, ScalablePerlin};
 
 fn main() -> Result<(), impl Error> {
+
+    // Testing
+    // let mut c = ShaderChunk::new([0, 0, 0]);
+
+    // let mut v = Voxel::from_type(3);
+
+    // println!("{:?}", v.get_voxel());
+
+    // c.insert_voxel([1, 0, 0], v, false);
+    // c.insert_voxel([2, 0, 0], v, false);
+    // c.set_generation_level(5);
+
+
+
+    // println!("{:?}", c.flatten());
+
     // Create window
+
+
     let event_loop = EventLoop::new().unwrap();
     let mut app = App::new(&event_loop);
 
@@ -372,7 +390,40 @@ impl App {
         let camera_location = CameraLocation {location: middle, direction: Vec3::new(), old_loc: middle, h_angle: 0.0, v_angle: 0.0, sun_loc: Vec3::from(10000.0, 3000.0, 10000.0)};
         let mut intial_world = get_grid_from_seed(seed, width as i32, [middle.x as i32, middle.y as i32, middle.z as i32]);
 
+        // let v32 = Voxel::from_octants(
+        //     [
+        //         0b_0101,
+        //         0b_0001,
+        //         0b_0001,
+        //         0b_0001,
 
+        //         0b_0000,
+        //         0b_0010,
+        //         0b_0111,
+        //         0b_1111,
+        //     ]
+        // );
+
+        
+        let v32 = Voxel::from_octants(
+            [
+                0b_0000,
+                0b_0001,
+                0b_0001,
+                0b_0001,
+
+                0b_0000,
+                0b_0010,
+                0b_0111,
+                0b_1111,
+            ]
+        );
+
+
+        intial_world.insert_voxel([middle.x as i32, middle.y as i32, (middle.z + 1.0) as i32], v32, false);
+        intial_world.insert_voxel([middle.x as i32, middle.y as i32, (middle.z + 2.0) as i32], Voxel::from_type(1), false);
+
+        println!("{:?}", middle);
 
         // Get Vector World Data
         let flat_world = intial_world.flatten_world();
@@ -680,7 +731,8 @@ impl ApplicationHandler for App {
         mod cs {
             vulkano_shaders::shader! {
                 ty: "compute",
-                path: "src/shaders/compute.glsl"
+                path: "src/shaders/compute.glsl",
+                include: ["src/shaders/compute_utils"]
             } 
         }
 
