@@ -34,7 +34,16 @@ impl Voxel {
     pub fn from_octants(v: [u8; 8]) -> Self {
         Self {
             octants: v,
-            voxel: u8s_to_u32(v),
+            voxel: octants_to_u32(v),
+        }
+    }
+
+    pub fn from_quadrants(v: [u8; 4]) -> Self {
+        let octants = [v[0], v[1], v[2], v[3], 0, 0, 0, 0];
+
+        Self {
+            octants: octants,
+            voxel: quadrants_to_u32(octants),
         }
     }
 
@@ -55,8 +64,13 @@ impl Voxel {
         self.voxel = v_type;
     }
 
-    pub fn update_voxel(&mut self) -> u32 {
-        self.voxel = u8s_to_u32(self.octants);
+    pub fn update_8_part_voxel(&mut self) -> u32 {
+        self.voxel = octants_to_u32(self.octants);
+        return self.voxel;
+    }
+
+    pub fn update_4_part_voxel(&mut self) -> u32 {
+        self.voxel = quadrants_to_u32(self.octants);
         return self.voxel;
     }
 
@@ -74,12 +88,11 @@ impl Default for Voxel {
     }
 }
 
-fn u8s_to_u32(o: [u8; 8]) -> u32 { 
+// Shifts each 4-bit value into the appropriate position
+fn octants_to_u32(o: [u8; 8]) -> u32 { 
     let mut result: u32 = 0;
     
-    // Shift each 4-bit value into the appropriate position
     for i in 0..8 {
-        // Convert the U4 to u32, shift it to its position, and OR it into the result
         let shifted_value = (o[i] as u32) << (i * 4);
         result |= shifted_value;
     }
@@ -87,3 +100,14 @@ fn u8s_to_u32(o: [u8; 8]) -> u32 {
     result
 }
 
+// Shifts each 8-bit value into the appropriate position
+fn quadrants_to_u32(o: [u8; 8]) -> u32 { 
+    let mut result: u32 = 0;
+    
+    for i in 0..4 {
+        let shifted_value = (o[i] as u32) << (i * 8);
+        result |= shifted_value;
+    }
+
+    result
+}

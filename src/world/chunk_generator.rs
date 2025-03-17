@@ -373,7 +373,8 @@ pub fn generate_res_1(world: &mut ShaderGrid, x_pos: u32, z_pos: u32) {
 
     let mut voxels: [(f64, Voxel); 4] = Default::default();
 
-    let tvp = [54944, 9996]; // 792 ish
+    //let tvp = [54731, 10175]; // 792 ish
+    let tvp = [54732 , 10639];
 
     for x in 0..64 {
         for z in 0..64 {
@@ -384,65 +385,62 @@ pub fn generate_res_1(world: &mut ShaderGrid, x_pos: u32, z_pos: u32) {
             let x_adj = x_pos + x;
             let z_adj = z_pos + z;
 
-            let mut voxel_type = 1;
+            let mut voxel_type;
+
+            // Get first octant pre loop
             let mut y = world.generator.height_map.get(c0, c1);
 
-            // if y < 16.1 + world.sea_level as f64  {
-            //     voxel_type = 4;
-            // }
-
-            voxel_type = get_sub_height_from_t(y);
-            //println!("Voxel Type: {}", voxel_type);
+            voxel_type = get_quad_height(y);
 
             let mut v = Voxel::new();
             let mut v_len = 1;
 
-            v.set_surface_octant(get_vertical_octant(y.fract()), voxel_type);
+            v.set_surface_octant(0, voxel_type);
 
             if x_adj == tvp[0] && z_adj == tvp[1] {
                 println!("y: 0 {}", y);  
             }
-
+            
             voxels[0] = (y.trunc(), v);
 
-            // Cover all 8 sub voxels -> 2x2 heightmap 
+            // Loop over other 3 quadrants
             for &(i, j) in &POSITIONS { 
                 y = world.generator.height_map.get(c0 + i * 2, c1 + j * 2);
+                let octant = i + j * 2;
+
+                voxel_type = get_quad_height(y);
 
                 if x_adj == tvp[0] && z_adj == tvp[1] {
                     println!("y: 1 {}", y);  
                 }
 
-                //voxel_type = 1;
-                let mut octant = i + j * 2;
-                octant += get_vertical_octant(y.fract());
-
-                voxel_type = get_sub_height_from_t(y);
-
-                if x_adj == tvp[0] && z_adj == tvp[1] {
-                    println!("octant {}", octant);
-                    println!("vtype {}", voxel_type);
-                    println!("");
-                }
-
                 let mut exists = false;
+                
 
-                for k in 0..v_len {
-                    if y.trunc() == voxels[k].0 {
+                // If new height lies within an existing voxel, insert, else set that voxels quadrant to 255 or 0 (full/empty)
+                 for k in 0..v_len {
+                    let temp = y.trunc();
+                    if temp == voxels[k].0 {
                         voxels[k].1.set_surface_octant(octant, voxel_type);
                         exists = true;
                         break;
                     } 
+                    else if temp > voxels[k].0 {
+                        voxels[k].1.set_octant(octant, 255); 
+                    }    
                 }
 
                 if !exists {
                     let mut temp_v = Voxel::new();
+
                     temp_v.set_surface_octant(octant, voxel_type);
                     voxels[v_len] = (y.trunc(), temp_v);
 
                     v_len += 1;
                 }
             }
+
+            // Ajust Voxels
 
             if x_adj == tvp[0] && z_adj == tvp[1] {
                 for k in 0..v_len {
@@ -451,9 +449,8 @@ pub fn generate_res_1(world: &mut ShaderGrid, x_pos: u32, z_pos: u32) {
             }
 
             for k in 0..v_len {
-                //println!("{:?}", voxels[k].1.get_voxel());
 
-                voxels[k].1.update_voxel();
+                voxels[k].1.update_4_part_voxel();
 
                 world.insert_voxel([
                         x_adj as i32,
@@ -464,7 +461,6 @@ pub fn generate_res_1(world: &mut ShaderGrid, x_pos: u32, z_pos: u32) {
                     true
                 );
             }
-
 
             if y < 15.7 + world.generator.sea_level {
                 world.insert_voxel([
@@ -487,17 +483,11 @@ use rand::{Rng, SeedableRng};
 
 // if y > 16.5 + world.sea_level as f64 && tree > 120.0 {
 //     insert_tree(world, x_adj, y as u32, z_adj);
-// }
+// }\
 
-fn get_sub_height_from_t(y: f64) -> u8 {
+fn get_quad_height(y: f64) -> u8 {
     let y = y.fract();
-    let height = ((y * 30.0).floor() as u8 + 1);
-
-    if height > 15 {
-        height - 15
-    } else {
-        height
-    }
+    (y * 254.0).floor() as u8 + 1
 }
 
 fn insert_tree(world: &mut ShaderGrid, x: u32, y: u32, z: u32) {

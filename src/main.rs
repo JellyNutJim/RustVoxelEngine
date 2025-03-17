@@ -75,6 +75,18 @@ fn main() -> Result<(), impl Error> {
     // c.insert_voxel([2, 0, 0], v, false);
     // c.set_generation_level(5);
 
+    // let mut v = Voxel::new();
+
+    // v.set_octant(0, 1);
+    // v.set_octant(1, 3);
+    // v.set_octant(2, 5);
+    // v.set_octant(3, 7);
+
+    // v.update_4_part_voxel();
+
+    // println!("{:b}", v.get_voxel());
+    
+
 
 
     // println!("{:?}", c.flatten());
@@ -405,17 +417,13 @@ impl App {
         // );
 
         
-        let v32 = Voxel::from_octants(
+        let v32 = Voxel::from_quadrants(
             [
-                0b_0000,
-                0b_0001,
-                0b_0001,
-                0b_0001,
+                0b_00000001,
+                0b_00000100,
+                0b_10001000,
+                0b_11111111,
 
-                0b_0000,
-                0b_0010,
-                0b_0111,
-                0b_1111,
             ]
         );
 
@@ -856,7 +864,7 @@ impl ApplicationHandler for App {
             WindowEvent::KeyboardInput { device_id, event, is_synthetic } => {
                 // Simple movement
 
-                let dis = Vec3::from(0.25, 0.25, 0.25) * 10.0;
+                let dis = Vec3::from(0.25, 0.25, 0.25) * 2.0;
                 let up = Vec3::from(0.0, 1.0, 0.0);
 
                 match event.physical_key {

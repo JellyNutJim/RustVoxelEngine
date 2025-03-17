@@ -243,6 +243,10 @@ vec3 grass2(vec3 hit_pos) {
         hit_colour *= 0.94;
     }
 
+    if (fract(hit_pos.y) < 0.5) {
+        hit_colour *= 0.98;
+    }
+
     if (fract(hit_pos.z) > 0.5) {
         hit_colour *= 0.94;
     }
@@ -338,7 +342,7 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
             break;
         }
 
-        // Smoothing test -> only drawing top surfaces
+        // For now, assume all voxels are surface voxels
         if ( multiplier == 1 && voxel_type != 3) { //world_pos == vec3(54732, 830, 10561) // multiplier == 1
             if (voxel_type == 0) {
                 steps += 1;
@@ -349,21 +353,10 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
 
             uint voxel = voxel_type;
 
-            uint n0 = voxel_type & 0xFu;                 // Bottom back left (origin)
-            uint n1 = (voxel_type & 0xF0u) >> 4u;        // Bottom front left
-            uint n2 = (voxel_type & 0xF00u) >> 8u;       // Bottom back right
-            uint n3 = (voxel_type & 0xF000u) >> 12u;     // Bottom front right
-
-            uint n4 = (voxel_type & 0xF0000u) >> 16u;    // Top back left
-            uint n5 = (voxel_type & 0xF00000u) >> 20u;   // Top front left
-            uint n6 = (voxel_type & 0xF000000u) >> 24u;  // Top back right
-            uint n7 = (voxel_type & 0xF0000000u) >> 28u; // Top front right
-            
-            // For 
-            uint height_0 = n4 != 0u ? n4 + 15 : n0;
-            uint height_1 = n5 != 0u ? n5 + 15 : n1;
-            uint height_2 = n6 != 0u ? n6 + 15 : n2;
-            uint height_3 = n7 != 0u ? n7 + 15 : n3;
+            uint height_0 = voxel_type & 0xFFu;                 // Bottom back left (origin)
+            uint height_1 = (voxel_type & 0xFF00u) >> 8u;       // Bottom front left
+            uint height_2 = (voxel_type & 0xFF0000u) >> 16u;    // Bottom back right
+            uint height_3 = (voxel_type & 0xFF000000u) >> 24u;  // Bottom front right
 
 
             // Temp fix to deal with missing voxels
@@ -383,21 +376,17 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
                 height_3 = 1;
             }
 
-            vec3 v0 = world_pos + vec3(0, (float(height_0 - 1) / 29), 0);
-            vec3 v1 = world_pos + vec3(1, (float(height_1 - 1) / 29), 0);
-            vec3 v2 = world_pos + vec3(0, (float(height_2 - 1) / 29), 1);
-            vec3 v3 = world_pos + vec3(1, (float(height_3 - 1) / 29), 1);
+            vec3 v0 = world_pos + vec3(0, (float(height_0 - 1) / 253), 0);
+            vec3 v1 = world_pos + vec3(1, (float(height_1 - 1) / 253), 0);
+            vec3 v2 = world_pos + vec3(0, (float(height_2 - 1) / 253), 1);
+            vec3 v3 = world_pos + vec3(1, (float(height_3 - 1) / 253), 1);
 
-
-
-            // vec3 v0 = world_pos + vec3(0, 0.7, 0);
-            // vec3 v1 = world_pos + vec3(1, 0.8, 0);
-            // vec3 v2 = world_pos + vec3(0, 0.9, 1);
-            // vec3 v3 = world_pos + vec3(1, 1.0, 1);
             float t = 0.0;
 
             if (intersection_test(c.origin, dir, v0, v1, v2, t) == true) {
                 vec3 hit_pos = c.origin + dir * t;
+
+                curr_distance = t;
 
                 if (hit_pos.y > 788) {
                     hit_colour = grass2(hit_pos) * pow((hit_pos.y / 840), 3);
@@ -408,9 +397,7 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
                 else {
                     float ratio = (hit_pos.y - 784) / 4;
 
-                    hit_colour = sand(hit_pos) * (1 - ratio) + grass2(hit_pos) * ratio;  //((sand(hit_pos) * (1 - ratio)) + (grass2(hit_pos) * ratio)) / 2;
-
-
+                    hit_colour = sand(hit_pos) * (1 - ratio) + (grass2(hit_pos) * pow((hit_pos.y / 840), 3)) * ratio;  //((sand(hit_pos) * (1 - ratio)) + (grass2(hit_pos) * ratio)) / 2;
                 }
 
 
@@ -426,6 +413,8 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
             if (intersection_test(c.origin, dir, v1, v2, v3, t) == true) {
                 vec3 hit_pos = c.origin + dir * t;
 
+                curr_distance = t;
+
                 if (hit_pos.y > 788) {
                     hit_colour = grass2(hit_pos) * pow((hit_pos.y / 840), 3);
                 }
@@ -435,9 +424,7 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
                 else {
                     float ratio = (hit_pos.y - 784) / 4;
 
-                    hit_colour = sand(hit_pos) * (1 - ratio) + grass2(hit_pos) * ratio;  //((sand(hit_pos) * (1 - ratio)) + (grass2(hit_pos) * ratio)) / 2;
-
-
+                    hit_colour = sand(hit_pos) * (1 - ratio) + (grass2(hit_pos) * pow((hit_pos.y / 840), 3)) * ratio;  //((sand(hit_pos) * (1 - ratio)) + (grass2(hit_pos) * ratio)) / 2;
                 }
 
                 if (transparent_hits > 0) {
@@ -543,13 +530,12 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
     return false;
 }
 
-void apply_shadow(vec3 world_pos, vec3 t_max, vec3 t_delta, ivec3 step, vec3 dir, inout vec3 hit_colour, inout float curr_distance) {
+void apply_shadow(vec3 world_pos, vec3 ray_origin, vec3 t_max, vec3 t_delta, ivec3 step, vec3 dir, inout vec3 hit_colour, inout float curr_distance) {
 
     uint steps = 0;
     uint hit_axis = 0;
     int multiplier;
 
-    take_step(step, t_delta, t_max, hit_axis, world_pos, 1, dir, curr_distance);
     //world_pos += step;
 
     while(steps < 30) {
@@ -557,13 +543,78 @@ void apply_shadow(vec3 world_pos, vec3 t_max, vec3 t_delta, ivec3 step, vec3 dir
 
         uint voxel_type = get_depth(world_pos, multiplier);
 
-        if (voxel_type != 0 && voxel_type != 3) {
-            hit_colour *= 0.5;
-            return;
+        if ( multiplier == 1 ) { //world_pos == vec3(54732, 830, 10561) // multiplier == 1
+
+            if (voxel_type == 0) {
+                steps += 1;
+                take_step(step, t_delta, t_max, hit_axis, world_pos, multiplier, dir, curr_distance);
+                continue;
+            }
+
+            uint voxel = voxel_type;
+
+            uint n0 = voxel_type & 0xFu;                 // Bottom back left (origin)
+            uint n1 = (voxel_type & 0xF0u) >> 4u;        // Bottom front left
+            uint n2 = (voxel_type & 0xF00u) >> 8u;       // Bottom back right
+            uint n3 = (voxel_type & 0xF000u) >> 12u;     // Bottom front right
+
+            uint n4 = (voxel_type & 0xF0000u) >> 16u;    // Top back left
+            uint n5 = (voxel_type & 0xF00000u) >> 20u;   // Top front left
+            uint n6 = (voxel_type & 0xF000000u) >> 24u;  // Top back right
+            uint n7 = (voxel_type & 0xF0000000u) >> 28u; // Top front right
+            
+            // For 
+            uint height_0 = n4 != 0u ? n4 + 15 : n0;
+            uint height_1 = n5 != 0u ? n5 + 15 : n1;
+            uint height_2 = n6 != 0u ? n6 + 15 : n2;
+            uint height_3 = n7 != 0u ? n7 + 15 : n3;
+
+            // Temp fix to deal with missing voxels
+            if (height_0 == 0) { 
+                height_0 = 1;
+            }
+
+            if (height_1 == 0) { 
+                height_1 = 1;
+            }
+
+            if (height_2 == 0) { 
+                height_2 = 1;
+            }
+
+            if (height_3 == 0) { 
+                height_3 = 1;
+            }
+
+            vec3 v0 = world_pos + vec3(0, (float(height_0 - 1) / 29), 0);
+            vec3 v1 = world_pos + vec3(1, (float(height_1 - 1) / 29), 0);
+            vec3 v2 = world_pos + vec3(0, (float(height_2 - 1) / 29), 1);
+            vec3 v3 = world_pos + vec3(1, (float(height_3 - 1) / 29), 1);
+
+            float t = 0.0;
+
+            if (intersection_test(ray_origin, dir, v0, v1, v2, t) == true) {
+                hit_colour *= 0.9;
+                return;
+            }
+            
+            if (intersection_test(ray_origin, dir, v1, v2, v3, t) == true) {
+                hit_colour *= 0.9;
+                return;
+            }
+
+            steps += 1;
+            take_step(step, t_delta, t_max, hit_axis, world_pos, 1, dir, curr_distance);
+            continue;
         }
 
         steps += 1;
-        take_step(step, t_delta, t_max, hit_axis, world_pos, 1, dir, curr_distance);
+        take_step(step, t_delta, t_max, hit_axis, world_pos, multiplier, dir, curr_distance);
+
+        // if (voxel_type != 0 && voxel_type != 3) {
+        //     hit_colour *= 0.5;
+        //     return;
+        // }
     }
 
     return;
@@ -683,7 +734,7 @@ void main() {
 
     if (hit == true) {
         // Get lighting
-        vec3 hit_pos = c.origin + dir * curr_distance;
+        vec3 hit_pos = c.origin + dir * (curr_distance - 0.001);
         world_pos = floor(hit_pos);
         dir = normalize((c.sun_loc - hit_pos));
 
@@ -718,7 +769,7 @@ void main() {
 
         t_max /= dir;
 
-        //apply_shadow(world_pos, t_max, t_delta, step, dir, hit_colour, curr_distance);
+        //apply_shadow(world_pos, hit_pos, t_max, t_delta, step, dir, hit_colour, curr_distance);
 
         imageStore(storageImage, pixel_coords, vec4(hit_colour, 1.0));
 
