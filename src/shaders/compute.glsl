@@ -243,13 +243,14 @@ vec3 grass2(vec3 hit_pos) {
         hit_colour *= 0.94;
     }
 
+    if (fract(hit_pos.z) > 0.5) {
+        hit_colour *= 0.94;
+    }
+
     if (fract(hit_pos.y) < 0.5) {
         hit_colour *= 0.98;
     }
 
-    if (fract(hit_pos.z) > 0.5) {
-        hit_colour *= 0.94;
-    }
 
     return hit_colour;
 }
@@ -343,7 +344,7 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
         }
 
         // For now, assume all voxels are surface voxels
-        if ( multiplier == 1 && voxel_type != 3) { //world_pos == vec3(54732, 830, 10561) // multiplier == 1
+        if ( multiplier == 1 && voxel_type != 858993459) { //world_pos == vec3(54732, 830, 10561) // multiplier == 1
             if (voxel_type == 0) {
                 steps += 1;
                 take_step(step, t_delta, t_max, hit_axis, world_pos, multiplier, dir, curr_distance);
@@ -444,7 +445,7 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
 
 
         // if detail == false
-        voxel_type = voxel_type & 0xFu;
+        //voxel_type = voxel_type & 0xFu;
 
         // Air
         if (voxel_type == 0) {  
@@ -497,7 +498,7 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
                 return true;
             }
 
-            if (voxel_type == 3) {
+            if (voxel_type == 858993459) {
                 transparent_hits = 1;
                 tansparent_mask = vec3(0.2, 0.5, 0.91);
                 steps += 1;
