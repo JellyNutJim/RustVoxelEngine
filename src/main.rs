@@ -63,6 +63,7 @@ use vulkano::command_buffer::CopyBufferInfo;
 use noise_gen::{PerlinNoise, ScalablePerlin};
 
 fn main() -> Result<(), impl Error> {
+    env::set_var("RUST_BACKTRACE", "1");
 
     // Testing
     // let mut c = ShaderChunk::new([0, 0, 0]);
@@ -129,6 +130,8 @@ impl FrameTimer {
         false
     }
 }
+
+use std::env;
 
 struct App {
     instance: Arc<Instance>,

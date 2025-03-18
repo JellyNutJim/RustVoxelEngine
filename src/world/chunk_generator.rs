@@ -185,31 +185,100 @@ impl GenPipeLine {
 // Height map application functions, combines different height levels to produce more varies terrain
 impl GenPipeLine {
 
-    // Generates Intial heightmap based on landmass height, and calculates biome positions
+    // Populates the biome map, and the heightmap for sized 8 voxels (1/4 of the total biome and height data)
+    fn res_8_map_gen(&mut self, x_pos: u32, z_pos: u32, map_coords: (usize, usize)) {
+        let map_coords_2 = (map_coords.0 * 2, map_coords.1 * 2);
+
+        for x in 0..16 {
+            for z in 0..16 {
+
+                // World position
+                let x_adj = (x_pos + x * 4) as f64;
+                let z_adj = (z_pos + z * 4) as f64;
+
+                let x_usize = x as usize;
+                let z_usize = z as usize;
+
+                // Biome mapping
+                let map_x = map_coords.0 + x_usize * 4;
+                let map_z = map_coords.1 + z_usize * 4;
+
+                // Heightmap mapping
+                let height_map_x = map_coords_2.0 + x_usize * 8;
+                let height_map_z = map_coords_2.1 + z_usize * 8;
+
+                self.height_map.set(
+                    height_map_x,
+                    height_map_z,
+                    self.get_landmass_noise(x_adj, z_adj),
+                );
+
+
+                // Insert new biome data -> determined after base heightmap gen so it can be used for biome processing
+                self.biome_map.set(map_x, map_z, self.get_biome_at(x_adj, z_adj));
+
+                // Update height to represent biome type
+                self.apply_full_biome_height(x_adj, z_adj, (height_map_x, height_map_z), true);
+            }
+        }
+    }
+
+    // Assumes 1/4th has already been populated by res_8_map_gen, populates the other 3/4 of data
+    fn res_4_map_gen(&mut self, x_pos: u32, z_pos: u32, map_coords: (usize, usize)) {
+        let map_coords_2 = (map_coords.0 * 2, map_coords.1 * 2);
+
+        for x in 0..64 {
+            for z in 0..64 {
+
+                // Skip already processed world positions
+                if x % 4 == 0 && z % 4 == 0 {
+                    continue;
+                }
+
+                let x_adj = (x_pos + x) as f64;
+                let z_adj = (z_pos + z) as f64;
+
+                let x_usize = x as usize;
+                let z_usize = z as usize;
+
+                // Biome mapping
+                let map_x = map_coords.0 + x_usize;
+                let map_z = map_coords.1 + z_usize;
+
+                // Heightmap mapping
+                let height_map_x = map_coords_2.0 + x_usize * 2;
+                let height_map_z = map_coords_2.1 + z_usize * 2;
+    
+                // set base heightmap values, x/y * 2 as heightmap stores 4x the data it needs to at this level
+                self.height_map.set(
+                    height_map_x,
+                    height_map_z,
+                    self.get_landmass_noise(x_adj, z_adj),
+                );
+
+                self.biome_map.set(map_x, map_z, self.get_biome_at(x_adj, z_adj));
+                self.apply_full_biome_height(x_adj, z_adj, (height_map_x, height_map_z), true);
+            }
+        }
+    }
+
+    // Populates 100% of the biome and heightmap data, currently unused. Maybe useful for smaller render distances where memory must be conserved.
     fn new_chunk_map_gen(&mut self, x_pos: u32, z_pos: u32, map_coords: (usize, usize)) {
         // Update Heightmap
         for x in 0..64 {
             for z in 0..64 {
-                let mut x_adj = (x_pos + x) as f64;
-                let mut z_adj = (z_pos + z) as f64;
+                let x_adj = (x_pos + x) as f64;
+                let z_adj = (z_pos + z) as f64;
     
                 // Insert new biome data
                 self.biome_map.set(map_coords.0 + x as usize, map_coords.1 + z as usize, self.get_biome_at(x_adj, z_adj));
     
                 // set base heightmap values
-                for i in 0..2 {
-                    for j in 0..2 {
-                        x_adj += 0.5 * i as f64;
-                        z_adj += 0.5 * j as f64;
-    
-                        // temp to visualise difference
-                        self.height_map.set(
-                            map_coords.0 * 2 + ((x * 2) as f64 + 1.0 * i as f64) as usize,
-                            map_coords.1 * 2 + ((z * 2) as f64 + 1.0 * j as f64) as usize,
-                            self.get_landmass_noise(x_adj, z_adj),
-                        );
-                    }   
-                }
+                self.height_map.set(
+                    map_coords.0 * 2 + ((x * 2) as f64 ) as usize,
+                    map_coords.1 * 2 + ((z * 2) as f64 ) as usize,
+                    self.get_landmass_noise(x_adj, z_adj),
+                );
             }
         }
     }
@@ -227,11 +296,19 @@ impl GenPipeLine {
         res
     }   
 
+    fn get_full_biome_height(&self, map_x: usize, map_z: usize) -> f64 {
+        self.height_map.get(map_x, map_z)
+    }
+
     fn apply_biome_merging() {
 
     }
 
 }
+
+
+static POSITIONS: [(usize, usize); 4] = [(0, 0), (0, 1), (1, 0), (1, 1)];
+static POSITIONS_EXLCUDING: [(usize, usize); 3] = [(0, 1), (1, 0), (1, 1)];
 
 // Visible API, 
 
@@ -240,7 +317,7 @@ pub fn generate_res_8(world: &mut ShaderGrid, x_pos: u32, z_pos: u32, insert: bo
     let mut map_c = world.generator.get_map_coords(x_pos, z_pos, world.origin);
 
     // Update intial biome and heightmap
-    world.generator.new_chunk_map_gen(x_pos, z_pos, map_c);
+    world.generator.res_8_map_gen(x_pos, z_pos, map_c);
 
     if insert == false {
         return;
@@ -257,16 +334,26 @@ pub fn generate_res_8(world: &mut ShaderGrid, x_pos: u32, z_pos: u32, insert: bo
             let map_x = map_c.0 + (x_adj * 2);
             let map_z = map_c.1 + (z_adj * 2);
 
-            let (mut voxel_type, mut y) = world.generator.apply_full_biome_height((x_pos + x_adj as u32) as f64, (z_pos + z_adj as u32) as f64, (map_x, map_z), false);
+            let y = world.generator.get_full_biome_height(map_x, map_z);
+
+            let mut voxel_type = 1;
 
             if y < 15.7 + world.generator.sea_level {
-                voxel_type = 3;
-                y = world.generator.sea_level;
+                let v2 = Voxel::from_octants([3, 3, 3, 3, 3, 3, 3, 3]);
+                voxel_type = 4;
+
+                world.insert_subchunk([
+                    (x_pos + x_adj as u32) as i32,
+                    world.generator.sea_level as i32,
+                    (z_pos + z_adj as u32) as i32,
+                ], 
+                v2, 2, true
+                );
             }
 
+            // Round y to nearest eigth
             let y = ((y as i32 - 3) / 8) * 8;
-
-            let v = Voxel::from_type(voxel_type as u8);
+            let v = Voxel::from_type(voxel_type);
 
             world.insert_subchunk([
                     (x_pos + x_adj as u32) as i32,
@@ -276,26 +363,30 @@ pub fn generate_res_8(world: &mut ShaderGrid, x_pos: u32, z_pos: u32, insert: bo
                 v, 2, true
             );
 
-            
         }
     }
 }
 
-// pub fn generate_res_8(&mut self) {
 
-// }
-
-// pub fn generate_res_4(&mut self) {
-
-// }
-static POSITIONS: [(usize, usize); 4] = [(0, 0), (0, 1), (1, 0), (1, 1)];
-static POSITIONS_EXLCUDING: [(usize, usize); 3] = [(0, 1), (1, 0), (1, 1)];
-
-pub fn generate_res_2(world: &mut ShaderGrid, x_pos: u32, z_pos: u32) {
+// Essentially a higher resolution of gen 8, accept it generates all required base biome and heightmap data, not 1/8th or 1/4th
+pub fn generate_res_4(world: &mut ShaderGrid, x_pos: u32, z_pos: u32) {
     let mut map_c = world.generator.get_map_coords(x_pos, z_pos, world.origin);
+    world.generator.res_4_map_gen(x_pos, z_pos, map_c);
     map_c.0 *= 2;
     map_c.1 *= 2;
-    // Apply biomes
+
+
+}
+
+// Shows a higher resolution, and applys biome merging
+pub fn generate_res_2(world: &mut ShaderGrid, x_pos: u32, z_pos: u32) {
+    let mut map_c = world.generator.get_map_coords(x_pos, z_pos, world.origin);
+
+    // populate remaining biome and intial heightmap values
+    world.generator.res_4_map_gen(x_pos, z_pos, map_c);
+
+    map_c.0 *= 2;
+    map_c.1 *= 2;
 
     for x in 0..64 {
         for z in 0..64 {
@@ -306,28 +397,8 @@ pub fn generate_res_2(world: &mut ShaderGrid, x_pos: u32, z_pos: u32) {
             let x_adj = x_pos + x;
             let z_adj = z_pos + z;
 
-            for &(i, j) in &POSITIONS_EXLCUDING {
-                world.generator.apply_full_biome_height(
-                    x_adj as f64 + 0.5 * i as f64, 
-                    z_adj as f64 + 0.5 * j as f64,
-                    ( 
-                        c0 + i,
-                        c1 + j,
-                    ),
-                    true
-                );
-            }
-    
-
-            let (voxel_type, y) = world.generator.apply_full_biome_height(
-                x_adj as f64, 
-                z_adj as f64,
-                (
-                    c0,
-                    c1,
-                ),
-                true
-            );
+            let y = world.generator.get_full_biome_height(c0, c1);
+            let voxel_type = 1;
                 
             if x % 2 != 0 {
                 continue;
@@ -350,8 +421,6 @@ pub fn generate_res_2(world: &mut ShaderGrid, x_pos: u32, z_pos: u32) {
                 true
             );
 
-            // let t = Voxel::from_octants([3, 3, 3, 3, 3, 3, 3, 3]);
-            // println!("{}", t.get_voxel());
 
             if y < 15.7 + world.generator.sea_level {
                 world.insert_subchunk([

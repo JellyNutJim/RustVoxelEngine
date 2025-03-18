@@ -380,9 +380,10 @@ impl ShaderGrid {
 
         // Now the world has been shifted, multiresolution work can take place
 
+        //self.complete_biome_heightmap_gen(dir, axis, alt_axis);
 
         // Calculates the final per subvoxel heightmap data, inserts features
-        self.final_heightmap_adjust(dir, axis, alt_axis);
+        self.merge_biome(dir, axis, alt_axis);
 
         // Close Zone
         // Simply inserts the detail generated at final adjust at a higher resolution
@@ -391,9 +392,13 @@ impl ShaderGrid {
 
     }
 
+    fn complete_biome_heightmap_gen(&mut self, dir: i32, axis: usize, alt_axis: usize) {
+
+    }
+
     // Updates
     // L
-    fn final_heightmap_adjust(&mut self, dir: i32, axis: usize, alt_axis: usize) {
+    fn merge_biome(&mut self, dir: i32, axis: usize, alt_axis: usize) {
         let layer_width = 121;
         let layer_half_width = layer_width / 2;
 
