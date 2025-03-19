@@ -189,23 +189,23 @@ impl GenPipeLine {
     fn res_8_map_gen(&mut self, x_pos: u32, z_pos: u32, map_coords: (usize, usize)) {
         let map_coords_2 = (map_coords.0 * 2, map_coords.1 * 2);
 
-        for x in 0..16 {
-            for z in 0..16 {
+        for x in 0..8 {
+            for z in 0..8 {
 
                 // World position
-                let x_adj = (x_pos + x * 4) as f64;
-                let z_adj = (z_pos + z * 4) as f64;
+                let x_adj = (x_pos + x * 8) as f64;
+                let z_adj = (z_pos + z * 8) as f64;
 
                 let x_usize = x as usize;
                 let z_usize = z as usize;
 
                 // Biome mapping
-                let map_x = map_coords.0 + x_usize * 4;
-                let map_z = map_coords.1 + z_usize * 4;
+                let map_x = map_coords.0 + x_usize * 8;
+                let map_z = map_coords.1 + z_usize * 8;
 
                 // Heightmap mapping
-                let height_map_x = map_coords_2.0 + x_usize * 8;
-                let height_map_z = map_coords_2.1 + z_usize * 8;
+                let height_map_x = map_coords_2.0 + x_usize * 16;
+                let height_map_z = map_coords_2.1 + z_usize * 16;
 
                 self.height_map.set(
                     height_map_x,
@@ -231,7 +231,7 @@ impl GenPipeLine {
             for z in 0..64 {
 
                 // Skip already processed world positions
-                if x % 4 == 0 && z % 4 == 0 {
+                if x % 8 == 0 && z % 8 == 0 {
                     continue;
                 }
 
@@ -313,28 +313,27 @@ static POSITIONS_EXLCUDING: [(usize, usize); 3] = [(0, 1), (1, 0), (1, 1)];
 // Visible API, 
 
 // Intialises the base heightmap, intialises the base biome map, inserts 16x16 voxels
-pub fn generate_res_8(world: &mut ShaderGrid, x_pos: u32, z_pos: u32, insert: bool) {
+pub fn generate_res_8(world: &mut ShaderGrid, x_pos: u32, z_pos: u32) {
     let mut map_c = world.generator.get_map_coords(x_pos, z_pos, world.origin);
 
     // Update intial biome and heightmap
     world.generator.res_8_map_gen(x_pos, z_pos, map_c);
-
-    if insert == false {
-        return;
-    }
+    let mut voxels: [(f64, Voxel); 4] = Default::default();
 
     map_c.0 *= 2;
     map_c.1 *= 2;
 
     for x in 0..8 {
         for z in 0..8 {
-            let x_adj = x * 8;
-            let z_adj = z * 8;
+            let x_adj = x_pos + x * 8;
+            let z_adj = z_pos + z * 8;
 
-            let map_x = map_c.0 + (x_adj * 2);
-            let map_z = map_c.1 + (z_adj * 2);
+            let c0 = map_c.0 + (x * 16) as usize;
+            let c1 = map_c.1 + (z * 16) as usize;
 
-            let y = world.generator.get_full_biome_height(map_x, map_z);
+            let y = world.generator.get_full_biome_height(c0, c1);
+            let mut v_len = 0;
+            //generate_4_height_leveled_voxel(world, &mut v_len, &mut voxels, 8, (c0, c1));
 
             let mut voxel_type = 1;
 
@@ -343,22 +342,22 @@ pub fn generate_res_8(world: &mut ShaderGrid, x_pos: u32, z_pos: u32, insert: bo
                 voxel_type = 4;
 
                 world.insert_subchunk([
-                    (x_pos + x_adj as u32) as i32,
-                    world.generator.sea_level as i32,
-                    (z_pos + z_adj as u32) as i32,
+                    x_adj as i32,
+                    (world.generator.sea_level) as i32,
+                    z_adj as i32,
                 ], 
                 v2, 2, true
                 );
             }
 
             // Round y to nearest eigth
-            let y = ((y as i32 - 3) / 8) * 8;
+            let y_leveled = ((y as i32 - 8) / 8) * 8;
             let v = Voxel::from_type(voxel_type);
 
             world.insert_subchunk([
-                    (x_pos + x_adj as u32) as i32,
-                    y,
-                    (z_pos + z_adj as u32) as i32,
+                    x_adj as i32,
+                    y_leveled,
+                    z_adj as i32,
                 ], 
                 v, 2, true
             );
@@ -368,12 +367,56 @@ pub fn generate_res_8(world: &mut ShaderGrid, x_pos: u32, z_pos: u32, insert: bo
 }
 
 
-// Essentially a higher resolution of gen 8, accept it generates all required base biome and heightmap data, not 1/8th or 1/4th
+// Essentially a higher resolution of gen 8, accept it generates all required base biome and heightmap data, not 1/8th or 1/4th but only inserts size 4 voxels
 pub fn generate_res_4(world: &mut ShaderGrid, x_pos: u32, z_pos: u32) {
     let mut map_c = world.generator.get_map_coords(x_pos, z_pos, world.origin);
+
+    // Populate the remaining unfilled heightmap and biome map
     world.generator.res_4_map_gen(x_pos, z_pos, map_c);
+    
+    let mut voxels: [(f64, Voxel); 4] = Default::default();
     map_c.0 *= 2;
     map_c.1 *= 2;
+
+    for x in 0..16 {
+        for z in 0..16 {
+            let x_adj = x_pos + x * 4;
+            let z_adj = z_pos + z * 4;
+
+            let c0 =  map_c.0 + (x * 8) as usize;
+            let c1 =  map_c.1 + (z * 8) as usize;
+
+            let mut v_len = 0;
+            generate_4_height_leveled_voxel(world, &mut v_len, &mut voxels, 4, (c0, c1));
+
+            for k in 0..v_len {
+                voxels[k].1.update_4_part_voxel();
+
+                world.insert_subchunk([
+                        x_adj as i32,
+                        voxels[k].0 as i32 - 1,
+                        z_adj as i32,
+                    ], 
+                    voxels[k].1,  
+                    3,
+                    true
+                );
+            }
+
+            if voxels[0].0 < 15.7 + world.generator.sea_level {
+                world.insert_subchunk([
+                        x_adj as i32,
+                        (world.generator.sea_level + 15.0) as i32,
+                        z_adj  as i32,
+                    ], 
+                    Voxel::from_octants([3, 3, 3, 3, 3, 3, 3, 3]),  
+                    3,
+                    false
+                );
+            }
+
+        }
+    }
 
 
 }
@@ -382,58 +425,49 @@ pub fn generate_res_4(world: &mut ShaderGrid, x_pos: u32, z_pos: u32) {
 pub fn generate_res_2(world: &mut ShaderGrid, x_pos: u32, z_pos: u32) {
     let mut map_c = world.generator.get_map_coords(x_pos, z_pos, world.origin);
 
-    // populate remaining biome and intial heightmap values
-    world.generator.res_4_map_gen(x_pos, z_pos, map_c);
-
     map_c.0 *= 2;
     map_c.1 *= 2;
 
-    for x in 0..64 {
-        for z in 0..64 {
+    let mut voxels: [(f64, Voxel); 4] = Default::default();
 
-            let c0 =  map_c.0 + (x * 2) as usize;
-            let c1 =  map_c.1 + (z * 2) as usize;
+    for x in 0..32 {
+        for z in 0..32 {
 
-            let x_adj = x_pos + x;
-            let z_adj = z_pos + z;
+            let x_adj = x_pos + x * 2;
+            let z_adj = z_pos + z * 2;
 
-            let y = world.generator.get_full_biome_height(c0, c1);
-            let voxel_type = 1;
-                
-            if x % 2 != 0 {
-                continue;
+            let c0 =  map_c.0 + (x * 4) as usize;
+            let c1 =  map_c.1 + (z * 4) as usize;
+            
+            let mut v_len = 0;
+
+            generate_4_height_leveled_voxel(world, &mut v_len, &mut voxels, 2, (c0, c1));
+
+            for k in 0..v_len {
+                voxels[k].1.update_4_part_voxel();
+
+                world.insert_subchunk([
+                        x_adj as i32,
+                        voxels[k].0 as i32 - 1,
+                        z_adj as i32,
+                    ], 
+                    voxels[k].1,  
+                    4,
+                    true
+                );
             }
 
-            if z % 2 != 0 {
-                continue;
-            }
-
-            let y = ((y - 1.0) / 2.0) * 2.0;
-            let v = Voxel::from_type(voxel_type as u8);
-
-            world.insert_subchunk([
-                    x_adj as i32,
-                    y as i32,
-                    z_adj as i32,
-                ], 
-                v,  
-                4,
-                true
-            );
-
-
-            if y < 15.7 + world.generator.sea_level {
+            if voxels[0].0 < 15.7 + world.generator.sea_level {
                 world.insert_subchunk([
                         x_adj as i32,
                         (world.generator.sea_level + 15.0) as i32,
                         z_adj  as i32,
                     ], 
-                    Voxel::from_octants([3, 3, 3, 3, 3, 3, 3, 3]), 
-                    4, 
+                    Voxel::from_octants([3, 3, 3, 3, 3, 3, 3, 3]),  
+                    4,
                     false
                 );
             }
-
         }
     }
 }
@@ -446,9 +480,6 @@ pub fn generate_res_1(world: &mut ShaderGrid, x_pos: u32, z_pos: u32) {
 
     let mut voxels: [(f64, Voxel); 4] = Default::default();
 
-    //let tvp = [54731, 10175]; // 792 ish
-    let tvp = [54663 , 10197];
-
     for x in 0..64 {
         for z in 0..64 {
 
@@ -457,71 +488,11 @@ pub fn generate_res_1(world: &mut ShaderGrid, x_pos: u32, z_pos: u32) {
 
             let x_adj = x_pos + x;
             let z_adj = z_pos + z;
-
-            let mut voxel_type;
-
-            // Get height values and then sort them 
-            let mut positions = vec![(0, 0, world.generator.height_map.get(c0, c1))]; // x, z, height
-
-            for &(i, j) in &POSITIONS_EXLCUDING {
-                let height = world.generator.height_map.get(c0 + i * 2, c1 + j * 2);
-                positions.push((i, j, height));
-            }
-
-            // Highest first so that they can be looped over once
-            positions.sort_by(|a, b| b.2.partial_cmp(&a.2).unwrap_or(std::cmp::Ordering::Equal));
-
-            if x_adj == tvp[0] && z_adj == tvp[1] {
-                println!("p: {:?}", positions);  
-            }
-
-            let mut default: [u8; 4] = [0, 0, 0, 0];
-
             let mut v_len = 0;
 
-            // Loop over other 3 quadrants
-            for &(i, j, y) in &positions{ 
-                let octant = i + j * 2;
-                let y_level = y.trunc();
-
-                voxel_type = get_quad_height(y);
-
-                if x_adj == tvp[0] && z_adj == tvp[1] {
-                    println!("y: {} {} ({} {})", octant, y, i, j);  
-                }
-
-                let mut exists = false;
-                
-                // If new height lies within an existing voxel, insert, else set that voxels quadrant to 255 or 0 (full/empty)
-                 for k in 0..v_len {
-                    if y_level == voxels[k].0 {
-                        voxels[k].1.set_surface_octant(octant, voxel_type);
-                        exists = true;
-                        break;
-                    } 
-                }
-
-                if !exists {
-                    let mut temp_v = Voxel::from_quadrants(default);
-                    temp_v.set_surface_octant(octant, voxel_type);
-                    voxels[v_len] = (y_level, temp_v);
-                    v_len += 1;
-                }
-
-                // Update default, as we know any other voxels will be the same or lower
-                default[octant] = 255;
-            }
-
-            // Ajust Voxels
-
-            if x_adj == tvp[0] && z_adj == tvp[1] {
-                for k in 0..v_len {
-                    println!("{:?}", voxels[k]);  
-                }
-            }
+            generate_4_height_voxel(world, &mut v_len, &mut voxels, (c0, c1));
 
             for k in 0..v_len {
-
                 voxels[k].1.update_4_part_voxel();
 
                 world.insert_voxel([
@@ -533,9 +504,6 @@ pub fn generate_res_1(world: &mut ShaderGrid, x_pos: u32, z_pos: u32) {
                     true
                 );
             }
-
-            // let bruh = Voxel::from_octants([3, 3, 3, 3, 3, 3, 3, 3]);
-            // println!("{}", bruh.get_voxel());
 
             if voxels[0].0 < 15.7 + world.generator.sea_level {
                 world.insert_voxel([
@@ -563,6 +531,119 @@ use rand::{Rng, SeedableRng};
 fn get_quad_height(y: f64) -> u8 {
     let y = y.fract();
     (y * 254.0).floor() as u8 + 1
+}
+
+fn get_leveled_quad_height(y: f64, level: f64, scale: f64) -> u8 {
+    let y = y - level;
+    ((y / scale) * 254.0).floor() as u8 + 1
+}
+
+fn generate_4_height_voxel(world: &ShaderGrid, v_len: &mut usize, voxels: &mut [(f64, Voxel); 4], map_pos: (usize, usize)) {
+    let mut octant_height;
+
+    // Get height values and then sort them 
+    let mut positions = vec![(0, 0, world.generator.height_map.get(map_pos.0, map_pos.1))]; // x, z, height
+
+    // Fill remaining posistion
+    for &(i, j) in &POSITIONS_EXLCUDING {
+        let height = world.generator.height_map.get(map_pos.0 + i * 2, map_pos.1 + j * 2);
+        positions.push((i, j, height));
+    }
+
+    // Highest first so that they can be looped over once
+    positions.sort_by(|a, b| b.2.partial_cmp(&a.2).unwrap_or(std::cmp::Ordering::Equal));
+
+    let mut default: [u8; 4] = [0, 0, 0, 0];
+
+    // Loop over other 3 quadrants
+    for &(i, j, y) in &positions{ 
+        let octant = i + j * 2;
+        let y_level = y.trunc();
+
+        octant_height = get_quad_height(y);
+        let mut exists = false;
+        
+        // If new height lies within an existing voxel, insert, else set that voxels quadrant to 255 or 0 (full/empty)
+        for k in 0..*v_len {
+            if y_level == voxels[k].0 {
+                voxels[k].1.set_surface_octant(octant, octant_height);
+                exists = true;
+                break;
+            } 
+        }
+
+        if !exists {
+            let mut temp_v = Voxel::from_quadrants(default);
+            temp_v.set_surface_octant(octant, octant_height);
+            voxels[*v_len] = (y_level, temp_v);
+            *v_len += 1;
+        }
+
+        // Update default, as we know any other voxels will be the same or lower
+        default[octant] = 255;
+    }
+}
+
+fn generate_4_height_leveled_voxel(world: &ShaderGrid, v_len: &mut usize, voxels: &mut [(f64, Voxel); 4], scale: usize, map_pos: (usize, usize)) {
+
+    // let t = (world.generator.height_map.get(map_pos.0, map_pos.1) / scale as f64).floor() * scale as f64;
+    // let v = Voxel::from_quadrants([10, 10, 230, 200]);
+
+    // *v_len = 1;
+
+    // voxels[0] = (t, v);
+    // return;
+
+
+    let mut octant_height;
+    let scale_f64 = scale as f64;
+
+    // Get height values and then sort them 
+    let mut positions = vec![(
+        0, 
+        0, 
+        world.generator.height_map.get(map_pos.0, map_pos.1),
+    )]; 
+
+    // Fill remaining posistion
+    for &(i, j) in &POSITIONS_EXLCUDING {
+        let height = world.generator.height_map.get(map_pos.0 + i * scale * 2, map_pos.1 + j * scale * 2);
+        positions.push((i, j, height));
+    }
+
+    // Highest first so that they can be looped over once
+    positions.sort_by(|a, b| b.2.partial_cmp(&a.2).unwrap_or(std::cmp::Ordering::Equal));
+
+    let mut default: [u8; 4] = [0, 0, 0, 0];
+
+    // Loop over other 3 quadrants
+    for &(i, j, y) in &positions{ 
+        let octant = i + j * 2;
+        let y_level = ((y) / scale_f64).floor() * scale_f64;
+
+        octant_height = get_leveled_quad_height(y, y_level, scale_f64);
+
+        let mut exists = false;
+        
+        // If new height lies within an existing voxel, insert, else set that voxels quadrant to 255 or 0 (full/empty)
+        for k in 0..*v_len {
+            if y_level == voxels[k].0 {
+                voxels[k].1.set_surface_octant(octant, octant_height);
+                exists = true;
+                break;
+            } 
+        }
+
+        if !exists {
+            let mut temp_v = Voxel::from_quadrants(default);
+            temp_v.set_surface_octant(octant, octant_height);
+            voxels[*v_len] = (y_level, temp_v);
+            *v_len += 1;
+        }
+
+        // Update default, as we know any other voxels will be the same or lower
+        default[octant] = 255;
+    }
 }
 
 fn insert_tree(world: &mut ShaderGrid, x: u32, y: u32, z: u32) {

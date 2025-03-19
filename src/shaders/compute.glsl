@@ -344,7 +344,7 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
         }
 
         // For now, assume all voxels are surface voxels
-        if ( multiplier == 1 && voxel_type != 858993459) { //world_pos == vec3(54732, 830, 10561) // multiplier == 1
+        if ( (multiplier == 1 || multiplier == 2 || multiplier == 4) && voxel_type != 858993459) { //world_pos == vec3(54732, 830, 10561) // multiplier == 1
             if (voxel_type == 0) {
                 steps += 1;
                 take_step(step, t_delta, t_max, hit_axis, world_pos, multiplier, dir, curr_distance);
@@ -377,10 +377,15 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
                 height_3 = 1;
             }
 
-            vec3 v0 = world_pos + vec3(0, (float(height_0 - 1) / 253), 0);
-            vec3 v1 = world_pos + vec3(1, (float(height_1 - 1) / 253), 0);
-            vec3 v2 = world_pos + vec3(0, (float(height_2 - 1) / 253), 1);
-            vec3 v3 = world_pos + vec3(1, (float(height_3 - 1) / 253), 1);
+            float scale = float(multiplier);
+
+            // Dodgey temp fix until stepping is sorted out to what it should be
+            vec3 scaleed_pos = floor(world_pos / scale) * scale;
+
+            vec3 v0 = scaleed_pos + vec3(0,     (float(height_0 - 1) / 253) * scale, 0);
+            vec3 v1 = scaleed_pos + vec3(scale, (float(height_1 - 1) / 253) * scale, 0);
+            vec3 v2 = scaleed_pos + vec3(0,     (float(height_2 - 1) / 253) * scale, scale);
+            vec3 v3 = scaleed_pos + vec3(scale, (float(height_3 - 1) / 253) * scale, scale);
 
             float t = 0.0;
 
@@ -401,10 +406,8 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
                     hit_colour = sand(hit_pos) * (1 - ratio) + (grass2(hit_pos) * pow((hit_pos.y / 840), 3)) * ratio;  //((sand(hit_pos) * (1 - ratio)) + (grass2(hit_pos) * ratio)) / 2;
                 }
 
-
-
                 if (transparent_hits > 0) {
-                    hit_colour = (hit_colour + tansparent_mask) / 2;
+                    hit_colour = (hit_colour * 0.3 + tansparent_mask * 0.7);
                 }
 
                 return true;
@@ -429,7 +432,7 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
                 }
 
                 if (transparent_hits > 0) {
-                    hit_colour = (hit_colour + tansparent_mask) / 2;
+                    hit_colour = (hit_colour * 0.3 + tansparent_mask * 0.7);
                 }
 
                 return true;
@@ -500,20 +503,16 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
 
             if (voxel_type == 858993459) {
                 transparent_hits = 1;
-                tansparent_mask = vec3(0.2, 0.5, 0.91);
+                tansparent_mask = vec3(0.2, 0.5, 1.0);
                 steps += 1;
 
                 vec3 hit_pos = c.origin + dir * curr_distance;
-                if (fract(hit_pos.x) > 0.5) {
-                    tansparent_mask *= 0.96;
-                }
-
-                if (fract(hit_pos.y) < 0.5) {
-                    tansparent_mask *= 0.96;
+                if (fract(hit_pos.x) < 0.5) {
+                    tansparent_mask *= 0.98;
                 }
 
                 if (fract(hit_pos.z) < 0.5) {
-                    tansparent_mask *= 0.96;
+                    tansparent_mask *= 0.98;
                 }
 
 

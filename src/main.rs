@@ -63,7 +63,7 @@ use vulkano::command_buffer::CopyBufferInfo;
 use noise_gen::{PerlinNoise, ScalablePerlin};
 
 fn main() -> Result<(), impl Error> {
-    env::set_var("RUST_BACKTRACE", "1");
+    //env::set_var("RUST_BACKTRACE", "1");
 
     // Testing
     // let mut c = ShaderChunk::new([0, 0, 0]);
@@ -101,36 +101,6 @@ fn main() -> Result<(), impl Error> {
     event_loop.run_app(&mut app)
 }
 
-struct FrameTimer {
-    last_frame: Instant,
-    frame_duration: Duration,
-    accumulated_time: Duration,
-}
-
-impl FrameTimer {
-    fn new(fps: u32) -> Self {
-        FrameTimer {
-            last_frame: Instant::now(),
-            frame_duration: Duration::from_secs_f64(1.0 / fps as f64),
-            accumulated_time: Duration::ZERO,
-        }
-    }
-
-    fn update(&mut self) -> bool {
-        let now = Instant::now();
-        let delta = now - self.last_frame;
-        self.last_frame = now;
-        
-        self.accumulated_time += delta;
-        
-        if self.accumulated_time >= self.frame_duration {
-            self.accumulated_time -= self.frame_duration;
-            return true;
-        }
-        false
-    }
-}
-
 use std::env;
 
 struct App {
@@ -154,7 +124,6 @@ struct App {
     world_updater: WorldUpdater,
 
     last_n_press: bool,
-    frame_timer: FrameTimer,
 }
 
 struct RenderContext {
@@ -430,9 +399,11 @@ impl App {
             ]
         );
 
+        intial_world.insert_subchunk([middle.x as i32, middle.y as i32, (middle.z + 1.0) as i32], v32, 4, false);
 
-        intial_world.insert_voxel([middle.x as i32, middle.y as i32, (middle.z + 1.0) as i32], v32, false);
-        intial_world.insert_voxel([middle.x as i32, middle.y as i32, (middle.z + 2.0) as i32], Voxel::from_type(1), false);
+
+        //intial_world.insert_voxel([middle.x as i32, middle.y as i32, (middle.z + 1.0) as i32], v32, false);
+        //intial_world.insert_voxel([middle.x as i32, middle.y as i32, (middle.z + 2.0) as i32], Voxel::from_type(1), false);
 
         println!("{:?}", middle);
 
@@ -649,8 +620,6 @@ impl App {
         println!("{:?}", a);
 
         let last_n_press = false;
-        let frame_timer = FrameTimer::new(60); 
-
 
         App {
             instance,
@@ -668,7 +637,6 @@ impl App {
             world_updater,
             update_receiver,
             last_n_press,
-            frame_timer,
         }
     }
 }
@@ -915,7 +883,7 @@ impl ApplicationHandler for App {
                 match button {
                     MouseButton::Left => {
                         let voxel_loc = self.camera_location.location + self.camera_location.direction * 2.0;
-                        let u = Update::AddVoxel(voxel_loc.x as i32, voxel_loc.y as i32, voxel_loc.z as i32, 1);
+                        let u = Update::AddVoxel(voxel_loc.x as i32, voxel_loc.y as i32, voxel_loc.z as i32, 858993459);
 
                         let now = Instant::now();
                         if self.last_n_press == false {
@@ -987,9 +955,9 @@ impl ApplicationHandler for App {
                     return;
                 }
 
-                if !self.frame_timer.update() {
-                    return; // Skip rendering this frame but keep processing input
-                }
+                // if !self.frame_timer.update() {
+                //     return; // Skip rendering this frame but keep processing input
+                // }
 
                 // Free finished resources
                 rcx.previous_frame_end.as_mut().unwrap().cleanup_finished();
@@ -1000,7 +968,7 @@ impl ApplicationHandler for App {
                         .swapchain
                         .recreate(SwapchainCreateInfo {
                             image_extent: window_size.into(),
-                            image_format: rcx.swapchain.image_format(), // Maintain the same format
+                            image_format: rcx.swapchain.image_format(), 
                             ..rcx.swapchain.create_info()
                         })
                         .expect("failed to recreate swapchain");
@@ -1326,7 +1294,9 @@ impl WorldUpdater {
                         match update {
                             Update::AddVoxel(x, y, z , t) => {
                                 println!("Adding type: {} at: {} {} {}", t, x, y, z);
-                                world.insert_voxel([x,y,z], Voxel::from_type(t as u8), false); 
+
+                                world.insert_voxel([x,y,z], Voxel::from_u32(t), false); 
+
                                 world.update_flat_chunk_with_world_pos([x, y, z]);
                             }
                             Update::SwitchSeed(seed) => {

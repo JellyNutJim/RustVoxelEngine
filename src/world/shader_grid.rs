@@ -30,19 +30,20 @@ pub struct ShaderGrid {
 
     // Chunks as array of u32
     flat_chunks: Vec<Vec<u32>>,
+
+    // Layer Sizes
+    res_8_layer_width: u32,
+    res_4_layer_width: u32,
+    res_2_layer_width: u32,
+    res_1_layer_width: u32,
 }
 
 // Layer sizes -> Will be dynamically determined at some point
 
-static LAYER_ONE: u32 = 251;
-static LAYER_TWO: u32 = 201;
-static LAYER_THREE: u32 = 151;
-static INNER: u32 = 51;
-
 #[allow(unused)]
 impl ShaderGrid {
     // Create grid with given origin and size
-    pub fn new(width: u32, origin: [i32; 3], seed: u64, sea_level: u32) -> Self {
+    pub fn new(width: u32, origin: [i32; 3], seed: u64, sea_level: u32, res_8_layer_width: u32, res_4_layer_width: u32, res_2_layer_width: u32, res_1_layer_width: u32) -> Self {
         let mut s = Self {
             origin: origin,
             width: width,
@@ -52,6 +53,11 @@ impl ShaderGrid {
             chunks: Vec::new(),
             flat_chunks: Vec::new(),
             seed: seed,
+
+            res_8_layer_width,
+            res_4_layer_width,
+            res_2_layer_width,
+            res_1_layer_width,
         };
 
         let width = width as i32;
@@ -69,6 +75,22 @@ impl ShaderGrid {
 
         s.set_grid_from_chunks();
         s
+    }
+
+    pub fn get_res_8_width(&self) -> u32{
+        self.res_8_layer_width
+    }
+
+    pub fn get_res_4_width(&self) -> u32{
+        self.res_4_layer_width
+    }
+
+    pub fn get_res_2_width(&self) -> u32{
+        self.res_2_layer_width
+    }
+
+    pub fn get_res_1_width(&self) -> u32{
+        self.res_1_layer_width
     }
 
     // Finds the smallest chunk origin, sets that as the grid origin
@@ -363,7 +385,7 @@ impl ShaderGrid {
             // Update Biome MaP for this chunk
             //gen_biome(&mut self.biome_map, update_chunk[0] as u32,  update_chunk[2] as u32);
 
-            generate_res_8(self, update_chunk[0] as u32, update_chunk[2] as u32, true);
+            generate_res_8(self, update_chunk[0] as u32, update_chunk[2] as u32);
 
             let c_ind = self.get_chunk_pos(&update_chunk);
 
@@ -393,13 +415,7 @@ impl ShaderGrid {
     }
 
     fn complete_biome_heightmap_gen(&mut self, dir: i32, axis: usize, alt_axis: usize) {
-
-    }
-
-    // Updates
-    // L
-    fn merge_biome(&mut self, dir: i32, axis: usize, alt_axis: usize) {
-        let layer_width = 121;
+        let layer_width = self.get_res_4_width();
         let layer_half_width = layer_width / 2;
 
         let mid_xz = self.get_x_z_midpoint_in_space();
@@ -436,7 +452,7 @@ impl ShaderGrid {
                 let index = self.grid[grid_index as usize] as usize;
                 self.chunks[index] = ShaderChunk::new(self.chunks[index].get_origin());
 
-                self.chunks[index].set_generation_level(4);
+                self.chunks[index].set_generation_level(3);
 
                 let grid_index = delete_chunk_pos[0] as u32 + (delete_chunk_pos[1] as u32 + j)  * self.width + delete_chunk_pos[2] as u32 * self.width.pow(2);
                 let index = self.grid[grid_index as usize] as usize;
@@ -445,10 +461,10 @@ impl ShaderGrid {
                 self.chunks[index].set_generation_level(2);
             }
 
-            generate_res_2(self, update_chunk[0] as u32, update_chunk[2] as u32);
+            generate_res_4(self, update_chunk[0] as u32, update_chunk[2] as u32);
 
             // Chunks outside this border are reset
-            generate_res_8(self, delete_chunk[0] as u32, delete_chunk[2] as u32, true);
+            generate_res_8(self, delete_chunk[0] as u32, delete_chunk[2] as u32);
 
 
             // Update Flat Chunk Column
@@ -470,10 +486,85 @@ impl ShaderGrid {
 
     }
 
+    // Updates
+    // L
+    fn merge_biome(&mut self, dir: i32, axis: usize, alt_axis: usize) {
+        let layer_width = self.get_res_2_width();
+        let layer_half_width = layer_width / 2;
+
+        let mid_xz = self.get_x_z_midpoint_in_space();
+        let mid_chunk = [(mid_xz[0] / 64) * 64, (mid_xz[1] / 64) * 64];
+
+        let mut update_chunk = [
+            (mid_chunk[0] - layer_half_width * 64) as i32,
+            self.origin[1],
+            (mid_chunk[1] - layer_half_width * 64) as i32
+        ];
+
+        let mut delete_chunk = [
+            update_chunk[0],
+            update_chunk[1],
+            update_chunk[2]
+        ];
+
+        if dir == 1 {
+            update_chunk[axis] += ((layer_width - 1) * 64) as i32;
+            delete_chunk[axis] += (-1 * 64) as i32;
+        }
+        else {
+            delete_chunk[axis] += ((layer_width + 1) * 64) as i32;
+        }
+
+        for i in 0..layer_width as usize {
+
+            let update_chunk_pos   = self.get_chunk_pos(&update_chunk);
+            let delete_chunk_pos = self.get_chunk_pos(&delete_chunk);
+
+            let mut generate = false;
+
+            // Temp solution of just deleting chunks at layer boundaries
+            for j in 0..self.width {
+                let grid_index = update_chunk_pos[0] as u32 + (update_chunk_pos[1] as u32 + j)  * self.width + update_chunk_pos[2] as u32 * self.width.pow(2);
+                let index = self.grid[grid_index as usize] as usize;
+
+                let chunk = &mut self.chunks[index];
+                if chunk.get_max_generation_level() == 3 {
+                    generate = true;
+                    self.chunks[index].set_generation_level(4);
+                } 
+
+                let grid_index = delete_chunk_pos[0] as u32 + (delete_chunk_pos[1] as u32 + j)  * self.width + delete_chunk_pos[2] as u32 * self.width.pow(2);
+                let index = self.grid[grid_index as usize] as usize;
+                self.chunks[index] = ShaderChunk::new(self.chunks[index].get_origin());
+
+                self.chunks[index].set_generation_level(3);
+            }
+
+            if generate {
+                generate_res_2(self, update_chunk[0] as u32, update_chunk[2] as u32);
+            }
+
+            // Update Flat Chunk Column
+            for j in 0..self.width {
+                let grid_index = update_chunk_pos[0] as u32 + (update_chunk_pos[1] as u32 + j)  * self.width + update_chunk_pos[2] as u32 * self.width.pow(2);
+                let index = self.grid[grid_index as usize] as usize;
+                self.flat_chunks[index] = self.chunks[index].flatten().1;
+
+                let grid_index = delete_chunk_pos[0] as u32 + (delete_chunk_pos[1] as u32 + j)  * self.width + delete_chunk_pos[2] as u32 * self.width.pow(2);
+                let index = self.grid[grid_index as usize] as usize;
+                self.flat_chunks[index] = self.chunks[index].flatten().1;
+            }
+
+            // Move to next chunk along axis
+            update_chunk[alt_axis] += 64;
+            delete_chunk[alt_axis] += 64;
+        }
+    }
+
 
     // Close Detail
     fn insert_inner(&mut self, dir: i32, axis: usize, alt_axis: usize) {
-        let layer_width = 51;
+        let layer_width = self.get_res_1_width();
         let layer_half_width = layer_width / 2;
 
         let mid_xz = self.get_x_z_midpoint_in_space();

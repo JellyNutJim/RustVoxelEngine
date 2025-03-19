@@ -31,6 +31,13 @@ impl Voxel {
         }
     }
 
+    pub fn from_u32(t: u32) -> Self {
+        Self {
+            octants: [0; 8],
+            voxel: t, 
+        }
+    }
+
     pub fn from_octants(v: [u8; 8]) -> Self {
         Self {
             octants: v,
