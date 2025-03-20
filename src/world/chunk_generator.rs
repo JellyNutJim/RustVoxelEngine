@@ -31,8 +31,8 @@ impl GenPipeLine {
         Self {
             landmass: PerlinNoise::new(seed, 0.00003),
 
-            temperature: PerlinNoise::new(seed + 1, 0.003),
-            humidity: PerlinNoise::new(seed - 1, 0.003),
+            temperature: PerlinNoise::new(seed + 1, 0.0003),
+            humidity: PerlinNoise::new(seed - 1, 0.0003),
 
             height: ScalablePerlin::new(seed - 2),
 
@@ -68,9 +68,15 @@ impl GenPipeLine {
         }
     }
 
-    fn get_biome_at(&self, x: f64, z: f64) -> f64 {
-        // Biome Pipelin
-        if self.landmass.get_noise_at_point(x, z) > -16.0 {
+    fn get_biome_at(&self, x: f64, z: f64, y: f64) -> f64 {
+        let temp = self.temperature.get_noise_at_point(x, z).abs() * 256.0;
+        let humid = self.humidity.get_noise_at_point(x, z).abs() * 256.0;
+
+        //println!("{} {}", temp, y);
+
+        //return 1.0;
+
+        if temp > 60.0 && y > 700.0 {
             1.0
         } else {
             0.0
@@ -98,13 +104,8 @@ impl GenPipeLine {
     }
 
     fn get_interference(&self, x: f64, z: f64) -> f64 {
-        let i = self.interference.get_noise_at_point(x, z, 0.5) * 16.0 * 16.0;
+        self.interference.get_noise_at_point(x, z, 0.5) * 16.0 * 16.0
 
-        if i < 0.0 {
-            0.0
-        } else {
-            i
-        }
     }
 }
 
@@ -143,7 +144,7 @@ impl GenPipeLine {
         (1, updated_height)
     }
 
-    fn generate_fjords(&mut self, x: f64, z: f64, map_coords: (usize, usize), update: bool) -> (u32, f64) {
+    fn generate_hills(&mut self, x: f64, z: f64, map_coords: (usize, usize), update: bool) -> (u32, f64) {
 
         let change  = self.get_beach_with_bays_noise(x, z);
         let height = self.height_map.get_mut(map_coords.0, map_coords.1);
@@ -180,6 +181,37 @@ impl GenPipeLine {
 
         *height
     }
+
+    fn apply_full_biome_height(&mut self, x_pos: f64, z_pos: f64, height_map_coord: (usize, usize), biome_map_coord: (usize, usize)) -> (u32, f64) {
+
+        let b = self.biome_map.get(biome_map_coord.0, biome_map_coord.1);
+        let res: (u32, f64);
+
+        // return self.generate_hills(
+        //     x_pos, 
+        //     z_pos, 
+        //     height_map_coord,
+        //     true,
+        // );
+
+        if b == 1.0 {
+            res = self.generate_hills(
+                x_pos, 
+                z_pos, 
+                height_map_coord,
+                true,
+            );
+        } else {
+            res = self.generate_beach(
+                x_pos, 
+                z_pos, 
+                height_map_coord,
+                true,
+            );
+        }
+
+        res
+    }   
 }
 
 // Height map application functions, combines different height levels to produce more varies terrain
@@ -207,18 +239,19 @@ impl GenPipeLine {
                 let height_map_x = map_coords_2.0 + x_usize * 16;
                 let height_map_z = map_coords_2.1 + z_usize * 16;
 
+                let height = self.get_landmass_noise(x_adj, z_adj);
+
                 self.height_map.set(
                     height_map_x,
                     height_map_z,
-                    self.get_landmass_noise(x_adj, z_adj),
+                    height,
                 );
 
-
                 // Insert new biome data -> determined after base heightmap gen so it can be used for biome processing
-                self.biome_map.set(map_x, map_z, self.get_biome_at(x_adj, z_adj));
+                self.biome_map.set(map_x, map_z, self.get_biome_at(x_adj, z_adj, height));
 
                 // Update height to represent biome type
-                self.apply_full_biome_height(x_adj, z_adj, (height_map_x, height_map_z), true);
+                self.apply_full_biome_height(x_adj, z_adj, (height_map_x, height_map_z), (map_x, map_z));
             }
         }
     }
@@ -250,18 +283,20 @@ impl GenPipeLine {
                 let height_map_z = map_coords_2.1 + z_usize * 2;
     
                 // set base heightmap values, x/y * 2 as heightmap stores 4x the data it needs to at this level
+                let height = self.get_landmass_noise(x_adj, z_adj);
                 self.height_map.set(
                     height_map_x,
                     height_map_z,
-                    self.get_landmass_noise(x_adj, z_adj),
+                    height,
                 );
 
-                self.biome_map.set(map_x, map_z, self.get_biome_at(x_adj, z_adj));
-                self.apply_full_biome_height(x_adj, z_adj, (height_map_x, height_map_z), true);
+                self.biome_map.set(map_x, map_z, self.get_biome_at(x_adj, z_adj, height));
+                self.apply_full_biome_height(x_adj, z_adj, (height_map_x, height_map_z), (map_x, map_z));
             }
         }
     }
 
+    // No longer used
     // Populates 100% of the biome and heightmap data, currently unused. Maybe useful for smaller render distances where memory must be conserved.
     fn new_chunk_map_gen(&mut self, x_pos: u32, z_pos: u32, map_coords: (usize, usize)) {
         // Update Heightmap
@@ -269,32 +304,23 @@ impl GenPipeLine {
             for z in 0..64 {
                 let x_adj = (x_pos + x) as f64;
                 let z_adj = (z_pos + z) as f64;
-    
-                // Insert new biome data
-                self.biome_map.set(map_coords.0 + x as usize, map_coords.1 + z as usize, self.get_biome_at(x_adj, z_adj));
-    
+
+                let height = self.get_landmass_noise(x_adj, z_adj);
+
                 // set base heightmap values
                 self.height_map.set(
                     map_coords.0 * 2 + ((x * 2) as f64 ) as usize,
                     map_coords.1 * 2 + ((z * 2) as f64 ) as usize,
-                    self.get_landmass_noise(x_adj, z_adj),
+                    height,
                 );
+    
+                // Insert new biome data
+                self.biome_map.set(map_coords.0 + x as usize, map_coords.1 + z as usize, self.get_biome_at(x_adj, z_adj, height));
+    
+
             }
         }
     }
-
-    fn apply_full_biome_height(&mut self, x_pos: f64, z_pos: f64, map_coords: (usize, usize), update: bool) -> (u32, f64) {
-
-        // Select correct biomes (for now just beach)
-        let res = self.generate_fjords(
-            x_pos, 
-            z_pos, 
-            map_coords,
-            update,
-        );
-
-        res
-    }   
 
     fn get_full_biome_height(&self, map_x: usize, map_z: usize) -> f64 {
         self.height_map.get(map_x, map_z)

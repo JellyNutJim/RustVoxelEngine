@@ -362,7 +362,7 @@ impl App {
         
         // Ensures camera always starts on land
         while !found {
-            if temp.get_noise_at_point(x, z) > 0.11 {
+            if temp.get_noise_at_point(x, z) > 0.05 {
                 found = true;
             } else {
                 x += 1.0;
@@ -399,7 +399,7 @@ impl App {
             ]
         );
 
-        intial_world.insert_subchunk([middle.x as i32, middle.y as i32, (middle.z + 1.0) as i32], v32, 4, false);
+        //intial_world.insert_subchunk([middle.x as i32, middle.y as i32, (middle.z + 1.0) as i32], v32, 4, false);
 
 
         //intial_world.insert_voxel([middle.x as i32, middle.y as i32, (middle.z + 1.0) as i32], v32, false);

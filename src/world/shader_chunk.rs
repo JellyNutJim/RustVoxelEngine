@@ -210,6 +210,7 @@ impl ShaderChunk {
         (self.pos, octant_vec)
     }
 
+    // currently only works for voxels (four height data)
     fn get_flattened_octant(octants: &[ChunkContent; 8], mut curr_depth: u32, max_depth: u32) -> Vec<u32>{
         let mut octant_vec: Vec<Vec<u32>> = Vec::new(); 
         let mut result: Vec<u32> = Vec::new();
@@ -258,5 +259,9 @@ impl ShaderChunk {
 
             result
         }
+    }
+
+    fn get_geometry_data() {
+        
     }
 }

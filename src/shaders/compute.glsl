@@ -146,7 +146,6 @@ void take_step(ivec3 step, vec3 t_delta, inout vec3 t_max, inout uint hit_axis, 
         curr_distance += minT;
 
         if (dir.y <= 0.0) {
-            // Apply a tiny backstep only for non-upward rays or non-y-axis hits
             curr_distance -= 1e-4;
         }
         
@@ -354,7 +353,7 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
 
             uint voxel = voxel_type;
 
-            uint height_0 = voxel_type & 0xFFu;                 // Bottom back left (origin)
+            uint height_0 = voxel_type & 0xFFu;                 // Bottom back left
             uint height_1 = (voxel_type & 0xFF00u) >> 8u;       // Bottom front left
             uint height_2 = (voxel_type & 0xFF0000u) >> 16u;    // Bottom back right
             uint height_3 = (voxel_type & 0xFF000000u) >> 24u;  // Bottom front right
@@ -553,7 +552,7 @@ void apply_shadow(vec3 world_pos, vec3 ray_origin, vec3 t_max, vec3 t_delta, ive
 
             uint voxel = voxel_type;
 
-            uint n0 = voxel_type & 0xFu;                 // Bottom back left (origin)
+            uint n0 = voxel_type & 0xFu;                 // Bottom back left 
             uint n1 = (voxel_type & 0xF0u) >> 4u;        // Bottom front left
             uint n2 = (voxel_type & 0xF00u) >> 8u;       // Bottom back right
             uint n3 = (voxel_type & 0xF000u) >> 12u;     // Bottom front right
@@ -841,7 +840,7 @@ void main() {
         return;
     }
     
-    // Calculate sky color (your existing sky gradient)
+    // Calculate sky colour 
     float k = (normalize(dir).y + 1.0) * 0.5;
     vec3 colour = vec3(1.0) * (1.0 - k) + vec3(0.5, 0.7, 1.0) * (k);
     vec4 output_colour = vec4(colour, 1.0);
