@@ -1312,7 +1312,7 @@ impl WorldUpdater {
                                 
                             }
                         };
-                        println!("add time: {}", i.elapsed().as_millis());
+                        //println!("add time: {}", i.elapsed().as_millis());
 
                         // Generate new world data
                         //let mut rng = rand::rng();
@@ -1325,7 +1325,7 @@ impl WorldUpdater {
                         // }
 
                         //w.resize(150000000, 0);
-                        println!("resize time: {}", i.elapsed().as_millis());
+                        //println!("resize time: {}", i.elapsed().as_millis());
 
                         println!("LENGTH: {}", flat_world.1.len());
                         
