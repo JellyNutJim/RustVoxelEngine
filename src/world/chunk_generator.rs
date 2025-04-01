@@ -86,7 +86,14 @@ impl GenPipeLine {
                 Biome::Single(2)
             }
             else {
-                let dif = ((temp - 60.0) / 80.0) * 0.5 + ((y - 700.0) / 720.0) * 0.5;
+                let t;
+                if temp > 79.8 {
+                    t = 20.0;
+                } else {
+                    t = temp - 60.0;
+                }
+
+                let dif = t / 20.0;
                 Biome::Double(1, 2, dif)
             }
 
@@ -241,32 +248,54 @@ impl GenPipeLine {
         *height
     }
 
+    fn get_biome_height(&mut self, biome_id: u8, x: f64, z: f64, map_coords: (usize, usize), update: bool) -> (u32, f64) {
+        match biome_id {
+            1 => { self.generate_beach(x, z, map_coords, true) }
+            2 => { self.generate_hills(x, z, map_coords, true) }
+            _ => { self.generate_beach(x, z, map_coords, true) }
+        } 
+    }
+
     // Applies biome height, does not account for biome merging
     fn apply_full_biome_height(&mut self, x_pos: f64, z_pos: f64, height_map_coord: (usize, usize), biome_map_coord: (usize, usize)) -> (u32, f64) {
 
         let b = self.biome_map.get(biome_map_coord.0, biome_map_coord.1);
-        let mut res: (u32, f64) = (0, 0.0);
+        let res: (u32, f64);
+
+        
+        if x_pos.trunc() == 17361.0 && z_pos.trunc() == 10449.0 {
+            println!("{:?}", b);
+        }
+
+        if x_pos.trunc() == 17672.0 && z_pos.trunc() == 10507.0 {
+            println!("{:?}", b);
+        }
 
         match b {
             Biome::Single(b) => {
-                if b == 1 {
-                    res = self.generate_beach(
-                        x_pos, 
-                        z_pos, 
-                        height_map_coord,
-                        true,
-                    );
-                } else {
-                    res = self.generate_hills(
-                        x_pos, 
-                        z_pos, 
-                        height_map_coord,
-                        true,
-                    );
-                }
+                res = self.get_biome_height(b, x_pos, z_pos, height_map_coord, true);
             }
             Biome::Double(b1, b2, p) => {
+                let h1 =  self.get_biome_height(b1, x_pos, z_pos, height_map_coord, true);
+                let h2 =  self.get_biome_height(b2, x_pos, z_pos, height_map_coord, true);
+                let height = h1.1 * (1.0 - p) + h2.1 * p;
+                //println!("{}", p);
+                
 
+                if x_pos.trunc() == 17361.0 && z_pos.trunc() == 10449.0 {
+                    println!("h1 {}", h1.1);
+                    println!("h2 {}", h2.1);
+                    println!("height {}", height);
+                }
+
+                if x_pos.trunc() == 17672.0 && z_pos.trunc() == 10507.0 {
+                    println!("h1 {}", h1.1);
+                    println!("h2 {}", h2.1);
+                    println!("height {}", height);
+                }
+
+                self.height_map.set(height_map_coord.0, height_map_coord.1, height);
+                res = (h1.0, height);
             }
         }
 
