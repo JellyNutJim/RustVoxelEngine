@@ -3,6 +3,7 @@ mod shader_chunk;
 mod shader_grid;
 mod chunk_generator;
 mod height_map;
+mod biome_map;
 
 // Rust usage
 mod chunk;
@@ -11,6 +12,7 @@ pub use shader_chunk::ShaderChunk;
 pub use shader_grid::ShaderGrid;
 pub use chunk_generator::*;
 pub use height_map::HeightMap;
+pub use biome_map::{BiomeMap, Biome};
 
 
 use crate::{
@@ -37,8 +39,6 @@ pub fn get_grid_from_seed(seed: u64, width: i32, camera_origin: [i32; 3]) -> Sha
     let r4w: u32 = 151;
     let r2w: u32 = 101;
     let r1w: u32 = 51;
-
-
 
     //let mut p = ShaderGrid::from(chunks, 3);
     let camera_chunk = [(camera_origin[0] / 64) * 64, (camera_origin[1] / 64) * 64, (camera_origin[2] / 64) * 64];

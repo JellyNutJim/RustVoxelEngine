@@ -9,6 +9,7 @@ layout(set = 0, binding = 0) uniform camera_subbuffer {
     vec3 pixel_delta_v;
     vec3 world_pos_1;
     vec3 sun_loc;
+    vec3 time;
 } c;
 
 
@@ -50,6 +51,54 @@ uint get_octant(vec3 pos, uint mid) {
 
     return octant;
 }
+
+
+float lerp(float a, float b, float t) {
+    return a + t * (b - a);
+}
+
+float fade(float t) {
+    return t * t * t * (t * (t * 6.0 - 15.0) + 10.0);
+}
+
+float grad(uint hash, float x, float z) {
+    uint index = (hash & 255) * 2;
+    return n_buf.grad[index] * x + n_buf.grad[index + 1] * z;
+}
+
+float get_perlin_noise(float x, float z) { 
+    int x_floor = int(floor(x));
+    int z_floor = int(floor(z));
+
+    x = x - x_floor;
+    z = z - z_floor;
+
+    x_floor = x_floor & 255;
+    z_floor = z_floor & 255;
+
+    uint a  = uint(n_buf.perm[x_floor] + z_floor); 
+    uint aa = uint(n_buf.perm[a]);
+    uint ab = uint(n_buf.perm[a + 1]);
+    
+    uint b  = uint(n_buf.perm[x_floor + 1] + z_floor);
+    uint ba = uint(n_buf.perm[b]);
+    uint bb = uint(n_buf.perm[b + 1]); 
+
+    float u = fade(x);
+    float v = fade(z);
+
+    float x1 = grad(aa, x, z);
+    float x2 = grad(ba, x - 1, z);
+    float z1 = lerp(x1, x2, u);
+
+    x1 = grad(ab, x, z - 1.0);
+    x2 = grad(bb, x - 1, z - 1);
+    float z2 = lerp(x1, x2, u);
+
+
+    return lerp(z1, z2, v);
+} 
+
 
 uint get_depth(vec3 pos, inout int multiplier) {
     
@@ -326,7 +375,7 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
     while((world_pos.x > w_buf.origin.x && world_pos.x < w_buf.origin.x + 64*WIDTH) && (world_pos.z > w_buf.origin.z && world_pos.z < w_buf.origin.z + 64*WIDTH)) {
         // Go through chunks
 
-        if (world_pos.y > 64*41) {
+        if (world_pos.y > 64*41 || world_pos.y < 0) {
             break;
         }
 
@@ -501,20 +550,31 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
             }
 
             if (voxel_type == 858993459) {
-                transparent_hits = 1;
-                tansparent_mask = vec3(0.2, 0.5, 1.0);
+                if (transparent_hits == 0) {
+                    transparent_hits = 1;
+                    tansparent_mask = vec3(0.2, 0.5, 1.0);
+
+                    vec3 hp = c.origin + dir * curr_distance;
+
+                    float t = c.time.z;
+                    float scale = 1;
+
+                    float nx = (hp.x) * scale;
+                    float nz = (hp.z) * scale;
+                    
+
+                    float y = get_perlin_noise(nx, nz);// * (c.time.z + 0.2);
+
+
+
+                    if (y < (t) / 10) {
+                        float r = 0.2 * 1.0 + -(y / 3);
+                        float g = 0.5 * 1.0 + -(y / 3);
+                        tansparent_mask = vec3(r, g, 1.0);
+                    }
+                }
+
                 steps += 1;
-
-                vec3 hit_pos = c.origin + dir * curr_distance;
-                if (fract(hit_pos.x) < 0.5) {
-                    tansparent_mask *= 0.98;
-                }
-
-                if (fract(hit_pos.z) < 0.5) {
-                    tansparent_mask *= 0.98;
-                }
-
-
                 take_step(step, t_delta, t_max, hit_axis, world_pos, multiplier, dir, curr_distance);
                 continue;
             }
@@ -618,53 +678,6 @@ void apply_shadow(vec3 world_pos, vec3 ray_origin, vec3 t_max, vec3 t_delta, ive
 
     return;
 }
-
-float lerp(float a, float b, float t) {
-    return a + t * (b - a);
-}
-
-float fade(float t) {
-    return t * t * t * (t * (t * 6.0 - 15.0) + 10.0);
-}
-
-float grad(uint hash, float x, float z) {
-    uint index = (hash & 255) * 2;
-    return n_buf.grad[index] * x + n_buf.grad[index + 1] * z;
-}
-
-float get_perlin_noise(float x, float z) { 
-    int x_floor = int(floor(x));
-    int z_floor = int(floor(z));
-
-    x = x - x_floor;
-    z = z - z_floor;
-
-    x_floor = x_floor & 255;
-    z_floor = z_floor & 255;
-
-    uint a  = uint(n_buf.perm[x_floor] + z_floor); 
-    uint aa = uint(n_buf.perm[a]);
-    uint ab = uint(n_buf.perm[a + 1]);
-    
-    uint b  = uint(n_buf.perm[x_floor + 1] + z_floor);
-    uint ba = uint(n_buf.perm[b]);
-    uint bb = uint(n_buf.perm[b + 1]); 
-
-    float u = fade(x);
-    float v = fade(z);
-
-    float x1 = grad(aa, x, z);
-    float x2 = grad(ba, x - 1, z);
-    float z1 = lerp(x1, x2, u);
-
-    x1 = grad(ab, x, z - 1.0);
-    x2 = grad(bb, x - 1, z - 1);
-    float z2 = lerp(x1, x2, u);
-
-
-    return lerp(z1, z2, v);
-} 
-
 
 void main() {
     ivec2 pixel_coords = ivec2(gl_GlobalInvocationID.xy);

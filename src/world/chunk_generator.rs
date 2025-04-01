@@ -1,6 +1,6 @@
-use std::{os::windows::io::BorrowedHandle, u8};
+use std::u8;
 
-use super::{HeightMap, PerlinNoise, ScalablePerlin, ShaderChunk, ShaderGrid, Voxel};
+use super::{BiomeMap, Biome, HeightMap, PerlinNoise, ScalablePerlin, ShaderChunk, ShaderGrid, Voxel};
 
 // Contains all noises used throughout the generation process
 #[allow(unused)]
@@ -21,7 +21,7 @@ pub struct GenPipeLine {
 
     // Meta Data
     height_map: HeightMap,
-    biome_map: HeightMap,
+    biome_map: BiomeMap,
     sea_level: f64,
 }
 
@@ -32,7 +32,7 @@ impl GenPipeLine {
             landmass: PerlinNoise::new(seed, 0.00003),
 
             temperature: PerlinNoise::new(seed + 1, 0.0003),
-            humidity: PerlinNoise::new(seed - 1, 0.0003),
+            humidity: PerlinNoise::new(seed - 1, 0.03),
 
             height: ScalablePerlin::new(seed - 2),
 
@@ -40,7 +40,7 @@ impl GenPipeLine {
             features: ScalablePerlin::new(seed + 3),
 
             height_map: HeightMap::new(sea_level, width * 64 * 2), // Double the grid size to account for sub voxels
-            biome_map: HeightMap::new(0.0,width * 64), // Biomes placed per voxel
+            biome_map: BiomeMap::new(Biome::Single(0),width * 64), // Biomes placed per voxel
             sea_level: sea_level,
         }
     }
@@ -68,7 +68,12 @@ impl GenPipeLine {
         }
     }
 
-    fn get_biome_at(&self, x: f64, z: f64, y: f64) -> f64 {
+    // 1.0 -> Flat
+    // 2.0 -> Hills
+    // 3.0 -> Mountain
+    // 4.0 -> River
+
+    fn get_biome_at(&self, x: f64, z: f64, y: f64) -> Biome {
         let temp = self.temperature.get_noise_at_point(x, z).abs() * 256.0;
         let humid = self.humidity.get_noise_at_point(x, z).abs() * 256.0;
 
@@ -77,9 +82,16 @@ impl GenPipeLine {
         //return 1.0;
 
         if temp > 60.0 && y > 700.0 {
-            1.0
+            if temp > 80.0 && y > 720.0 {
+                Biome::Single(2)
+            }
+            else {
+                let dif = ((temp - 60.0) / 80.0) * 0.5 + ((y - 700.0) / 720.0) * 0.5;
+                Biome::Double(1, 2, dif)
+            }
+
         } else {
-            0.0
+            Biome::Single(1)
         }
     }
 }
@@ -101,6 +113,10 @@ impl GenPipeLine {
             self.height.get_noise_at_point(x, z, 0.005) * 16.0 +
             self.height.get_noise_at_point(x, z, 0.001) * 16.0 * 16.0 
         ) / 2.0
+    }
+
+    fn get_mountain_noise(&self, x: f64, z: f64) -> f64 { 
+        self.height.get_noise_at_point(x, z, 0.0003) * 32.0 * 32.0 + self.interference.get_noise_at_point(x, z, 0.005) * 16.0
     }
 
     fn get_interference(&self, x: f64, z: f64) -> f64 {
@@ -171,7 +187,50 @@ impl GenPipeLine {
         }
 
         (1, updated_height)
-    }       
+    }      
+
+    fn generate_mountains (&mut self, x: f64, z: f64, map_coords: (usize, usize), update: bool) -> (u32, f64) {
+        let change  = self.get_mountain_noise(x, z);
+        let height = self.height_map.get_mut(map_coords.0, map_coords.1);
+        let original = *height;
+
+        if *height + change < self.sea_level {
+            let uh = *height * 0.7 + change * 0.3;
+            if update == true {
+                *height = uh;
+            }
+
+            return (4, uh)
+        }
+
+        let distance = self.sea_level + 16.0 - *height;
+
+        let mut fall_off: f64 = 3.5;
+        if original > self.sea_level && change < 0.0{
+            fall_off = 6.0;
+        }
+
+        if original < self.sea_level + 15.0 {
+            fall_off = 10.0;
+        }
+
+
+        let distance = distance.abs();
+        let scaling = 1.0 - (-distance.powf(2.0) / fall_off.powf(2.0)).exp();
+
+        let updated_height = *height + change * scaling;
+        
+        if update == true {
+            *height = updated_height;
+        }
+
+        if *height < 16.6 + self.sea_level || original < self.sea_level + 16.0{
+            return (4, updated_height)
+        }
+
+        (1, updated_height)
+    }
+
 
     fn apply_interference(&mut self, x: f64, z: f64, map_coords: (usize, usize)) -> f64 {
         let change = self.get_interference(x, z);
@@ -182,32 +241,33 @@ impl GenPipeLine {
         *height
     }
 
+    // Applies biome height, does not account for biome merging
     fn apply_full_biome_height(&mut self, x_pos: f64, z_pos: f64, height_map_coord: (usize, usize), biome_map_coord: (usize, usize)) -> (u32, f64) {
 
         let b = self.biome_map.get(biome_map_coord.0, biome_map_coord.1);
-        let res: (u32, f64);
+        let mut res: (u32, f64) = (0, 0.0);
 
-        // return self.generate_hills(
-        //     x_pos, 
-        //     z_pos, 
-        //     height_map_coord,
-        //     true,
-        // );
+        match b {
+            Biome::Single(b) => {
+                if b == 1 {
+                    res = self.generate_beach(
+                        x_pos, 
+                        z_pos, 
+                        height_map_coord,
+                        true,
+                    );
+                } else {
+                    res = self.generate_hills(
+                        x_pos, 
+                        z_pos, 
+                        height_map_coord,
+                        true,
+                    );
+                }
+            }
+            Biome::Double(b1, b2, p) => {
 
-        if b == 1.0 {
-            res = self.generate_hills(
-                x_pos, 
-                z_pos, 
-                height_map_coord,
-                true,
-            );
-        } else {
-            res = self.generate_beach(
-                x_pos, 
-                z_pos, 
-                height_map_coord,
-                true,
-            );
+            }
         }
 
         res
@@ -411,9 +471,14 @@ pub fn generate_res_4(world: &mut ShaderGrid, x_pos: u32, z_pos: u32) {
 
             let c0 =  map_c.0 + (x * 8) as usize;
             let c1 =  map_c.1 + (z * 8) as usize;
-
             let mut v_len = 0;
+
             generate_4_height_leveled_voxel(world, &mut v_len, &mut voxels, 4, (c0, c1));
+
+            if x_adj == 17532 && z_adj == 10364 {
+                println!("{:?}", voxels);
+                println!("{}", v_len);
+            }
 
             for k in 0..v_len {
                 voxels[k].1.update_4_part_voxel();
@@ -517,6 +582,8 @@ pub fn generate_res_1(world: &mut ShaderGrid, x_pos: u32, z_pos: u32) {
             let mut v_len = 0;
 
             generate_4_height_voxel(world, &mut v_len, &mut voxels, (c0, c1));
+
+ 
 
             for k in 0..v_len {
                 voxels[k].1.update_4_part_voxel();

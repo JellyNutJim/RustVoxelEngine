@@ -86,6 +86,10 @@ fn main() -> Result<(), impl Error> {
     // v.update_4_part_voxel();
 
     // println!("{:b}", v.get_voxel());
+
+    // let d = ScalablePerlin::new(54);
+
+    // println!("point: {}", d.get_noise_at_point(5843958.0, 5843958.0, 0.01));
     
 
 
@@ -124,6 +128,8 @@ struct App {
     world_updater: WorldUpdater,
 
     last_n_press: bool,
+
+    start: Instant,
 }
 
 struct RenderContext {
@@ -147,6 +153,7 @@ struct CameraBufferData {
     pixel_delta_v: [f32; 4],
     world_position: [f32; 4],
     sun_position: [f32; 4],
+    time: [f32; 4],
 }
 
 struct CameraLocation {
@@ -620,6 +627,7 @@ impl App {
         println!("{:?}", a);
 
         let last_n_press = false;
+        let start = Instant::now();
 
         App {
             instance,
@@ -637,6 +645,7 @@ impl App {
             world_updater,
             update_receiver,
             last_n_press,
+            start,
         }
     }
 }
@@ -1040,6 +1049,27 @@ impl ApplicationHandler for App {
                         z: look_from.z.floor(),
                     };
 
+                    let t = self.start.elapsed().as_secs_f32();
+                    let period = 2.0;
+
+                    let normalized_t = (t % period) / period;
+    
+                    let s = if normalized_t < 0.5 {
+                        normalized_t * 2.0
+                    } else {
+                        2.0 - normalized_t * 2.0
+                    };
+
+
+                    let time = [
+                        t,
+                        t.fract(),
+                        s,
+                        1.0, // Extra Number
+                    ];
+
+                    //println!("{}", s);
+
 
                     //println!("{:?} {:?} {:?} {:?}", world_position_1, world_position_2, world_position_4 ,world_position_8);
 
@@ -1049,7 +1079,8 @@ impl ApplicationHandler for App {
                         pixel_delta_u:[pixel_delta_u.x as f32, pixel_delta_u.y as f32, pixel_delta_u.z as f32, 1.0],
                         pixel_delta_v: [pixel_delta_v.x as f32, pixel_delta_v.y as f32, pixel_delta_v.z as f32, 1.0],
                         world_position: [world_position_1.x as f32, world_position_1.y as f32, world_position_1.z as f32, 1.0],
-                        sun_position: [self.camera_location.sun_loc.x as f32, self.camera_location.sun_loc.y as f32, self.camera_location.sun_loc.z as f32, 1.0]
+                        sun_position: [self.camera_location.sun_loc.x as f32, self.camera_location.sun_loc.y as f32, self.camera_location.sun_loc.z as f32, 1.0],
+                        time: time,
                     };
 
                     //println!("{:?}", look_from);
