@@ -51,6 +51,7 @@ mod asset_load;
 mod noise_gen;
 mod types;
 mod world;
+mod testing;
 
 use world::{get_grid_from_seed, ShaderChunk, ShaderGrid};
 
@@ -61,6 +62,8 @@ use types::{Vec3, Voxel};
 use vulkano::command_buffer::CopyBufferInfo;
 
 use noise_gen::{PerlinNoise, ScalablePerlin};
+
+use testing::test;
 
 fn main() -> Result<(), impl Error> {
     //env::set_var("RUST_BACKTRACE", "1");
@@ -92,7 +95,7 @@ fn main() -> Result<(), impl Error> {
     // println!("point: {}", d.get_noise_at_point(5843958.0, 5843958.0, 0.01));
     
 
-
+    test();
 
     // println!("{:?}", c.flatten());
 
