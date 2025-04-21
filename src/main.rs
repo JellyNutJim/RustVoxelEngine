@@ -101,6 +101,7 @@ fn main() -> Result<(), impl Error> {
 
     // Create window
 
+    std::process::exit(0);
 
     let event_loop = EventLoop::new().unwrap();
     let mut app = App::new(&event_loop);
