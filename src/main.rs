@@ -992,7 +992,7 @@ impl ApplicationHandler for App {
                 // }
 
                 // Free finished resources
-                //rcx.previous_frame_end.as_mut().unwrap().cleanup_finished();
+                rcx.previous_frame_end.as_mut().unwrap().cleanup_finished();
 
                 // Recreate everything upon screen resize
                 if rcx.recreate_swapchain {
@@ -1014,8 +1014,6 @@ impl ApplicationHandler for App {
                 // UPDATE HERE
 
                 // Get current chunk
-                
-
 
                 // Calculate camera buffer variables and set them to the buffer
                 let uniform_camera_subbuffer = {
