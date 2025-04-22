@@ -392,28 +392,28 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
         }
 
         // View octant boundaries
-        if (curr_distance < 50.0 && curr_distance > 2.0) {
+        // if (curr_distance < 50.0 && curr_distance > 2.0) {
 
-            vec3 position = c.origin + dir * curr_distance;
-            vec3 octant_relative = mod(position, multiplier);
+        //     vec3 position = c.origin + dir * curr_distance;
+        //     vec3 octant_relative = mod(position, multiplier);
             
-            // bit jank for now but its fine
+        //     // bit jank for now but its fine
 
-            float threshold = 0.1;
-            bool near_x = octant_relative.x < threshold || octant_relative.x > multiplier - threshold;
-            bool near_y = octant_relative.y < threshold || octant_relative.y > multiplier - threshold;
-            bool near_z = octant_relative.z < threshold || octant_relative.z > multiplier - threshold;
+        //     float threshold = 0.1;
+        //     bool near_x = octant_relative.x < threshold || octant_relative.x > multiplier - threshold;
+        //     bool near_y = octant_relative.y < threshold || octant_relative.y > multiplier - threshold;
+        //     bool near_z = octant_relative.z < threshold || octant_relative.z > multiplier - threshold;
             
-            int boundary_count = 0;
-            if (near_x) boundary_count++;
-            if (near_y) boundary_count++;
-            if (near_z) boundary_count++;
+        //     int boundary_count = 0;
+        //     if (near_x) boundary_count++;
+        //     if (near_y) boundary_count++;
+        //     if (near_z) boundary_count++;
             
-            if (boundary_count >= 2) {
-                hit_colour = vec3(0.0, 0.0, 1.0);
-                return true;
-            }
-        }
+        //     if (boundary_count >= 2) {
+        //         hit_colour = vec3(0.0, 0.0, 1.0);
+        //         return true;
+        //     }
+        // }
 
         // For now, assume all voxels are surface voxels
         if ( (multiplier == 1 || multiplier == 2 || multiplier == 4) && voxel_type != 858993459) { //world_pos == vec3(54732, 830, 10561) // multiplier == 1

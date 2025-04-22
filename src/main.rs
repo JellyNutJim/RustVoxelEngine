@@ -101,7 +101,6 @@ fn main() -> Result<(), impl Error> {
 
     // Create window
 
-    std::process::exit(0);
 
     let event_loop = EventLoop::new().unwrap();
     let mut app = App::new(&event_loop);
@@ -141,7 +140,8 @@ struct RenderContext {
     swapchain: Arc<Swapchain>,
     attachment_image_views: Vec<Arc<ImageView>>,
 
-    compute_pipeline: Arc<ComputePipeline>,
+    initial_pipeline: Arc<ComputePipeline>,
+    main_pipeline: Arc<ComputePipeline>, // Renamed for clarity
     viewport: Viewport,
     recreate_swapchain: bool,
     previous_frame_end: Option<Box<dyn GpuFuture>>,
@@ -720,18 +720,29 @@ impl ApplicationHandler for App {
         let attachment_image_views = window_size_dependent_setup(&images);
 
         // Shader
-        mod cs {
+        mod initial_beam {
             vulkano_shaders::shader! {
                 ty: "compute",
-                path: "src/shaders/compute.glsl",
+                path: "src/shaders/initial_beam.glsl",
                 include: ["src/shaders/compute_utils"]
             } 
         }
 
-        let shader = cs::load(self.device.clone()).expect("failed to create shader module");
+        mod main_beam {
+            vulkano_shaders::shader! {
+                ty: "compute",
+                path: "src/shaders/secondary_beam.glsl",
+                include: ["src/shaders/compute_utils"]
+            } 
+        }
 
-        let cs = shader.entry_point("main").unwrap();
-        let stage = PipelineShaderStageCreateInfo::new(cs);
+        let initial_shader = initial_beam::load(self.device.clone()).expect("failed to create preprocess shader module");
+        let initial_cs = initial_shader.entry_point("main").unwrap();
+        let initial_stage = PipelineShaderStageCreateInfo::new(initial_cs);
+        
+        let main_shader = main_beam::load(self.device.clone()).expect("failed to create main shader module");
+        let main_cs = main_shader.entry_point("main").unwrap();
+        let main_stage = PipelineShaderStageCreateInfo::new(main_cs);
 
         let layout = {
             let bindings = [
@@ -800,10 +811,17 @@ impl ApplicationHandler for App {
         )
         .unwrap();
 
-        let compute_pipeline = ComputePipeline::new(
+        let initial_pipeline = ComputePipeline::new(
             self.device.clone(),
             None,
-            ComputePipelineCreateInfo::stage_layout(stage, pipeline_layout),
+            ComputePipelineCreateInfo::stage_layout(initial_stage, pipeline_layout.clone()),
+        )
+        .unwrap();
+
+        let main_pipeline = ComputePipeline::new(
+            self.device.clone(),
+            None,
+            ComputePipelineCreateInfo::stage_layout(main_stage, pipeline_layout),
         )
         .unwrap();
 
@@ -821,7 +839,8 @@ impl ApplicationHandler for App {
             window,
             swapchain,
             attachment_image_views,
-            compute_pipeline,
+            initial_pipeline,
+            main_pipeline,
             viewport,
             recreate_swapchain,
             previous_frame_end,
@@ -973,7 +992,7 @@ impl ApplicationHandler for App {
                 // }
 
                 // Free finished resources
-                rcx.previous_frame_end.as_mut().unwrap().cleanup_finished();
+                //rcx.previous_frame_end.as_mut().unwrap().cleanup_finished();
 
                 // Recreate everything upon screen resize
                 if rcx.recreate_swapchain {
@@ -1001,7 +1020,8 @@ impl ApplicationHandler for App {
                 // Calculate camera buffer variables and set them to the buffer
                 let uniform_camera_subbuffer = {
                     let look_from = self.camera_location.location;
-
+                    
+                    // Update world when exiting the centre octree
                     let curr_pos_chunk = (look_from / 64.0).floor();
                     let old_pos_chunk = (self.camera_location.old_loc / 64.0).floor();
 
@@ -1017,7 +1037,6 @@ impl ApplicationHandler for App {
                         self.world_updater.request_update(Update::Shift(2, diff.z as i32));
                     }
 
-                    // Detect Chunk switch and move world
 
                     let look_distance = 1.0;
                     let look_at = self.camera_location.location + self.camera_location.direction * look_distance;
@@ -1026,7 +1045,6 @@ impl ApplicationHandler for App {
 
                     let v_up = Vec3 {x: 0.0, y: 1.0, z: 0.0};
                     //let fov = 90;
-
 
                     let focal_length = (look_from - look_at).magnitude();
                     let viewport_height = 2.0;
@@ -1115,7 +1133,7 @@ impl ApplicationHandler for App {
                     rcx.recreate_swapchain = true;
                 }
 
-                let layout = &rcx.compute_pipeline.layout().set_layouts()[0];
+                let layout = &rcx.main_pipeline.layout().set_layouts()[0];
                 //println!("Layout bindings: {:?}", layout.bindings());
 
                 // Create descriptor set for the buffers
@@ -1133,6 +1151,25 @@ impl ApplicationHandler for App {
                 )
                 .unwrap();
 
+                // Dispatch sizes, initial beam only works on 1/4th of pixels
+
+                let w_width = window_size.width;
+                let w_height = window_size.height;
+
+                // Regular dispatch size
+                let full_dispatch_size = [
+                    (w_width + 15) / 16,   
+                    (w_height + 15) / 16,
+                    1
+                ];
+                
+                // 1/4th aka every other pixel for intial beam stage
+                let reduced_dispatch_size = [
+                    (w_width / 2 + 15) / 16,  // Half width, then rounded up
+                    (w_height / 2 + 15) / 16, // Half height, then rounded up
+                    1
+                ];
+
                 // record command buffer
                 let mut builder = AutoCommandBufferBuilder::primary(
                     &self.command_buffer_allocator,  // Add & here
@@ -1142,18 +1179,30 @@ impl ApplicationHandler for App {
                 .unwrap();
 
                 builder
-                    .bind_pipeline_compute(rcx.compute_pipeline.clone())
+                    .bind_pipeline_compute(rcx.initial_pipeline.clone())
                     .unwrap()
                     .bind_descriptor_sets(
                         PipelineBindPoint::Compute, 
-                        rcx.compute_pipeline.layout().clone(), 
+                        rcx.initial_pipeline.layout().clone(), 
                         0, 
                         descriptor_set.clone()
                     )
                     .unwrap()
-                    .dispatch([window_size.width + 15 /  16, window_size.height + 15 / 16, 1])
+                    .dispatch(reduced_dispatch_size)
                     .unwrap();
-                    
+                
+                builder
+                    .bind_pipeline_compute(rcx.main_pipeline.clone())
+                    .unwrap()
+                    .bind_descriptor_sets(
+                        PipelineBindPoint::Compute, 
+                        rcx.main_pipeline.layout().clone(), 
+                        0, 
+                        descriptor_set 
+                    )
+                    .unwrap()
+                    .dispatch(full_dispatch_size)
+                    .unwrap();
 
                 builder
                     .begin_rendering(RenderingInfo {
