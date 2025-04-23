@@ -580,24 +580,24 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
                     transparent_hits = 1;
                     tansparent_mask = vec3(0.2, 0.5, 1.0);
 
-                    vec3 hp = c.origin + dir * curr_distance;
+                    // vec3 hp = c.origin + dir * curr_distance;
 
-                    float t = c.time.z;
-                    float scale = 1;
+                    // float t = c.time.z;
+                    // float scale = 1;
 
-                    float nx = (hp.x) * scale;
-                    float nz = (hp.z) * scale;
+                    // float nx = (hp.x) * scale;
+                    // float nz = (hp.z) * scale;
                     
 
-                    float y = get_perlin_noise(nx, nz);// * (c.time.z + 0.2);
+                    // float y = get_perlin_noise(nx, nz);// * (c.time.z + 0.2);
 
 
 
-                    if (y < (t) / 10) {
-                        float r = 0.2 * 1.0 + -(y / 3);
-                        float g = 0.5 * 1.0 + -(y / 3);
-                        tansparent_mask = vec3(r, g, 1.0);
-                    }
+                    // if (y < (t) / 10) {
+                    //     float r = 0.2 * 1.0 + -(y / 3);
+                    //     float g = 0.5 * 1.0 + -(y / 3);
+                    //     tansparent_mask = vec3(r, g, 1.0);
+                    // }
                 }
 
                 steps += 1;

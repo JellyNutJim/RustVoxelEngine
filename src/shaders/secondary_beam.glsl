@@ -365,6 +365,7 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
     steps = 0;
     int multiplier = 1;
     int transparent_hits = 0;
+    float transparent_distance = 0.0;
     vec3 tansparent_mask = vec3(0.0);
 
     float accumculated_curve = 0.0;
@@ -481,7 +482,14 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
                 }
 
                 if (transparent_hits > 0) {
-                    hit_colour = (hit_colour * 0.3 + tansparent_mask * 0.7);
+                    float dis = curr_distance - transparent_distance;
+                    if (dis > 50) { 
+                        hit_colour = tansparent_mask;
+                    }
+
+                    float t_per = (dis / 164);
+
+                    hit_colour = (hit_colour * (0.3 - t_per) + tansparent_mask * (0.7 + t_per));
                 }
 
                 return true;
@@ -506,7 +514,14 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
                 }
 
                 if (transparent_hits > 0) {
-                    hit_colour = (hit_colour * 0.3 + tansparent_mask * 0.7);
+                    float dis = curr_distance - transparent_distance;
+                    if (dis > 50) { 
+                        hit_colour = tansparent_mask;
+                    }
+
+                    float t_per = (dis / 164);
+
+                    hit_colour = (hit_colour * (0.3 - t_per) + tansparent_mask * (0.7 + t_per));
                 }
 
                 return true;
@@ -578,26 +593,27 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
             if (voxel_type == 858993459) {
                 if (transparent_hits == 0) {
                     transparent_hits = 1;
+                    transparent_distance = curr_distance;
                     tansparent_mask = vec3(0.2, 0.5, 1.0);
 
-                    vec3 hp = c.origin + dir * curr_distance;
+                    // vec3 hp = c.origin + dir * curr_distance;
 
-                    float t = c.time.z;
-                    float scale = 1;
+                    // float t = c.time.z;
+                    // float scale = 1;
 
-                    float nx = (hp.x) * scale;
-                    float nz = (hp.z) * scale;
+                    // float nx = (hp.x) * scale;
+                    // float nz = (hp.z) * scale;
                     
 
-                    float y = get_perlin_noise(nx, nz);// * (c.time.z + 0.2);
+                    // float y = get_perlin_noise(nx, nz);// * (c.time.z + 0.2);
 
 
 
-                    if (y < (t) / 10) {
-                        float r = 0.2 * 1.0 + -(y / 3);
-                        float g = 0.5 * 1.0 + -(y / 3);
-                        tansparent_mask = vec3(r, g, 1.0);
-                    }
+                    // if (y < (t) / 10) {
+                    //     float r = 0.2 * 1.0 + -(y / 3);
+                    //     float g = 0.5 * 1.0 + -(y / 3);
+                    //     tansparent_mask = vec3(r, g, 1.0);
+                    // }
                 }
 
                 steps += 1;
