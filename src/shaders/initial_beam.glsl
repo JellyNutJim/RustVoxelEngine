@@ -28,7 +28,11 @@ layout(set = 0, binding = 3) readonly buffer NoiseBuffer {
     float grad[512];
 } n_buf;
 
-layout(set = 0, binding = 4, rgba8) uniform image2D storageImage;
+layout(set = 0, binding = 4) readonly buffer RayDistanceBuffer {
+    float ray_distances[8294415];
+} r_buf;
+
+layout(set = 0, binding = 5, rgba8) uniform image2D storageImage;
 
 #include "triangle.glsl"
 

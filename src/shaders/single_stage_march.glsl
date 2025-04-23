@@ -1,6 +1,6 @@
 #version 460
 
-layout(local_size_x = 4, local_size_y = 1, local_size_z = 1) in;
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
 
 layout(set = 0, binding = 0) uniform camera_subbuffer {
     vec3 origin;
@@ -28,7 +28,11 @@ layout(set = 0, binding = 3) readonly buffer NoiseBuffer {
     float grad[512];
 } n_buf;
 
-layout(set = 0, binding = 4, rgba8) uniform image2D storageImage;
+layout(set = 0, binding = 4) readonly buffer RayDistanceBuffer {
+    float ray_distances[8294415];
+} r_buf;
+
+layout(set = 0, binding = 5, rgba8) uniform image2D storageImage;
 
 #include "triangle.glsl"
 
@@ -206,7 +210,6 @@ void take_step(ivec3 step, vec3 t_delta, inout vec3 t_max, inout uint hit_axis, 
             temp[hit_axis] += step[hit_axis];
         }
 
-        
         t_max += (abs(temp - world_pos)) * t_delta;
         
         world_pos = temp;
@@ -365,6 +368,7 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
     steps = 0;
     int multiplier = 1;
     int transparent_hits = 0;
+    float transparent_distance = 0.0;
     vec3 tansparent_mask = vec3(0.0);
 
     float accumculated_curve = 0.0;
@@ -481,7 +485,14 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
                 }
 
                 if (transparent_hits > 0) {
-                    hit_colour = (hit_colour * 0.3 + tansparent_mask * 0.7);
+                    float dis = curr_distance - transparent_distance;
+                    if (dis > 50) { 
+                        hit_colour = tansparent_mask;
+                    }
+
+                    float t_per = (dis / 164);
+
+                    hit_colour = (hit_colour * (0.3 - t_per) + tansparent_mask * (0.7 + t_per));
                 }
 
                 return true;
@@ -506,7 +517,14 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
                 }
 
                 if (transparent_hits > 0) {
-                    hit_colour = (hit_colour * 0.3 + tansparent_mask * 0.7);
+                    float dis = curr_distance - transparent_distance;
+                    if (dis > 50) { 
+                        hit_colour = tansparent_mask;
+                    }
+
+                    float t_per = (dis / 164);
+
+                    hit_colour = (hit_colour * (0.3 - t_per) + tansparent_mask * (0.7 + t_per));
                 }
 
                 return true;
@@ -578,6 +596,7 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
             if (voxel_type == 858993459) {
                 if (transparent_hits == 0) {
                     transparent_hits = 1;
+                    transparent_distance = curr_distance;
                     tansparent_mask = vec3(0.2, 0.5, 1.0);
 
                     // vec3 hp = c.origin + dir * curr_distance;

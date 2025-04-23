@@ -28,7 +28,11 @@ layout(set = 0, binding = 3) readonly buffer NoiseBuffer {
     float grad[512];
 } n_buf;
 
-layout(set = 0, binding = 4, rgba8) uniform image2D storageImage;
+layout(set = 0, binding = 4) readonly buffer RayDistanceBuffer {
+    float ray_distances[8294415];
+} r_buf;
+
+layout(set = 0, binding = 5, rgba8) uniform image2D storageImage;
 
 #include "triangle.glsl"
 
@@ -206,7 +210,6 @@ void take_step(ivec3 step, vec3 t_delta, inout vec3 t_max, inout uint hit_axis, 
             temp[hit_axis] += step[hit_axis];
         }
 
-        
         t_max += (abs(temp - world_pos)) * t_delta;
         
         world_pos = temp;

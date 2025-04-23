@@ -123,6 +123,8 @@ struct App {
     world_meta_data_buffers: [Subbuffer<[i32]>; 2],
     noise_buffer: Subbuffer<[f32]>,
     camera_buffer: SubbufferAllocator,
+    
+    ray_distance_buffer: Subbuffer<[f32]>,
 
     rcx: Option<RenderContext>, 
     camera_location: CameraLocation,
@@ -385,21 +387,7 @@ impl App {
         let camera_location = CameraLocation {location: middle, direction: Vec3::new(), old_loc: middle, h_angle: 0.0, v_angle: 0.0, sun_loc: Vec3::from(10000.0, 3000.0, 10000.0)};
         let mut intial_world = get_grid_from_seed(seed, width as i32, [middle.x as i32, middle.y as i32, middle.z as i32]);
 
-        // let v32 = Voxel::from_octants(
-        //     [
-        //         0b_0101,
-        //         0b_0001,
-        //         0b_0001,
-        //         0b_0001,
-
-        //         0b_0000,
-        //         0b_0010,
-        //         0b_0111,
-        //         0b_1111,
-        //     ]
-        // );
-
-        
+        // For testing
         let v32 = Voxel::from_quadrants(
             [
                 0b_00000001,
@@ -411,11 +399,8 @@ impl App {
         );
 
         //intial_world.insert_subchunk([middle.x as i32, middle.y as i32, (middle.z + 1.0) as i32], v32, 4, false);
-
-
         //intial_world.insert_voxel([middle.x as i32, middle.y as i32, (middle.z + 1.0) as i32], v32, false);
         //intial_world.insert_voxel([middle.x as i32, middle.y as i32, (middle.z + 2.0) as i32], Voxel::from_type(1), false);
-
         println!("{:?}", middle);
 
         // Get Vector World Data
@@ -509,6 +494,22 @@ impl App {
         //println!("com {}", combined_data.len());
         //println!("com {:?}", combined_data);
 
+        // Stores every other pixel, supports up to 8k resolution screen size
+        let ray_distance_buffer_size =( 7680.0 * 4320.0 * 0.25 ) as i32 + 15;
+
+        let ray_distance_buffer = Buffer::new_slice::<f32>(
+            memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::STORAGE_BUFFER,
+                sharing: Sharing::Exclusive,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE,
+                ..Default::default()
+            },
+            ray_distance_buffer_size as DeviceSize,
+        ).expect("failed to recreate quarter resolution buffer");
 
         let noise_buffer = Buffer::from_iter(
             memory_allocator.clone(),
@@ -644,6 +645,7 @@ impl App {
             world_meta_data_buffers,
             noise_buffer,
             camera_buffer,
+            ray_distance_buffer,
             rcx,
             camera_location,
             world_updater,
@@ -655,8 +657,6 @@ impl App {
 }
 
 impl ApplicationHandler for App {
-
-
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         let window = Arc::new(
             event_loop
@@ -677,7 +677,6 @@ impl ApplicationHandler for App {
         // CURRENTLY BROKEN ON WINDOWS DISABLESM MOVE MOVEMENT EVEN DETECTION CAN USE USE DEVICE EVENT INSTEAD IF NEEDED
         //window.set_cursor_visible(false);
 
-        
         let (swapchain, images) = {
             // Querying the capabilities of the surface
             let surface_capabilities = self
@@ -784,6 +783,15 @@ impl ApplicationHandler for App {
                 ),
                 (
                     4,
+                    DescriptorSetLayoutBinding {
+                        stages: ShaderStages::COMPUTE,
+                        ..DescriptorSetLayoutBinding::descriptor_type(
+                            DescriptorType::StorageBuffer,
+                        )
+                    }
+                ),
+                (
+                    5,
                     DescriptorSetLayoutBinding {
                         stages: ShaderStages::COMPUTE,
                         ..DescriptorSetLayoutBinding::descriptor_type(
@@ -1143,7 +1151,8 @@ impl ApplicationHandler for App {
                         WriteDescriptorSet::buffer(1, self.voxel_buffers[self.current_voxel_buffer].clone()),
                         WriteDescriptorSet::buffer(2, self.world_meta_data_buffers[self.current_voxel_buffer].clone()),
                         WriteDescriptorSet::buffer(3, self.noise_buffer.clone()), 
-                        WriteDescriptorSet::image_view(4, rcx.attachment_image_views[image_index as usize].clone()),
+                        WriteDescriptorSet::buffer(4, self.ray_distance_buffer.clone()), 
+                        WriteDescriptorSet::image_view(5, rcx.attachment_image_views[image_index as usize].clone()),
                     ],
                     [],
                 )
