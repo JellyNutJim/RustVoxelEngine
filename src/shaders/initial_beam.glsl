@@ -711,25 +711,13 @@ void apply_shadow(vec3 world_pos, vec3 ray_origin, vec3 t_max, vec3 t_delta, ive
 
 void main() {
     return;
-
-    ivec2 pixel_coords = ivec2(gl_GlobalInvocationID.xy);
+    
+    // Effectively every other pixel on the screen
+    ivec2 pixel_coords = ivec2(gl_GlobalInvocationID.xy) * 2;
 
     vec3 origin = c.origin;
-
     vec3 pixel_center = c.pixel00_loc + (c.pixel_delta_u * float(pixel_coords.x)) + (c.pixel_delta_v * float(pixel_coords.y));
     vec3 dir = pixel_center - origin;
-
-    //[54732, 830, 10560]
-
-    // vec3 v0 = vec3(54742.0, 830.0, 10530.0);
-    // vec3 v1 = vec3(54752.0, 840.0, 10520.0);
-    // vec3 v2 = vec3(54732.0, 850.0, 10580.0);
-
-    // if (intersection_test(origin, dir, v0, v1, v2) == true) {
-    //     imageStore(storageImage, pixel_coords, vec4(1.0, 0.984, 0.0, 1.0));
-    //     return;
-    // }
-
     vec3 world_pos = c.world_pos_1;
 
     vec3 t_delta;

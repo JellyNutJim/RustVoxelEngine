@@ -727,6 +727,10 @@ void apply_shadow(vec3 world_pos, vec3 ray_origin, vec3 t_max, vec3 t_delta, ive
 void main() {
     ivec2 pixel_coords = ivec2(gl_GlobalInvocationID.xy);
 
+    if (pixel_coords.x % 2 == 0 && pixel_coords.y % 2 == 0) {
+        return;
+    }
+
     vec3 origin = c.origin;
 
     vec3 pixel_center = c.pixel00_loc + (c.pixel_delta_u * float(pixel_coords.x)) + (c.pixel_delta_v * float(pixel_coords.y));

@@ -1172,8 +1172,8 @@ impl ApplicationHandler for App {
                 
                 // 1/4th aka every other pixel for intial beam stage
                 let reduced_dispatch_size = [
-                    (w_width / 2 + 15) / 16,  // Half width, then rounded up
-                    (w_height / 2 + 15) / 16, // Half height, then rounded up
+                    (w_width / 2 + 15) / 16,  
+                    (w_height / 2 + 15) / 16, 
                     1
                 ];
 
