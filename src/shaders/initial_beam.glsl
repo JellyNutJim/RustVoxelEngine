@@ -28,7 +28,7 @@ layout(set = 0, binding = 3) readonly buffer NoiseBuffer {
     float grad[512];
 } n_buf;
 
-layout(set = 0, binding = 4) readonly buffer RayDistanceBuffer {
+layout(set = 0, binding = 4) buffer RayDistanceBuffer {
     float ray_distances[8294415];
 } r_buf;
 
@@ -711,7 +711,7 @@ void apply_shadow(vec3 world_pos, vec3 ray_origin, vec3 t_max, vec3 t_delta, ive
 
 void main() {
     return;
-    
+
     // Effectively every other pixel on the screen
     ivec2 pixel_coords = ivec2(gl_GlobalInvocationID.xy) * 2;
 
@@ -803,10 +803,16 @@ void main() {
 
         //apply_shadow(world_pos, hit_pos, t_max, t_delta, step, dir, hit_colour, curr_distance);
 
+        // Save distance traveled, if transparent hit, distance to the first transparent object is used instead
+        r_buf.ray_distances[pixel_coords.x + pixel_coords.y * 2] = curr_distance;
+
         imageStore(storageImage, pixel_coords, vec4(hit_colour, 1.0));
 
         return;
     }
+
+    // -1 represents a world miss
+    r_buf.ray_distances[pixel_coords.x + pixel_coords.y * 2] = -1;
 
     // Check for world intersection
     if (origin.y > 768 && dir.y < 0) {
@@ -880,12 +886,3 @@ void main() {
     imageStore(storageImage, pixel_coords, output_colour);
     
 }
-
-
-// In voxel search and render
-
-// Sub voxel render
-
-// Sub triangle render
-
-
