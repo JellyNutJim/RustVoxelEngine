@@ -495,7 +495,7 @@ impl App {
         //println!("com {:?}", combined_data);
 
         // Stores every other pixel, supports up to 8k resolution screen size
-        let ray_distance_buffer_size =( 7680.0 * 4320.0 * 0.25 ) as i32 + 15;
+        let ray_distance_buffer_size = ( 7680.0 * 4320.0 ) as i32 + 15;
 
         let ray_distance_buffer = Buffer::new_slice::<f32>(
             memory_allocator.clone(),
@@ -1052,7 +1052,7 @@ impl ApplicationHandler for App {
                     let v_up = Vec3 {x: 0.0, y: 1.0, z: 0.0};
                     //let fov = 90;
 
-                    let focal_length = (look_from - look_at).magnitude();
+                    let focal_length = 1.0;
                     let viewport_height = 2.0;
                     let viewport_width = viewport_height * (w_size.width as f64 / w_size.height as f64);
 
@@ -1095,11 +1095,6 @@ impl ApplicationHandler for App {
                         s,
                         1.0, // Extra Number
                     ];
-
-                    //println!("{}", s);
-
-
-                    //println!("{:?} {:?} {:?} {:?}", world_position_1, world_position_2, world_position_4 ,world_position_8);
 
                     let c: CameraBufferData = CameraBufferData {
                         origin: [look_from.x as f32, look_from.y as f32, look_from.z as f32, 1.0],

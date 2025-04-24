@@ -1,4 +1,5 @@
 #version 460
+// Secondary Beam
 
 layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
 
@@ -29,7 +30,7 @@ layout(set = 0, binding = 3) readonly buffer NoiseBuffer {
 } n_buf;
 
 layout(set = 0, binding = 4) buffer RayDistanceBuffer {
-    float ray_distances[8294415];
+    float ray_distances[7680][4320];
 } r_buf;
 
 layout(set = 0, binding = 5, rgba8) uniform image2D storageImage;
@@ -726,116 +727,179 @@ void apply_shadow(vec3 world_pos, vec3 ray_origin, vec3 t_max, vec3 t_delta, ive
 
 void main() {
     ivec2 pixel_coords = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 image_dimensions = imageSize(storageImage);
 
-    if (pixel_coords.x % 2 == 0 && pixel_coords.y % 2 == 0) {
+    // Ignore prerenderd pixels
+    bool x_multiple_of_2 = pixel_coords.x % 2 == 0;
+    bool y_multiple_of_2 = pixel_coords.y % 2 == 0;
+
+    if (x_multiple_of_2 && y_multiple_of_2) {
         return;
     }
 
+    // Setup ray
     vec3 origin = c.origin;
-
     vec3 pixel_center = c.pixel00_loc + (c.pixel_delta_u * float(pixel_coords.x)) + (c.pixel_delta_v * float(pixel_coords.y));
-    vec3 dir = pixel_center - origin;
+    vec3 dir = normalize(pixel_center - origin);
 
-    //[54732, 830, 10560]
+    // Ensure that the current pixel is not at the edge of the image, as otherwise it cannot be pre lengthened
+    bool is_edge = pixel_coords.x == 0 || pixel_coords.x == image_dimensions.x - 1 || pixel_coords.y == 0 || pixel_coords.y == image_dimensions.y - 1;
 
-    // vec3 v0 = vec3(54742.0, 830.0, 10530.0);
-    // vec3 v1 = vec3(54752.0, 840.0, 10520.0);
-    // vec3 v2 = vec3(54732.0, 850.0, 10580.0);
+    float initial_distance = 1.0;
 
-    // if (intersection_test(origin, dir, v0, v1, v2) == true) {
-    //     imageStore(storageImage, pixel_coords, vec4(1.0, 0.984, 0.0, 1.0));
-    //     return;
-    // }
+    if (!is_edge) {
+        // As the ray is not an edge, foward its postion to the lowest surrounding pixel
+        ivec2 pc = pixel_coords;
 
-    vec3 world_pos = c.world_pos_1;
+        // Pixels aligned along an even part of the axis must examine the nearest 6 instead of 4
+        if (x_multiple_of_2) {
 
-    vec3 t_delta;
-    ivec3 step;
-    vec3 t_max;
+            initial_distance = min(
+                min(
+                    r_buf.ray_distances[pc.x - 2 ][ pc.y + 1],
+                    r_buf.ray_distances[pc.x - 2 ][ pc.y - 1]
+                ),
+                min(
+                    min(
+                        r_buf.ray_distances[ pc.x ][ pc.y + 1 ],
+                        r_buf.ray_distances[ pc.x ][ pc.y - 1 ]
+                    ),
+                    min(
+                        r_buf.ray_distances[ pc.x + 2 ][ pc.y + 1 ],
+                        r_buf.ray_distances[ pc.x + 2 ][ pc.y - 1 ]
+                    )
+                )
+            );
+        } 
+        else if (y_multiple_of_2) {
 
-    const float limit = 1e-10;
-    
-    t_delta.x = (abs(dir.x) < limit) ? 1e30 : abs(1.0 / dir.x);
-    t_delta.y = (abs(dir.y) < limit) ? 1e30 : abs(1.0 / dir.y);
-    t_delta.z = (abs(dir.z) < limit) ? 1e30 : abs(1.0 / dir.z);
-
-    if (dir.x < 0.0) {
-        step.x = -1;
-        t_max.x = ((world_pos.x) - origin.x);
+            initial_distance = min(
+                min(
+                    r_buf.ray_distances[ pc.x + 1 ][ pc.y - 2 ],
+                    r_buf.ray_distances[ pc.x - 1 ][ pc.y - 2 ]
+                ),
+                min(
+                    min(
+                        r_buf.ray_distances[ pc.x + 1 ][ pc.y ],
+                        r_buf.ray_distances[ pc.x - 1 ][ pc.y ]
+                    ),
+                    min(
+                        r_buf.ray_distances[ pc.x + 1 ][ pc.y + 2 ],
+                        r_buf.ray_distances[ pc.x - 1 ][ pc.y + 2 ]
+                    )
+                )
+            );
+        }
+        else {
+            initial_distance = min(
+                r_buf.ray_distances[ pc.x - 1 ][ pc.y - 1 ],
+                min(
+                    r_buf.ray_distances[ pc.x + 1 ][ pc.y - 1 ],
+                    min(
+                        r_buf.ray_distances[ pc.x - 1 ][ pc.y + 1 ],
+                        r_buf.ray_distances[ pc.x + 1 ][ pc.y + 1 ]
+                    )
+                )
+            );
+        }
     }
-    else {
-        step.x = 1;
-        t_max.x = ((world_pos.x + 1.0) - origin.x);
-    }
 
-    if (dir.y < 0.0) {
-        step.y = -1;
-        t_max.y = ((world_pos.y) - origin.y);
-    }
-    else {
-        step.y = 1;
-        t_max.y = ((world_pos.y + 1.0) - origin.y);
-    }
+    bool hit = false;
 
-    if (dir.z < 0.0) {
-        step.z = -1;
-        t_max.z = ((world_pos.z) - origin.z);
-    }
-    else {
-        step.z = 1;
-        t_max.z = ((world_pos.z + 1.0) - origin.z);
-    }
+    // If no surrounding pixels had an interception, skip the march
+    if (!isinf(initial_distance))
+    {
+        vec3 world_pos = c.world_pos_1;
 
-    t_max /= dir;
+        vec3 t_delta;
+        ivec3 step;
+        vec3 t_max;
 
-    vec3 hit_colour;
-    float curr_distance = 0;
-
-    bool hit = get_intersect(pixel_coords, world_pos, t_max, t_delta, step, dir, hit_colour, curr_distance);
-
-    if (hit == true) {
-        // Get lighting
-        vec3 hit_pos = c.origin + dir * (curr_distance - 0.001);
-        world_pos = floor(hit_pos);
-        dir = normalize((c.sun_loc - hit_pos));
-
-        t_delta = abs(vec3(1.0)/dir);
+        const float limit = 1e-10;
+        
+        t_delta.x = (abs(dir.x) < limit) ? 1e30 : abs(1.0 / dir.x);
+        t_delta.y = (abs(dir.y) < limit) ? 1e30 : abs(1.0 / dir.y);
+        t_delta.z = (abs(dir.z) < limit) ? 1e30 : abs(1.0 / dir.z);
 
         if (dir.x < 0.0) {
             step.x = -1;
-            t_max.x = ((world_pos.x) - hit_pos.x);
+            t_max.x = ((world_pos.x) - origin.x);
         }
         else {
             step.x = 1;
-            t_max.x = ((world_pos.x + 1.0) - hit_pos.x);
+            t_max.x = ((world_pos.x + 1.0) - origin.x);
         }
 
         if (dir.y < 0.0) {
             step.y = -1;
-            t_max.y = ((world_pos.y) - hit_pos.y);
+            t_max.y = ((world_pos.y) - origin.y);
         }
         else {
             step.y = 1;
-            t_max.y = ((world_pos.y + 1.0) - hit_pos.y);
+            t_max.y = ((world_pos.y + 1.0) - origin.y);
         }
 
         if (dir.z < 0.0) {
             step.z = -1;
-            t_max.z = ((world_pos.z) - hit_pos.z);
+            t_max.z = ((world_pos.z) - origin.z);
         }
         else {
             step.z = 1;
-            t_max.z = ((world_pos.z + 1.0) - hit_pos.z);
+            t_max.z = ((world_pos.z + 1.0) - origin.z);
         }
 
         t_max /= dir;
 
-        //apply_shadow(world_pos, hit_pos, t_max, t_delta, step, dir, hit_colour, curr_distance);
+        vec3 hit_colour;
+        float curr_distance = 0;
 
-        imageStore(storageImage, pixel_coords, vec4(hit_colour, 1.0));
+        hit = get_intersect(pixel_coords, world_pos, t_max, t_delta, step, dir, hit_colour, curr_distance);
 
-        return;
+        if (hit == true) {
+            // Get lighting
+            vec3 hit_pos = c.origin + dir * (curr_distance - 0.001);
+            world_pos = floor(hit_pos);
+            dir = normalize((c.sun_loc - hit_pos));
+
+            t_delta = abs(vec3(1.0)/dir);
+
+            if (dir.x < 0.0) {
+                step.x = -1;
+                t_max.x = ((world_pos.x) - hit_pos.x);
+            }
+            else {
+                step.x = 1;
+                t_max.x = ((world_pos.x + 1.0) - hit_pos.x);
+            }
+
+            if (dir.y < 0.0) {
+                step.y = -1;
+                t_max.y = ((world_pos.y) - hit_pos.y);
+            }
+            else {
+                step.y = 1;
+                t_max.y = ((world_pos.y + 1.0) - hit_pos.y);
+            }
+
+            if (dir.z < 0.0) {
+                step.z = -1;
+                t_max.z = ((world_pos.z) - hit_pos.z);
+            }
+            else {
+                step.z = 1;
+                t_max.z = ((world_pos.z + 1.0) - hit_pos.z);
+            }
+
+            t_max /= dir;
+
+            //apply_shadow(world_pos, hit_pos, t_max, t_delta, step, dir, hit_colour, curr_distance);
+
+            imageStore(storageImage, pixel_coords, vec4(hit_colour, 1.0));
+
+            return;
+        }
     }
+
 
     // Check for world intersection
     if (origin.y > 768 && dir.y < 0) {

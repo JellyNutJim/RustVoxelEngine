@@ -1,4 +1,5 @@
 #version 460
+// Initial Beam
 
 layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
 
@@ -29,7 +30,7 @@ layout(set = 0, binding = 3) readonly buffer NoiseBuffer {
 } n_buf;
 
 layout(set = 0, binding = 4) buffer RayDistanceBuffer {
-    float ray_distances[8294415];
+    float ray_distances[7680][4320];
 } r_buf;
 
 layout(set = 0, binding = 5, rgba8) uniform image2D storageImage;
@@ -390,9 +391,7 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
         // }
 
         if (steps > 2000) {
-            hit_colour = vec3(0.0, 0.0, 0.0);
-            return true;
-            break;
+            return false;
         }
 
         // View octant boundaries
@@ -710,14 +709,13 @@ void apply_shadow(vec3 world_pos, vec3 ray_origin, vec3 t_max, vec3 t_delta, ive
 }
 
 void main() {
-    return;
 
     // Effectively every other pixel on the screen
     ivec2 pixel_coords = ivec2(gl_GlobalInvocationID.xy) * 2;
 
     vec3 origin = c.origin;
     vec3 pixel_center = c.pixel00_loc + (c.pixel_delta_u * float(pixel_coords.x)) + (c.pixel_delta_v * float(pixel_coords.y));
-    vec3 dir = pixel_center - origin;
+    vec3 dir = normalize(pixel_center - origin);
     vec3 world_pos = c.world_pos_1;
 
     vec3 t_delta;
@@ -804,15 +802,15 @@ void main() {
         //apply_shadow(world_pos, hit_pos, t_max, t_delta, step, dir, hit_colour, curr_distance);
 
         // Save distance traveled, if transparent hit, distance to the first transparent object is used instead
-        r_buf.ray_distances[pixel_coords.x + pixel_coords.y * 2] = curr_distance;
+        r_buf.ray_distances[pixel_coords.x][pixel_coords.y] = curr_distance;
 
         imageStore(storageImage, pixel_coords, vec4(hit_colour, 1.0));
 
         return;
     }
 
-    // -1 represents a world miss
-    r_buf.ray_distances[pixel_coords.x + pixel_coords.y * 2] = -1;
+    // infinity represents a world miss
+    r_buf.ray_distances[pixel_coords.x][pixel_coords.y] = 1.0/0.0;
 
     // Check for world intersection
     if (origin.y > 768 && dir.y < 0) {
