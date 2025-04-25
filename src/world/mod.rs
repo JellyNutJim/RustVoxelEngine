@@ -49,7 +49,7 @@ pub fn get_grid_from_seed(seed: u64, width: i32, camera_origin: [i32; 3]) -> Sha
     println!("camera chunk: {:?}", camera_chunk);
     println!("grid origin: {:?}", origin);
 
-    let mut p = ShaderGrid::new(width as u32, origin, seed, 768, r8w, r4w, r2w, r1w);
+    let mut p = ShaderGrid::new(width as u32, origin, seed, 816, r8w, r4w, r2w, r1w);
 
 
     // Intial World Builder Pipelin

@@ -1,6 +1,6 @@
 use std::u8;
 
-use super::{BiomeMap, Biome, HeightMap, PerlinNoise, ScalablePerlin, ShaderChunk, ShaderGrid, Voxel};
+use super::{BiomeMap, Biome, HeightMap, PerlinNoise, ScalablePerlin, ShaderGrid, Voxel};
 
 // Contains all noises used throughout the generation process
 #[allow(unused)]
@@ -422,7 +422,7 @@ impl GenPipeLine {
 }
 
 
-static POSITIONS: [(usize, usize); 4] = [(0, 0), (0, 1), (1, 0), (1, 1)];
+//static POSITIONS: [(usize, usize); 4] = [(0, 0), (0, 1), (1, 0), (1, 1)];
 static POSITIONS_EXLCUDING: [(usize, usize); 3] = [(0, 1), (1, 0), (1, 1)];
 
 // Visible API, 

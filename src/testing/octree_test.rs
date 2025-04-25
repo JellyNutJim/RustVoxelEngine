@@ -3,7 +3,7 @@ use crate::{
     Voxel,
 };
 
-
+#[allow(unused)]
 pub fn test() {
     let mut p = ShaderChunk::new([0, 0, 0]);
     let mut v = Voxel::from_type(3);

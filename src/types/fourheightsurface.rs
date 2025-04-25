@@ -1,9 +1,10 @@
-
+#[allow(unused)]
 pub struct FourHeightSurface {
     quadrants: [u8; 4],
     meta: u32,
 }
 
+#[allow(unused)]
 impl FourHeightSurface {
     pub fn new() -> Self {
         Self {

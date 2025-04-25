@@ -370,10 +370,12 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
     steps = 0;
     int multiplier = 1;
     int transparent_hits = 0;
+    float transparent_distance = 0.0;
     vec3 tansparent_mask = vec3(0.0);
 
     float accumculated_curve = 0.0;
     float curve = 0.01;
+    float dis = 0.0;
 
     int curr_chunk = 0;
 
@@ -391,11 +393,21 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
         // }
 
         if (steps > 2000) {
-            return false;
+            hit_colour = vec3(0.0, 0.0, 0.0);
+            return true;
+            break;
         }
 
-        // View octant boundaries
-        // if (curr_distance < 50.0 && curr_distance > 2.0) {
+        if (transparent_hits > 0) {
+            dis = curr_distance - transparent_distance;
+            if (dis > 50) { 
+                hit_colour = tansparent_mask;
+                return true;
+            }
+        }
+
+        //View octant boundaries
+        // if (curr_distance < 200.0 && curr_distance > 2.0) {
 
         //     vec3 position = c.origin + dir * curr_distance;
         //     vec3 octant_relative = mod(position, multiplier);
@@ -413,7 +425,20 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
         //     if (near_z) boundary_count++;
             
         //     if (boundary_count >= 2) {
-        //         hit_colour = vec3(0.0, 0.0, 1.0);
+        //         float r = 0.0;
+        //         float g = 0.0;
+        //         float b = 0.0;
+
+        //         if (multiplier == 64) {
+        //             r = 1.0;
+        //         }
+        //         if (multiplier == 32) {
+        //             g = 1.0;
+        //         }
+        //         if (multiplier == 16) {
+        //             b = 1.0;
+        //         }
+        //         hit_colour = vec3(r, g, b);
         //         return true;
         //     }
         // }
@@ -471,20 +496,27 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
 
                 curr_distance = t;
 
-                if (hit_pos.y > 788) {
-                    hit_colour = grass2(hit_pos) * pow((hit_pos.y / 840), 3);
+                if (hit_pos.y > 835) {
+                    hit_colour = grass2(hit_pos) * pow((hit_pos.y / 891), 3);
                 }
-                else if (hit_pos.y < 784) {
-                    hit_colour = sand(hit_pos) * pow((hit_pos.y / 784), 3);
+                else if (hit_pos.y < 831) {
+                    hit_colour = sand(hit_pos) * pow((hit_pos.y / 891), 3);
                 }
                 else {
-                    float ratio = (hit_pos.y - 784) / 4;
+                    float ratio = (hit_pos.y - 831) / 4;
 
-                    hit_colour = sand(hit_pos) * (1 - ratio) + (grass2(hit_pos) * pow((hit_pos.y / 840), 3)) * ratio;  //((sand(hit_pos) * (1 - ratio)) + (grass2(hit_pos) * ratio)) / 2;
+                    hit_colour = sand(hit_pos) * (1 - ratio) + (grass2(hit_pos) * pow((hit_pos.y / 891), 3)) * ratio;  //((sand(hit_pos) * (1 - ratio)) + (grass2(hit_pos) * ratio)) / 2;
                 }
 
                 if (transparent_hits > 0) {
-                    hit_colour = (hit_colour * 0.3 + tansparent_mask * 0.7);
+                    if (dis > 50) { 
+                        hit_colour = tansparent_mask;
+                        return true;
+                    }
+
+                    float t_per = (dis / 164);
+
+                    hit_colour = (hit_colour * (0.3 - t_per) + tansparent_mask * (0.7 + t_per));
                 }
 
                 return true;
@@ -496,20 +528,27 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
 
                 curr_distance = t;
 
-                if (hit_pos.y > 788) {
-                    hit_colour = grass2(hit_pos) * pow((hit_pos.y / 840), 3);
+                if (hit_pos.y > 835) {
+                    hit_colour = grass2(hit_pos) * pow((hit_pos.y / 891), 3);
                 }
-                else if (hit_pos.y < 784) {
-                    hit_colour = sand(hit_pos) * pow((hit_pos.y / 784), 3);
+                else if (hit_pos.y < 831) {
+                    hit_colour = sand(hit_pos) * pow((hit_pos.y / 891), 3);
                 }
                 else {
-                    float ratio = (hit_pos.y - 784) / 4;
+                    float ratio = (hit_pos.y - 831) / 4;
 
-                    hit_colour = sand(hit_pos) * (1 - ratio) + (grass2(hit_pos) * pow((hit_pos.y / 840), 3)) * ratio;  //((sand(hit_pos) * (1 - ratio)) + (grass2(hit_pos) * ratio)) / 2;
+                    hit_colour = sand(hit_pos) * (1 - ratio) + (grass2(hit_pos) * pow((hit_pos.y / 891), 3)) * ratio;  //((sand(hit_pos) * (1 - ratio)) + (grass2(hit_pos) * ratio)) / 2;
                 }
 
                 if (transparent_hits > 0) {
-                    hit_colour = (hit_colour * 0.3 + tansparent_mask * 0.7);
+                    if (dis > 50) { 
+                        hit_colour = tansparent_mask;
+                        return true;
+                    }
+
+                    float t_per = (dis / 164);
+
+                    hit_colour = (hit_colour * (0.3 - t_per) + tansparent_mask * (0.7 + t_per));
                 }
 
                 return true;
@@ -581,26 +620,8 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
             if (voxel_type == 858993459) {
                 if (transparent_hits == 0) {
                     transparent_hits = 1;
+                    transparent_distance = curr_distance;
                     tansparent_mask = vec3(0.2, 0.5, 1.0);
-
-                    vec3 hp = c.origin + dir * curr_distance;
-
-                    float t = c.time.z;
-                    float scale = 1;
-
-                    float nx = (hp.x) * scale;
-                    float nz = (hp.z) * scale;
-                    
-
-                    float y = get_perlin_noise(nx, nz);// * (c.time.z + 0.2);
-
-
-
-                    if (y < (t) / 10) {
-                        float r = 0.2 * 1.0 + -(y / 3);
-                        float g = 0.5 * 1.0 + -(y / 3);
-                        tansparent_mask = vec3(r, g, 1.0);
-                    }
                 }
 
                 steps += 1;
@@ -813,7 +834,7 @@ void main() {
     r_buf.ray_distances[pixel_coords.x][pixel_coords.y] = 1.0/0.0;
 
     // Check for world intersection
-    if (origin.y > 768 && dir.y < 0) {
+    if (origin.y > 816 && dir.y < 0) {
         // float y_hit_dis = (768 - origin.y) / dir.y;
         // vec3 hp = origin + dir * y_hit_dis;
 
@@ -827,7 +848,7 @@ void main() {
         float discriminant = b*b - 4*a*c;
 
         if (discriminant >= 0) {
-            float y_hit_dis = (768 - origin.y) / dir.y; 
+            float y_hit_dis = (816 - origin.y) / dir.y; 
             vec3 hp = origin + dir * y_hit_dis;
             float scale = 0.00003;
             float nx = hp.x * scale;

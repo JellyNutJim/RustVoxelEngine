@@ -373,11 +373,11 @@ impl ShaderGrid {
             update_chunk[axis] += (self.width - 1) as i32 * 64;
         }
 
-        let temp = [
-            self.origin[0] as u32,
-            self.origin[1] as u32,
-            self.origin[2] as u32,
-        ];
+        // let temp = [
+        //     self.origin[0] as u32,
+        //     self.origin[1] as u32,
+        //     self.origin[2] as u32,
+        // ];
 
         // Populate moved chunks with new data, loops through the row of chunks to be generated
         for _i in 0..self.width as usize {
@@ -440,7 +440,7 @@ impl ShaderGrid {
             delete_chunk[axis] += ((layer_width + 1) * 64) as i32;
         }
 
-        for i in 0..layer_width as usize {
+        for _i in 0..layer_width as usize {
 
             let update_chunk_pos   = self.get_chunk_pos(&update_chunk);
             let delete_chunk_pos = self.get_chunk_pos(&delete_chunk);
@@ -514,7 +514,7 @@ impl ShaderGrid {
             delete_chunk[axis] += ((layer_width + 1) * 64) as i32;
         }
 
-        for i in 0..layer_width as usize {
+        for _i in 0..layer_width as usize {
 
             let update_chunk_pos   = self.get_chunk_pos(&update_chunk);
             let delete_chunk_pos = self.get_chunk_pos(&delete_chunk);
@@ -591,7 +591,7 @@ impl ShaderGrid {
         
         // Populate selected chunks with new data
         // Replace old chunks with lower res data
-        for i in 0..layer_width as usize {
+        for _i in 0..layer_width as usize {
 
             let update_chunk_pos   = self.get_chunk_pos(&update_chunk);
             let delete_chunk_pos = self.get_chunk_pos(&delete_chunk);
