@@ -39,6 +39,7 @@ layout(set = 0, binding = 5, rgba8) uniform image2D storageImage;
 
 const int WIDTH = 321;
 const bool DETAIL = false;
+const bool RENDER_OUT_OF_WORLD_FEATURES = false;
 
 uint get_octant(vec3 pos, uint mid) {
     uint octant = 0;
@@ -253,14 +254,8 @@ vec3 get_colour(uint hit_axis, ivec3 step, vec3 c) {
     return vec3(0.1, 0.1, 0.1);
 }
 
-vec3 stone(uint hit_axis, ivec3 step) {
-    vec3 normal;
-
-    if(hit_axis == 0) normal = vec3(-step.x, 0.0, 0.0);
-    else if(hit_axis == 1) normal = vec3(0.0, -step.y, 0.0);
-    else normal = vec3(0.0, 0.0, -step.z);
-
-    return vec3(0.7, 0.71, 0.7) * 0.3 + normal * 0.1;
+vec3 stone() {
+    return vec3(0.7, 0.71, 0.7) * 0.3;
 }
 
 vec3 grass(uint hit_axis, ivec3 step, vec3 hit_pos) {
@@ -407,7 +402,7 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
         }
 
         // View octant boundaries
-        // if (curr_distance < 200.0 && curr_distance > 2.0) {
+        // if (curr_distance < 500.0 && curr_distance > 2.0) {
 
         //     vec3 position = c.origin + dir * curr_distance;
         //     vec3 octant_relative = mod(position, multiplier);
@@ -451,8 +446,10 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
                 continue;
             }
 
-
-
+            // if (hit_axis == 1 && step.y > 0) {
+            //     hit_colour = stone();
+            //     return true;
+            // }
 
             uint voxel = voxel_type;
 
@@ -478,16 +475,67 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
             if (height_3 == 0) { 
                 height_3 = 1;
             }
+            
+            float h0 = (float(height_0 - 1) / 253);
+            float h1 = (float(height_1 - 1) / 253);
+            float h2 = (float(height_2 - 1) / 253);
+            float h3 = (float(height_3 - 1) / 253);
+
+            // Check if side has been hit
+            vec3 rel_pos = fract(c.origin + dir * curr_distance);
+
+            // x
+            // if (hit_axis == 0) {
+            //     if (step.x == 1) {
+            //         float m = h2 - h0;
+            //         float y_on_line = m * (rel_pos.z) + h0;
+
+            //         if (y_on_line > rel_pos.y) {
+            //             hit_colour = stone();
+            //             return true;
+            //         }
+            //     } else {
+            //         float m = h3 - h1;
+            //         float y_on_line = m * (rel_pos.z) + h1;
+
+            //         if (y_on_line > rel_pos.y) {
+            //             hit_colour = stone();
+            //             return true;
+            //         }
+            //     }
+            // }
+
+            // // z
+            // if (hit_axis == 2) {
+            //      if (step.z == 1) {
+            //         float m = h1 - h0;
+            //         float y_on_line = m * (rel_pos.x) + h0;
+
+            //         if (y_on_line > rel_pos.y) {
+            //             hit_colour = stone();
+            //             return true;
+            //         }
+            //     } else {
+            //         float m = h3 - h2;
+            //         float y_on_line = m * (rel_pos.x) + h2;
+
+            //         if (y_on_line > rel_pos.y) {
+            //             hit_colour = stone();
+            //             return true;
+            //         }
+            //     }
+            // }
+
 
             float scale = float(multiplier);
 
             // Dodgey temp fix until stepping is sorted out to what it should be
             vec3 scaleed_pos = floor(world_pos / scale) * scale;
 
-            vec3 v0 = scaleed_pos + vec3(0,     (float(height_0 - 1) / 253) * scale, 0);
-            vec3 v1 = scaleed_pos + vec3(scale, (float(height_1 - 1) / 253) * scale, 0);
-            vec3 v2 = scaleed_pos + vec3(0,     (float(height_2 - 1) / 253) * scale, scale);
-            vec3 v3 = scaleed_pos + vec3(scale, (float(height_3 - 1) / 253) * scale, scale);
+            vec3 v0 = scaleed_pos + vec3(0,     h0 * scale, 0);
+            vec3 v1 = scaleed_pos + vec3(scale, h1 * scale, 0);
+            vec3 v2 = scaleed_pos + vec3(0,     h2 * scale, scale);
+            vec3 v3 = scaleed_pos + vec3(scale, h3 * scale, scale);
 
             float t = 0.0;
 
@@ -608,7 +656,7 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
             }
 
             if (voxel_type == 2) {
-                hit_colour = stone(hit_axis, step);
+                hit_colour = stone();
 
                 if (transparent_hits > 0) {
                     hit_colour = (hit_colour + tansparent_mask) / 2;
@@ -629,7 +677,7 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
                 continue;
             }
 
-            hit_colour = stone(hit_axis, step);
+            hit_colour = stone();
 
             return true;
 
@@ -916,6 +964,13 @@ void main() {
         }
     }
 
+    if ( RENDER_OUT_OF_WORLD_FEATURES == false ) {
+        float k = (normalize(dir).y + 1.0) * 0.5;
+        vec3 colour = vec3(1.0) * (1.0 - k) + vec3(0.5, 0.7, 1.0) * (k);
+        vec4 output_colour = vec4(colour, 1.0);
+        imageStore(storageImage, pixel_coords, output_colour);
+        return;
+    }
 
     // Check for world intersection
     if (origin.y > 816 && dir.y < 0) {

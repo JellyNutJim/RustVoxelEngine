@@ -57,13 +57,17 @@ mod rendering;
 mod testing;
 
 use rendering::{ WorldUpdateMessage, WorldUpdater, Update, CameraBufferData, CameraLocation };
-use world::{get_grid_from_seed, ShaderChunk, ShaderGrid};
+use world::{get_grid_from_seed, get_empty_grid, ShaderChunk, ShaderGrid};
 
 
 use types::{Vec3, Voxel};
 use noise_gen::PerlinNoise; 
 
 
+const CONFINE_CURSOR: bool = false;
+const ORIENTATION_MOVEMENT: bool = false;
+const POSTIONAL_MOVEMENT: bool = false;
+const WORLD_INTERACTION: bool = false;
 
 //use testing::test;
 
@@ -327,16 +331,36 @@ impl App {
             }
         }
 
+        let h_angle: f64 = PI / 2.0;
+        let v_angle: f64 = 0.0;
+
+        let initial_direction = Vec3 {
+            x: h_angle.cos() * v_angle.cos(),
+            y: v_angle.sin(),
+            z: h_angle.sin() * v_angle.cos()
+        };
+
         let middle = Vec3::from(x, y, z);
 
-        let camera_location = CameraLocation {location: middle, direction: Vec3::new(), old_loc: middle, h_angle: 0.0, v_angle: 0.0, sun_loc: Vec3::from(10000.0, 3000.0, 10000.0)};
-        let mut intial_world = get_grid_from_seed(seed, width as i32, [middle.x as i32, middle.y as i32, middle.z as i32]);
+        let camera_location = CameraLocation { 
+            location: middle, 
+            direction: initial_direction, 
+            old_loc: middle, 
+            h_angle: h_angle, 
+            v_angle: v_angle, 
+            sun_loc: Vec3::from(10000.0, 3000.0, 10000.0)
+        };
+
+        let mut intial_world = get_grid_from_seed(42, width as i32, [middle.x as i32, middle.y as i32, middle.z as i32]);
+        
+        // Empty testing enviroment
+        //let mut intial_world = get_empty_grid(width as i32, [middle.x as i32, middle.y as i32, middle.z as i32]);
 
         // For testing
         // let v32 = Voxel::from_quadrants(
         //     [
         //         0b_00000001,
-        //         0b_00000100,
+        //         0b_00001100,
         //         0b_10001000,
         //         0b_11111111,
 
@@ -344,8 +368,8 @@ impl App {
         // );
 
         //intial_world.insert_subchunk([middle.x as i32, middle.y as i32, (middle.z + 1.0) as i32], v32, 4, false);
-        //intial_world.insert_voxel([middle.x as i32, middle.y as i32, (middle.z + 1.0) as i32], v32, false);
-        //intial_world.insert_voxel([middle.x as i32, middle.y as i32, (middle.z + 2.0) as i32], Voxel::from_type(1), false);
+        //intial_world.insert_voxel([middle.x as i32, middle.y as i32, (middle.z + 4.0) as i32], v32, false);
+
         println!("{:?}", middle);
 
         // Get Vector World Data
@@ -353,7 +377,7 @@ impl App {
         let mut voxels = flat_world.1;
         let mut meta_data = flat_world.0;
 
-        println!("{} {}", voxels.len(), meta_data.len());
+        println!("len: {} {}", voxels.len(), meta_data.len());
 
         // Resize
         voxels.resize(500000000, 0);  
@@ -616,9 +640,12 @@ impl ApplicationHandler for App {
         let window_size = window.inner_size();
         
         // Confine cursor
-        match window.set_cursor_grab(CursorGrabMode::Confined) {
-            _ => {}
+        if CONFINE_CURSOR == true {
+            match window.set_cursor_grab(CursorGrabMode::Confined) {
+                _ => {}
+            }
         }
+
 
         // Intially set cursor to centre of the screen
         window.set_cursor_position(PhysicalPosition::new(window_size.width as f64 / 2.0, window_size.height as f64 / 2.0)).expect("Cursor Error");
@@ -817,6 +844,10 @@ impl ApplicationHandler for App {
             WindowEvent::KeyboardInput { device_id, event, is_synthetic } => {
                 // Simple movement
 
+                if POSTIONAL_MOVEMENT == false {
+                    return;
+                }
+
                 let dis = Vec3::from(0.25, 0.25, 0.25) * 2.0;
                 let up = Vec3::from(0.0, 1.0, 0.0);
 
@@ -862,6 +893,11 @@ impl ApplicationHandler for App {
             }
             #[allow(unused_variables)]
             WindowEvent::MouseInput { device_id, state, button } => {
+                if WORLD_INTERACTION == false {
+                    return;
+                }
+
+
                 match button {
                     MouseButton::Left => {
                         let voxel_loc = self.camera_location.location + self.camera_location.direction * 2.0;
@@ -888,6 +924,12 @@ impl ApplicationHandler for App {
             }
             #[allow(unused_variables)]
             WindowEvent::CursorMoved { device_id, position } => {
+
+                // Disable mouse movement
+                if ORIENTATION_MOVEMENT == false {
+                    return;
+                }
+
                 // Only apply rotation and mouse locking when window is in focus
                 if !rcx.window.has_focus() { 
                     return
@@ -974,6 +1016,8 @@ impl ApplicationHandler for App {
                     let old_pos_chunk = (self.camera_location.old_loc / 64.0).floor();
 
                     let diff = curr_pos_chunk - old_pos_chunk;
+
+
 
                     if diff.x != 0.0 {
                         //println!("axis: {}, dir: {}", 0, diff.x);

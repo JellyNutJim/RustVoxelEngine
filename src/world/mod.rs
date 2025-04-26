@@ -30,11 +30,6 @@ use crate::{
 
 // WIDTH MUST ALWAYS BE ODD
 pub fn get_grid_from_seed(seed: u64, width: i32, camera_origin: [i32; 3]) -> ShaderGrid {
-
-    let x = Voxel::from_type(1);
-
-    println!("{:032b}", x.get_voxel());
-
     let r8w: u32 = width as u32;
     let r4w: u32 = 151;
     let r2w: u32 = 101;
@@ -42,7 +37,6 @@ pub fn get_grid_from_seed(seed: u64, width: i32, camera_origin: [i32; 3]) -> Sha
 
     //let mut p = ShaderGrid::from(chunks, 3);
     let camera_chunk = [(camera_origin[0] / 64) * 64, (camera_origin[1] / 64) * 64, (camera_origin[2] / 64) * 64];
-
     let origin = [camera_chunk[0] - ((width - 1) * 64) / 2 as i32,  camera_chunk[1] - ((width - 1) * 64) / 2 as i32, camera_chunk[2] - ((width - 1) * 64) / 2 as i32];
 
     println!("camera: {:?}", camera_origin);
@@ -66,6 +60,36 @@ pub fn get_grid_from_seed(seed: u64, width: i32, camera_origin: [i32; 3]) -> Sha
     // let p = p.flatten();
     // println!("Grid: {}", p.1.len());
     p
+}
+
+pub fn get_empty_grid(width: i32, camera_origin: [i32; 3]) -> ShaderGrid {
+    let r8w: u32 = width as u32;
+    let r4w: u32 = 151;
+    let r2w: u32 = 101;
+    let r1w: u32 = 51;
+
+    //let mut p = ShaderGrid::from(chunks, 3);
+    let camera_chunk = [(camera_origin[0] / 64) * 64, (camera_origin[1] / 64) * 64, (camera_origin[2] / 64) * 64];
+    let origin = [camera_chunk[0] - ((width - 1) * 64) / 2 as i32,  camera_chunk[1] - ((width - 1) * 64) / 2 as i32, camera_chunk[2] - ((width - 1) * 64) / 2 as i32];
+
+    println!("camera: {:?}", camera_origin);
+    println!("camera chunk: {:?}", camera_chunk);
+    println!("grid origin: {:?}", origin);
+
+    let mut grid = ShaderGrid::new(width as u32, origin, 42, 816, r8w, r4w, r2w, r1w);
+
+    // Set all generation levels to voxel depth
+    for x in 0..grid.width {
+        for y in 0..grid.width {
+            for z in 0..grid.width { 
+                let grid_index = x + y * grid.width + z * grid.width.pow(2);
+                let index = grid.grid[grid_index as usize] as usize;
+                grid.chunks[index].set_generation_level(5);
+            }
+        }
+    }
+
+    grid
 }
 
 
