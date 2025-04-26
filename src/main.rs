@@ -65,8 +65,8 @@ use noise_gen::PerlinNoise;
 
 
 const CONFINE_CURSOR: bool = false;
-const ORIENTATION_MOVEMENT: bool = false;
-const POSTIONAL_MOVEMENT: bool = false;
+const ORIENTATION_MOVEMENT: bool = true;
+const POSTIONAL_MOVEMENT: bool = true;
 const WORLD_INTERACTION: bool = false;
 
 //use testing::test;
@@ -96,6 +96,8 @@ struct App {
     camera_buffer: SubbufferAllocator,
     
     ray_distance_buffer: Subbuffer<[f32]>,
+
+    stat_buffer: Subbuffer<[u32]>,
 
     rcx: Option<RenderContext>, 
     camera_location: CameraLocation,
@@ -465,6 +467,7 @@ impl App {
 
         // Stores every other pixel, supports up to 8k resolution screen size
         let ray_distance_buffer_size = ( 7680.0 * 4320.0 ) as i32 + 15;
+        let stat_buffer_size = 3;
 
         let ray_distance_buffer = Buffer::new_slice::<f32>(
             memory_allocator.clone(),
@@ -480,6 +483,25 @@ impl App {
             ray_distance_buffer_size as DeviceSize,
         ).expect("failed to recreate quarter resolution buffer");
 
+
+        // Stat Buffer -----------------------------------------------------------------
+
+        let stat_buffer = Buffer::new_slice::<u32>(
+            memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::STORAGE_BUFFER | BufferUsage::TRANSFER_DST,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_HOST
+                | MemoryTypeFilter::HOST_RANDOM_ACCESS,
+                ..Default::default()
+            },
+            stat_buffer_size as DeviceSize,
+        ).expect("failed to recreate buffer");
+
+         // Noise Buffer -----------------------------------------------------------------
+
         let noise_buffer = Buffer::from_iter(
             memory_allocator.clone(),
             BufferCreateInfo {
@@ -494,6 +516,7 @@ impl App {
             combined_data,
         ).expect("failed to create buffer");
     
+
         let camera_buffer = SubbufferAllocator::new(
             memory_allocator.clone(),
             SubbufferAllocatorCreateInfo {
@@ -615,6 +638,7 @@ impl App {
             noise_buffer,
             camera_buffer,
             ray_distance_buffer,
+            stat_buffer,
             rcx,
             camera_location,
             world_updater,
@@ -661,7 +685,6 @@ impl ApplicationHandler for App {
                 .surface_capabilities(&surface, Default::default())
                 .unwrap();
 
-            // Please take a look at the docs for the meaning of the parameters we didn't mention.
             let image_format = vulkano::format::Format::R8G8B8A8_UNORM;
             Swapchain::new(
                 self.device.clone(),
@@ -672,7 +695,7 @@ impl ApplicationHandler for App {
                     image_format,
                     image_extent: window_size.into(),
                     image_usage: ImageUsage::COLOR_ATTACHMENT | ImageUsage::STORAGE,
-
+                    present_mode: vulkano::swapchain::PresentMode::Immediate, // comment out to enable vsync
                     composite_alpha: surface_capabilities
                         .supported_composite_alpha
                         .into_iter()
@@ -764,6 +787,15 @@ impl ApplicationHandler for App {
                     DescriptorSetLayoutBinding {
                         stages: ShaderStages::COMPUTE,
                         ..DescriptorSetLayoutBinding::descriptor_type(
+                            DescriptorType::StorageBuffer,
+                        )
+                    }
+                ),
+                (
+                    6,
+                    DescriptorSetLayoutBinding {
+                        stages: ShaderStages::COMPUTE,
+                        ..DescriptorSetLayoutBinding::descriptor_type(
                             DescriptorType::StorageImage,
                         )
                     }
@@ -844,6 +876,11 @@ impl ApplicationHandler for App {
             WindowEvent::KeyboardInput { device_id, event, is_synthetic } => {
                 // Simple movement
 
+                match event.physical_key {
+                    PhysicalKey::Code(KeyCode::Escape) => { std::process::exit(0) }
+                    _ =>  { } 
+                }
+
                 if POSTIONAL_MOVEMENT == false {
                     return;
                 }
@@ -886,8 +923,6 @@ impl ApplicationHandler for App {
                             println!("Set buffer index to {}", self.current_voxel_buffer);
                         }
                     }
-    
-                    PhysicalKey::Code(KeyCode::Escape) => { std::process::exit(0) }
                     _ =>  { print!("Non-Assigned Key")}
                 }
             }
@@ -959,9 +994,18 @@ impl ApplicationHandler for App {
                 if let Some(future) = &mut rcx.previous_frame_end {
                     future.cleanup_finished();
                     rcx.previous_frame_end = Some(sync::now(self.device.clone()).boxed());
-                }
-                
 
+                    let stats = self.stat_buffer.read().unwrap();
+                    let total_steps = stats[0]; // Total steps across all threads
+                    let rays_cast = stats[1];   // Total rays cast
+                    let rays_missed = stats[2];
+                    //let avg_steps_per_ray = if rays_cast > 0 { total_steps as f32 / rays_cast as f32 } else { 0.0 };
+    
+                    println!("Frame stats - Total steps: {}, Ray Hits: {}, Rays Missed: {}", 
+                            total_steps, rays_cast, rays_missed);
+                }
+
+                            
                 //println!("Checking for messages in RedrawRequested");
                 while let Ok(msg) = self.update_receiver.try_recv() {
                     println!("Received {:?}", msg);
@@ -978,10 +1022,6 @@ impl ApplicationHandler for App {
                 if window_size.width == 0 || window_size.height == 0 {
                     return;
                 }
-
-                // if !self.frame_timer.update() {
-                //     return; // Skip rendering this frame but keep processing input
-                // }
 
                 // Free finished resources
                 rcx.previous_frame_end.as_mut().unwrap().cleanup_finished();
@@ -1133,7 +1173,8 @@ impl ApplicationHandler for App {
                         WriteDescriptorSet::buffer(2, self.world_meta_data_buffers[self.current_voxel_buffer].clone()),
                         WriteDescriptorSet::buffer(3, self.noise_buffer.clone()), 
                         WriteDescriptorSet::buffer(4, self.ray_distance_buffer.clone()), 
-                        WriteDescriptorSet::image_view(5, rcx.attachment_image_views[image_index as usize].clone()),
+                        WriteDescriptorSet::buffer(5, self.stat_buffer.clone()), 
+                        WriteDescriptorSet::image_view(6, rcx.attachment_image_views[image_index as usize].clone()),
                     ],
                     [],
                 )
@@ -1165,6 +1206,8 @@ impl ApplicationHandler for App {
                     CommandBufferUsage::OneTimeSubmit,
                 )
                 .unwrap();
+
+                builder.fill_buffer(self.stat_buffer.clone(), 0).unwrap();
 
                 builder
                     .bind_pipeline_compute(rcx.initial_pipeline.clone())

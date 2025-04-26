@@ -33,7 +33,14 @@ layout(set = 0, binding = 4) buffer RayDistanceBuffer {
     float ray_distances[7680][4320];
 } r_buf;
 
-layout(set = 0, binding = 5, rgba8) uniform image2D storageImage;
+layout(set = 0, binding = 5) buffer StatBuffer {
+    uint march_total;
+    uint hit_total;
+    uint miss_total;
+} stat_buf;
+
+layout(set = 0, binding = 6, rgba8) uniform image2D storageImage;
+
 
 #include "triangle.glsl"
 
@@ -358,11 +365,9 @@ bool intersection_test(vec3 origin, vec3 dir, vec3 v0, vec3 v1, vec3 v2, inout f
 
 
 
-bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_delta, ivec3 step, vec3 dir, inout vec3 hit_colour, inout float curr_distance) {
+bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_delta, ivec3 step, vec3 dir, inout vec3 hit_colour, inout float curr_distance, inout uint steps) {
 
-    uint steps = 0;
     uint hit_axis = 0;
-    steps = 0;
     int multiplier = 1;
     int transparent_hits = 0;
     float transparent_distance = 0.0;
@@ -917,9 +922,16 @@ void main() {
             curr_distance = 0.0;
         }
 
-        hit = get_intersect(pixel_coords, world_pos, t_max, t_delta, step, dir, hit_colour, curr_distance);
+        uint steps = 0;
+
+        hit = get_intersect(pixel_coords, world_pos, t_max, t_delta, step, dir, hit_colour, curr_distance, steps);
+
+        atomicAdd(stat_buf.march_total, steps);
 
         if (hit == true) {
+
+            atomicAdd(stat_buf.hit_total, 1);
+
             // Get lighting
             vec3 hit_pos = c.origin + dir * (curr_distance - 0.001);
             world_pos = floor(hit_pos);
@@ -963,6 +975,8 @@ void main() {
             return;
         }
     }
+
+    atomicAdd(stat_buf.miss_total, 1);
 
     if ( RENDER_OUT_OF_WORLD_FEATURES == false ) {
         float k = (normalize(dir).y + 1.0) * 0.5;
@@ -1044,12 +1058,5 @@ void main() {
     imageStore(storageImage, pixel_coords, output_colour);
     
 }
-
-
-// In voxel search and render
-
-// Sub voxel render
-
-// Sub triangle render
 
 
