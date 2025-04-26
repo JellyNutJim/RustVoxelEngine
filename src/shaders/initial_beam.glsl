@@ -838,10 +838,10 @@ void main() {
 
     bool hit = get_intersect(pixel_coords, world_pos, t_max, t_delta, step, dir, hit_colour, curr_distance, transparent_distance, steps);
 
-    atomicAdd(stat_buf.march_total, steps);
+    //atmoicAdd(stat_buf.march_total, steps);
 
     if (hit == true) {
-        atomicAdd(stat_buf.hit_total, 1);
+        //atmoicAdd(stat_buf.hit_total, 1);
 
         // Get lighting
         vec3 hit_pos = c.origin + dir * (curr_distance - 0.001);
@@ -894,7 +894,7 @@ void main() {
 
     // infinity represents a world miss
     r_buf.ray_distances[pixel_coords.x][pixel_coords.y] = 1.0/0.0;
-    atomicAdd(stat_buf.miss_total, 1);
+    //atmoicAdd(stat_buf.miss_total, 1);
 
     if ( RENDER_OUT_OF_WORLD_FEATURES == false ) {
         float k = (normalize(dir).y + 1.0) * 0.5;

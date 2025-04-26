@@ -39,14 +39,15 @@ use vulkano::{
     Validated, Version, VulkanError, VulkanLibrary,
 };
 use winit::{
-    application::ApplicationHandler, dpi::PhysicalPosition, event::{MouseButton, WindowEvent}, event_loop::{ActiveEventLoop, EventLoop}, keyboard::{KeyCode, PhysicalKey}, window::{CursorGrabMode, Window, WindowId}
+    application::ApplicationHandler, dpi::PhysicalPosition, event::{MouseButton, WindowEvent}, event_loop::{ActiveEventLoop, EventLoop}, keyboard::{KeyCode, PhysicalKey}, window::{CursorGrabMode, Fullscreen, Window, WindowId}
 
 };
 
 use vulkano::command_buffer::CopyBufferInfo;
 
+use chrono::Local;
 use rand::Rng;
-use std::time::Instant;
+use std::{time::Instant, fs::File, io::Write, path::Path};
 use crossbeam_channel::Receiver;
 
 mod asset_load;
@@ -63,11 +64,22 @@ use world::{get_grid_from_seed, get_empty_grid, ShaderChunk, ShaderGrid};
 use types::{Vec3, Voxel};
 use noise_gen::PerlinNoise; 
 
-
+// Usage constants
 const CONFINE_CURSOR: bool = false;
 const ORIENTATION_MOVEMENT: bool = true;
 const POSTIONAL_MOVEMENT: bool = true;
 const WORLD_INTERACTION: bool = false;
+const RESIZEABLE_WINDOW: bool = true;
+const USE_VSYNC: bool = false;
+
+
+// Testing constants
+const MEASURE_FRAME_TIMES: bool = true;
+const MEASURE_MARCH_DATA: bool = false; // frame times must also be true
+const PRINT_FRAME_STATS: bool = false;
+
+// Options
+const USE_BEAM_OPTIMISATION: bool = true;
 
 //use testing::test;
 
@@ -108,6 +120,8 @@ struct App {
     last_n_press: bool,
 
     start: Instant,
+    frame_times: Vec<f64>,
+    render_data: Vec<(u32, u32, u32)>
 }
 
 struct RenderContext {
@@ -141,6 +155,58 @@ impl App {
     fn shift_world(&mut self, axis: usize, dir: i32) {
         self.world_updater.request_update(Update::Shift(axis, dir));
     }   
+
+    // saves the frame times and, if used, march data. -> Currently just saves file to current directory
+    fn save_performance_data(&self) {
+        // Empty
+        if self.frame_times.is_empty() {
+            return;
+        }
+    
+        let now = Local::now();
+        let filename = format!("frame_times_{}.csv", now.format("%Y%m%d_%H%M%S"));
+        
+        let path = Path::new(&filename);
+        let mut file = match File::create(&path) {
+            Ok(file) => file,
+            Err(e) => {
+                println!("Failed to create file: {}", e);
+                return;
+            }
+        };
+        
+        // Save frame times and march data if true
+        if MEASURE_MARCH_DATA {
+            if let Err(e) = writeln!(file, "frame_number,frame_time_ms,total_steps,rays_hit,rays_missed") {
+                println!("{}", e);
+                return;
+            }
+            
+            for (i, (&time, &march_data)) in self.frame_times.iter().zip(self.render_data.iter()).enumerate() {
+                let (total_steps, rays_hit, rays_missed) = march_data;
+                if let Err(e) = writeln!(file, "{},{:.4},{},{},{}", 
+                                         i+1, time * 1000.0, total_steps, rays_hit, rays_missed) {
+                    println!("failed to write data: {}", e);
+                    return;
+                }
+            }
+        } else { 
+            // Just save frame times
+            if let Err(e) = writeln!(file, "frame_number,frame_time_ms") {
+                println!("{}", e);
+                return;
+            }
+            
+            for (i, &time) in self.frame_times.iter().enumerate() {
+                if let Err(e) = writeln!(file, "{},{:.4}", i+1, time * 1000.0) {
+                    println!("failed to write data: {}", e);
+                    return;
+                }
+            }
+        }
+        
+        println!("Performance data saved to {}", filename);
+    }
 
     fn new(event_loop: &EventLoop<()>) -> Self {
 
@@ -312,7 +378,7 @@ impl App {
 
 
         let mut x = 17728.0;
-        let y = 870.0;
+        let y = 890.0;
         let z = 10560.0;
 
         //let seed = 42;
@@ -333,7 +399,7 @@ impl App {
             }
         }
 
-        let h_angle: f64 = PI / 2.0;
+        let h_angle: f64 = PI;
         let v_angle: f64 = 0.0;
 
         let initial_direction = Vec3 {
@@ -625,6 +691,8 @@ impl App {
 
         let last_n_press = false;
         let start = Instant::now();
+        let frame_times: Vec<f64> = Vec::new();
+        let render_data: Vec<(u32, u32, u32)> = Vec::new();
 
         App {
             instance,
@@ -645,6 +713,8 @@ impl App {
             update_receiver,
             last_n_press,
             start,
+            frame_times,
+            render_data,
         }
     }
 }
@@ -654,12 +724,24 @@ impl ApplicationHandler for App {
         let window = Arc::new(
             event_loop
                 .create_window(Window::default_attributes()
-                    .with_inner_size(winit::dpi::LogicalSize::new(1920.0, 1080.0))
+                    .with_inner_size(winit::dpi::LogicalSize::new(2560.0, 1440.0))
                     .with_title("Engine")
-                    .with_resizable(true)
+                    .with_resizable(RESIZEABLE_WINDOW)
                 )
                 .unwrap(),
         );
+        
+        if let Some(primary_monitor) = event_loop.primary_monitor() {
+            // Get the video modes available on this monitor
+            if let Some(video_mode) = primary_monitor.video_modes().next() {
+                // Set the window to fullscreen with the selected video mode
+                window.set_fullscreen(Some(Fullscreen::Exclusive(video_mode)));
+            } else {
+                // Fallback to borderless fullscreen if no video mode is available
+                window.set_fullscreen(Some(Fullscreen::Borderless(Some(primary_monitor))));
+            }
+        }
+        
         let surface = Surface::from_window(self.instance.clone(), window.clone()).unwrap();
         let window_size = window.inner_size();
         
@@ -669,7 +751,6 @@ impl ApplicationHandler for App {
                 _ => {}
             }
         }
-
 
         // Intially set cursor to centre of the screen
         window.set_cursor_position(PhysicalPosition::new(window_size.width as f64 / 2.0, window_size.height as f64 / 2.0)).expect("Cursor Error");
@@ -685,6 +766,12 @@ impl ApplicationHandler for App {
                 .surface_capabilities(&surface, Default::default())
                 .unwrap();
 
+            let present_mode = if USE_VSYNC == true {
+                vulkano::swapchain::PresentMode::Fifo
+            } else {
+                vulkano::swapchain::PresentMode::Immediate
+            };
+
             let image_format = vulkano::format::Format::R8G8B8A8_UNORM;
             Swapchain::new(
                 self.device.clone(),
@@ -695,7 +782,7 @@ impl ApplicationHandler for App {
                     image_format,
                     image_extent: window_size.into(),
                     image_usage: ImageUsage::COLOR_ATTACHMENT | ImageUsage::STORAGE,
-                    present_mode: vulkano::swapchain::PresentMode::Immediate, // comment out to enable vsync
+                    present_mode,
                     composite_alpha: surface_capabilities
                         .supported_composite_alpha
                         .into_iter()
@@ -719,10 +806,18 @@ impl ApplicationHandler for App {
             } 
         }
 
-        mod main_beam {
+        mod multi_stage_beam {
             vulkano_shaders::shader! {
                 ty: "compute",
                 path: "src/shaders/secondary_beam.glsl",
+                include: ["src/shaders/compute_utils"]
+            } 
+        }
+
+        mod single_stage_beam {
+            vulkano_shaders::shader! {
+                ty: "compute",
+                path: "src/shaders/single_stage_march.glsl",
                 include: ["src/shaders/compute_utils"]
             } 
         }
@@ -731,9 +826,13 @@ impl ApplicationHandler for App {
         let initial_cs = initial_shader.entry_point("main").unwrap();
         let initial_stage = PipelineShaderStageCreateInfo::new(initial_cs);
         
-        let main_shader = main_beam::load(self.device.clone()).expect("failed to create main shader module");
+        let main_shader = multi_stage_beam::load(self.device.clone()).expect("failed to create main shader module");
         let main_cs = main_shader.entry_point("main").unwrap();
         let main_stage = PipelineShaderStageCreateInfo::new(main_cs);
+
+        let single_stage_beam_shader = single_stage_beam::load(self.device.clone()).expect("failed to create single stage beam shader module");
+        let single_cs = single_stage_beam_shader.entry_point("main").unwrap();
+        let single_stage = PipelineShaderStageCreateInfo::new(single_cs);
 
         let layout = {
             let bindings = [
@@ -827,12 +926,22 @@ impl ApplicationHandler for App {
         )
         .unwrap();
 
-        let main_pipeline = ComputePipeline::new(
-            self.device.clone(),
-            None,
-            ComputePipelineCreateInfo::stage_layout(main_stage, pipeline_layout),
-        )
-        .unwrap();
+        // use beam or normal
+        let main_pipeline = if USE_BEAM_OPTIMISATION == true {
+            ComputePipeline::new(
+                self.device.clone(),
+                None,
+                ComputePipelineCreateInfo::stage_layout(main_stage, pipeline_layout.clone()),
+            )
+            .unwrap()
+        } else {
+            ComputePipeline::new(
+                self.device.clone(),
+                None,
+                ComputePipelineCreateInfo::stage_layout(single_stage, pipeline_layout.clone()),
+            )
+            .unwrap()
+        };
 
         // Dynamic viewports
         let viewport = Viewport {
@@ -878,9 +987,10 @@ impl ApplicationHandler for App {
 
                 match event.physical_key {
                     PhysicalKey::Code(KeyCode::Escape) => { std::process::exit(0) }
+                    PhysicalKey::Code(KeyCode::KeyR) => { if MEASURE_FRAME_TIMES == true { self.save_performance_data(); } }
                     _ =>  { } 
                 }
-
+                
                 if POSTIONAL_MOVEMENT == false {
                     return;
                 }
@@ -990,20 +1100,26 @@ impl ApplicationHandler for App {
                 
             }
             WindowEvent::RedrawRequested => {
+                let frame_start = std::time::Instant::now();
+                
+                // if let Some(future) = &mut rcx.previous_frame_end {
+                //     future.cleanup_finished();
+                //     rcx.previous_frame_end = Some(sync::now(self.device.clone()).boxed());
+                // }
 
-                if let Some(future) = &mut rcx.previous_frame_end {
-                    future.cleanup_finished();
-                    rcx.previous_frame_end = Some(sync::now(self.device.clone()).boxed());
+                // if MEASURE_MARCH_DATA == true {
+                //     let stats = self.stat_buffer.read().unwrap();
+                //     let total_steps = stats[0]; // Total steps 
+                //     let rays_cast = stats[1];   // Total rays that hit some geometry
+                //     let rays_missed = stats[2];
+                    
+                //     self.render_data.push((total_steps, rays_cast, rays_missed));
 
-                    let stats = self.stat_buffer.read().unwrap();
-                    let total_steps = stats[0]; // Total steps across all threads
-                    let rays_cast = stats[1];   // Total rays cast
-                    let rays_missed = stats[2];
-                    //let avg_steps_per_ray = if rays_cast > 0 { total_steps as f32 / rays_cast as f32 } else { 0.0 };
-    
-                    println!("Frame stats - Total steps: {}, Ray Hits: {}, Rays Missed: {}", 
-                            total_steps, rays_cast, rays_missed);
-                }
+                //     if PRINT_FRAME_STATS == true {
+                //         println!("Frame stats - Total steps: {}, Ray Hits: {}, Rays Missed: {}", 
+                //             total_steps, rays_cast, rays_missed);
+                //     }
+                // }
 
                             
                 //println!("Checking for messages in RedrawRequested");
@@ -1026,6 +1142,12 @@ impl ApplicationHandler for App {
                 // Free finished resources
                 rcx.previous_frame_end.as_mut().unwrap().cleanup_finished();
 
+                let present_mode = if USE_VSYNC == true {
+                    vulkano::swapchain::PresentMode::Fifo
+                } else {
+                    vulkano::swapchain::PresentMode::Immediate
+                };
+
                 // Recreate everything upon screen resize
                 if rcx.recreate_swapchain {
                     let (new_swapchain, new_images) = rcx
@@ -1033,6 +1155,7 @@ impl ApplicationHandler for App {
                         .recreate(SwapchainCreateInfo {
                             image_extent: window_size.into(),
                             image_format: rcx.swapchain.image_format(), 
+                            present_mode,
                             ..rcx.swapchain.create_info()
                         })
                         .expect("failed to recreate swapchain");
@@ -1043,9 +1166,6 @@ impl ApplicationHandler for App {
                     rcx.recreate_swapchain = false;
                 }
 
-                // UPDATE HERE
-
-                // Get current chunk
 
                 // Calculate camera buffer variables and set them to the buffer
                 let uniform_camera_subbuffer = {
@@ -1209,18 +1329,20 @@ impl ApplicationHandler for App {
 
                 builder.fill_buffer(self.stat_buffer.clone(), 0).unwrap();
 
-                builder
-                    .bind_pipeline_compute(rcx.initial_pipeline.clone())
-                    .unwrap()
-                    .bind_descriptor_sets(
-                        PipelineBindPoint::Compute, 
-                        rcx.initial_pipeline.layout().clone(), 
-                        0, 
-                        descriptor_set.clone()
-                    )
-                    .unwrap()
-                    .dispatch(reduced_dispatch_size)
-                    .unwrap();
+                if USE_BEAM_OPTIMISATION == true {
+                    builder
+                        .bind_pipeline_compute(rcx.initial_pipeline.clone())
+                        .unwrap()
+                        .bind_descriptor_sets(
+                            PipelineBindPoint::Compute, 
+                            rcx.initial_pipeline.layout().clone(), 
+                            0, 
+                            descriptor_set.clone()
+                        )
+                        .unwrap()
+                        .dispatch(reduced_dispatch_size)
+                        .unwrap();
+                }
                 
                 builder
                     .bind_pipeline_compute(rcx.main_pipeline.clone())
@@ -1282,6 +1404,15 @@ impl ApplicationHandler for App {
                         println!("failed to flush future: {e}");
                         rcx.previous_frame_end = Some(sync::now(self.device.clone()).boxed());
                     }
+                }
+                
+                if MEASURE_FRAME_TIMES == true {
+                    let frame_time = frame_start.elapsed();
+                    self.frame_times.push(frame_time.as_secs_f64());
+                    
+                    if PRINT_FRAME_STATS == true {
+                        println!("Frame time: {:?}, FPS: {}", frame_time, 1.0 / frame_time.as_secs_f32());
+                    } 
                 }
             }
             _ => {}
