@@ -363,14 +363,13 @@ bool intersection_test(vec3 origin, vec3 dir, vec3 v0, vec3 v1, vec3 v2, inout f
 
 
 
-bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_delta, ivec3 step, vec3 dir, inout vec3 hit_colour, inout float curr_distance) {
+bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_delta, ivec3 step, vec3 dir, inout vec3 hit_colour, inout float curr_distance, inout float transparent_distance) {
 
     uint steps = 0;
     uint hit_axis = 0;
     steps = 0;
     int multiplier = 1;
     int transparent_hits = 0;
-    float transparent_distance = 0.0;
     vec3 tansparent_mask = vec3(0.0);
 
     float accumculated_curve = 0.0;
@@ -450,9 +449,6 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
                 take_step(step, t_delta, t_max, hit_axis, world_pos, multiplier, dir, curr_distance);
                 continue;
             }
-
-
-
 
             uint voxel = voxel_type;
 
@@ -779,9 +775,10 @@ void main() {
     t_max /= dir;
 
     vec3 hit_colour;
-    float curr_distance = 0;
+    float curr_distance = 0.0;
+    float transparent_distance = 0.0;
 
-    bool hit = get_intersect(pixel_coords, world_pos, t_max, t_delta, step, dir, hit_colour, curr_distance);
+    bool hit = get_intersect(pixel_coords, world_pos, t_max, t_delta, step, dir, hit_colour, curr_distance, transparent_distance);
 
     if (hit == true) {
         // Get lighting
@@ -821,12 +818,15 @@ void main() {
         t_max /= dir;
 
         //apply_shadow(world_pos, hit_pos, t_max, t_delta, step, dir, hit_colour, curr_distance);
+        
+        // If transparent geometry was hit, use that distance instead
+        if (transparent_distance != 0) { curr_distance = transparent_distance; }
 
-        // Save distance traveled, if transparent hit, distance to the first transparent object is used instead
+        
+        // Save distance traveled
         r_buf.ray_distances[pixel_coords.x][pixel_coords.y] = curr_distance;
 
         imageStore(storageImage, pixel_coords, vec4(hit_colour, 1.0));
-
         return;
     }
 

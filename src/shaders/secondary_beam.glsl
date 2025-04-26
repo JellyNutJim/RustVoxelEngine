@@ -741,15 +741,15 @@ void main() {
         return;
     }
 
-    // Setup ray
+    // Setup ray direction
     vec3 origin = c.origin;
     vec3 pixel_center = c.pixel00_loc + (c.pixel_delta_u * float(pixel_coords.x)) + (c.pixel_delta_v * float(pixel_coords.y));
     vec3 dir = normalize(pixel_center - origin);
 
-    // Ensure that the current pixel is not at the edge of the image, as otherwise it cannot be pre lengthened
+    // Ensure that the current pixel is not at the edge of the image, as otherwise it cannot be pre marched
     bool is_edge = pixel_coords.x == 0 || pixel_coords.x == image_dimensions.x - 1 || pixel_coords.y == 0 || pixel_coords.y == image_dimensions.y - 1;
 
-    float initial_distance = 1.0;
+    float initial_distance = 0.0;
 
     if (!is_edge) {
         // As the ray is not an edge, foward its postion to the lowest surrounding pixel
@@ -818,12 +818,18 @@ void main() {
         vec3 t_delta;
         ivec3 step;
         vec3 t_max;
+        float curr_distance;
 
         const float limit = 1e-10;
         
         t_delta.x = (abs(dir.x) < limit) ? 1e30 : abs(1.0 / dir.x);
         t_delta.y = (abs(dir.y) < limit) ? 1e30 : abs(1.0 / dir.y);
         t_delta.z = (abs(dir.z) < limit) ? 1e30 : abs(1.0 / dir.z);
+
+        // If distance gain is small, just use normal marching
+        if (initial_distance > 66) {
+            world_pos = floor(origin + dir * (initial_distance - 59.9));
+        }
 
         if (dir.x < 0.0) {
             step.x = -1;
@@ -854,8 +860,14 @@ void main() {
 
         t_max /= dir;
 
+
         vec3 hit_colour;
-        float curr_distance = 0;
+        if (initial_distance > 64) {
+            curr_distance = min(t_max.x, min(t_max.y, t_max.z));
+        }
+        else {
+            curr_distance = 0.0;
+        }
 
         hit = get_intersect(pixel_coords, world_pos, t_max, t_delta, step, dir, hit_colour, curr_distance);
 
