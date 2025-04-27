@@ -76,13 +76,14 @@ const MEASURE_MARCH_DATA: bool = false; // frame times must also be true
 const PRINT_FRAME_STATS: bool = false;
 
 // Render Options
-const USE_BEAM_OPTIMISATION: bool = false;
+const USE_BEAM_OPTIMISATION: bool = true;
 const RESIZEABLE_WINDOW: bool = false;
 const USE_VSYNC: bool = false;
 const USE_FULLSCREEN: bool = true;
 const RESOLUTION: (u32, u32) = (2560, 1440);
 
 // Sarting conditions
+const SEED: u64 = 42;
 
 
 fn main() -> Result<(), impl Error> {
@@ -380,13 +381,13 @@ impl App {
 
 
         let mut x = 17700.0;
-        let y = 890.0;
+        let y = 1500.0;
         let z = 10560.0;
 
         //let seed = 42;
         //let seed = 1023;
 
-        let seed = 42;
+        let seed = SEED;
 
 
         let temp = PerlinNoise::new(seed, 0.00003);
@@ -401,8 +402,8 @@ impl App {
             }
         }
 
-        let h_angle: f64 = PI;
-        let v_angle: f64 = 0.0;
+        let h_angle: f64 = 0.0;
+        let v_angle: f64 = -PI/2.1;
 
         let initial_direction = Vec3 {
             x: h_angle.cos() * v_angle.cos(),
@@ -1108,6 +1109,8 @@ impl ApplicationHandler for App {
                 // Currently resets horizontal axis when it equals 2 PI as fully rotation is 2 pi -> -pi to +pi 
                 self.camera_location.h_angle = (self.camera_location.h_angle + x_change * 0.001) % (PI*2.0);
                 self.camera_location.v_angle = (self.camera_location.v_angle + (y_change * -0.001)).clamp(-PI/2.02, PI/2.02); 
+
+                //println!("{}", self.camera_location.v_angle);
 
                 // Convert spherical angles to direction vector
                 self.camera_location.direction = Vec3 {
