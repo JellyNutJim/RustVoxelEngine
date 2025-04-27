@@ -46,7 +46,7 @@ layout(set = 0, binding = 6, rgba8) uniform image2D storageImage;
 
 const int WIDTH = 321;
 const bool DETAIL = false;
-const bool RENDER_OUT_OF_WORLD_FEATURES = false;
+const bool RENDER_OUT_OF_WORLD_FEATURES = true;
 
 uint get_octant(vec3 pos, uint mid) {
     uint octant = 0;

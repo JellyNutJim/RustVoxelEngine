@@ -66,9 +66,11 @@ use noise_gen::PerlinNoise;
 
 // Camera Settings
 const CONFINE_CURSOR: bool = false;
-const ORIENTATION_MOVEMENT: bool = false;
-const POSTIONAL_MOVEMENT: bool = false;
+const ORIENTATION_MOVEMENT: bool = true;
+const POSTIONAL_MOVEMENT: bool = true;
 const WORLD_INTERACTION: bool = false;
+const AUTO_MOVE_FORWARDS: bool = false;
+const STARTING_ORIENTATION: (f64, f64) = (PI, 0.0);
 
 // Testing constants
 const MEASURE_FRAME_TIMES: bool = false;
@@ -79,11 +81,12 @@ const PRINT_FRAME_STATS: bool = false;
 const USE_BEAM_OPTIMISATION: bool = true;
 const RESIZEABLE_WINDOW: bool = false;
 const USE_VSYNC: bool = false;
-const USE_FULLSCREEN: bool = true;
-const RESOLUTION: (u32, u32) = (2560, 1440);
+const USE_FULLSCREEN: bool = false;
+const RESOLUTION: (u32, u32) = (1920, 1080);
 
 // Sarting conditions
 const SEED: u64 = 42;
+const USE_EMPTY_GRID: bool = false;
 
 
 fn main() -> Result<(), impl Error> {
@@ -121,6 +124,7 @@ struct App {
     world_updater: WorldUpdater,
 
     last_n_press: bool,
+    last_frame_time: Instant,
 
     start: Instant,
     frame_times: Vec<f64>,
@@ -381,7 +385,7 @@ impl App {
 
 
         let mut x = 17700.0;
-        let y = 1500.0;
+        let y = 1400.0;
         let z = 10560.0;
 
         //let seed = 42;
@@ -402,8 +406,8 @@ impl App {
             }
         }
 
-        let h_angle: f64 = 0.0;
-        let v_angle: f64 = -PI/2.1;
+        let h_angle: f64 = STARTING_ORIENTATION.0;
+        let v_angle: f64 = STARTING_ORIENTATION.1;
 
         let initial_direction = Vec3 {
             x: h_angle.cos() * v_angle.cos(),
@@ -422,10 +426,11 @@ impl App {
             sun_loc: Vec3::from(10000.0, 3000.0, 10000.0)
         };
 
-        let mut intial_world = get_grid_from_seed(42, width as i32, [middle.x as i32, middle.y as i32, middle.z as i32]);
-        
-        // Empty testing enviroment
-        //let mut intial_world = get_empty_grid(width as i32, [middle.x as i32, middle.y as i32, middle.z as i32]);
+        let mut initial_world = if USE_EMPTY_GRID {
+            get_empty_grid(width as i32, [middle.x as i32, middle.y as i32, middle.z as i32])
+        } else {
+            get_grid_from_seed(42, width as i32, [middle.x as i32, middle.y as i32, middle.z as i32])
+        };
 
         // For testing
         // let v32 = Voxel::from_quadrants(
@@ -444,7 +449,7 @@ impl App {
         println!("{:?}", middle);
 
         // Get Vector World Data
-        let flat_world = intial_world.flatten_world();
+        let flat_world = initial_world.flatten_world();
         let mut voxels = flat_world.1;
         let mut meta_data = flat_world.0;
 
@@ -520,8 +525,8 @@ impl App {
             .expect("failed to create buffer"),
         ];
 
-        let perm = intial_world.generator.landmass.permutation.clone();
-        let grad: Vec<f64> = intial_world.generator.landmass.gradients.clone().iter()
+        let perm = initial_world.generator.landmass.permutation.clone();
+        let grad: Vec<f64> = initial_world.generator.landmass.gradients.clone().iter()
                 .flat_map(|&gradient| gradient.into_iter())
                 .collect();
 
@@ -678,7 +683,7 @@ impl App {
             compute_queue.clone(),
             voxel_buffers.clone(),
             world_meta_data_buffers.clone(),
-            intial_world,
+            initial_world,
         );
 
         #[allow(unused_mut)]
@@ -693,6 +698,7 @@ impl App {
         println!("{:?}", a);
 
         let last_n_press = false;
+        let last_frame_time = Instant::now();
         let start = Instant::now();
         let frame_times: Vec<f64> = Vec::new();
         let render_data: Vec<(u32, u32, u32)> = Vec::new();
@@ -715,6 +721,7 @@ impl App {
             world_updater,
             update_receiver,
             last_n_press,
+            last_frame_time,
             start,
             frame_times,
             render_data,
@@ -1126,24 +1133,36 @@ impl ApplicationHandler for App {
             WindowEvent::RedrawRequested => {
                 let frame_start = std::time::Instant::now();
                 
+                if AUTO_MOVE_FORWARDS {
+                    let delta_time = frame_start.duration_since(self.last_frame_time);
+
+                    self.last_frame_time = frame_start;
+                    let base_speed = Vec3::from(0.2, 0.2, 0.2);
+
+                    let delta_seconds = delta_time.as_secs_f64() + delta_time.subsec_nanos() as f64 / 1_000_000_000.0;
+                    let movement = self.camera_location.direction * base_speed * delta_seconds * 60.0; 
+            
+                    self.camera_location.location = self.camera_location.location + movement;
+                }
+                
                 if let Some(future) = &mut rcx.previous_frame_end {
                     future.cleanup_finished();
                     rcx.previous_frame_end = Some(sync::now(self.device.clone()).boxed());
                 }
 
-                // if MEASURE_MARCH_DATA == true {
-                //     let stats = self.stat_buffer.read().unwrap();
-                //     let total_steps = stats[0]; // Total steps 
-                //     let rays_cast = stats[1];   // Total rays that hit some geometry
-                //     let rays_missed = stats[2];
+                if MEASURE_MARCH_DATA == true {
+                    let stats = self.stat_buffer.read().unwrap();
+                    let total_steps = stats[0]; // Total steps 
+                    let rays_cast = stats[1];   // Total rays that hit some geometry
+                    let rays_missed = stats[2];
                     
-                //     self.render_data.push((total_steps, rays_cast, rays_missed));
+                    self.render_data.push((total_steps, rays_cast, rays_missed));
 
-                //     if PRINT_FRAME_STATS == true {
-                //         println!("Frame stats - Total steps: {}, Ray Hits: {}, Rays Missed: {}", 
-                //             total_steps, rays_cast, rays_missed);
-                //     }
-                // }
+                    if PRINT_FRAME_STATS == true {
+                        println!("Frame stats - Total steps: {}, Ray Hits: {}, Rays Missed: {}", 
+                            total_steps, rays_cast, rays_missed);
+                    }
+                }
 
                             
                 //println!("Checking for messages in RedrawRequested");
