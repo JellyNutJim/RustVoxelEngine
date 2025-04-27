@@ -64,24 +64,26 @@ use world::{get_grid_from_seed, get_empty_grid, ShaderChunk, ShaderGrid};
 use types::{Vec3, Voxel};
 use noise_gen::PerlinNoise; 
 
-// Usage constants
+// Camera Settings
 const CONFINE_CURSOR: bool = false;
-const ORIENTATION_MOVEMENT: bool = true;
-const POSTIONAL_MOVEMENT: bool = true;
+const ORIENTATION_MOVEMENT: bool = false;
+const POSTIONAL_MOVEMENT: bool = false;
 const WORLD_INTERACTION: bool = false;
-const RESIZEABLE_WINDOW: bool = true;
-const USE_VSYNC: bool = false;
-
 
 // Testing constants
-const MEASURE_FRAME_TIMES: bool = true;
+const MEASURE_FRAME_TIMES: bool = false;
 const MEASURE_MARCH_DATA: bool = false; // frame times must also be true
 const PRINT_FRAME_STATS: bool = false;
 
-// Options
-const USE_BEAM_OPTIMISATION: bool = true;
+// Render Options
+const USE_BEAM_OPTIMISATION: bool = false;
+const RESIZEABLE_WINDOW: bool = false;
+const USE_VSYNC: bool = false;
+const USE_FULLSCREEN: bool = true;
+const RESOLUTION: (u32, u32) = (2560, 1440);
 
-//use testing::test;
+// Sarting conditions
+
 
 fn main() -> Result<(), impl Error> {
 
@@ -377,7 +379,7 @@ impl App {
         //let middle = Vec3::from(mid,830.0, mid);
 
 
-        let mut x = 17728.0;
+        let mut x = 17700.0;
         let y = 890.0;
         let z = 10560.0;
 
@@ -724,23 +726,42 @@ impl ApplicationHandler for App {
         let window = Arc::new(
             event_loop
                 .create_window(Window::default_attributes()
-                    .with_inner_size(winit::dpi::LogicalSize::new(2560.0, 1440.0))
+                    .with_inner_size(winit::dpi::LogicalSize::new(RESOLUTION.0, RESOLUTION.1))
                     .with_title("Engine")
                     .with_resizable(RESIZEABLE_WINDOW)
                 )
                 .unwrap(),
         );
-        
-        if let Some(primary_monitor) = event_loop.primary_monitor() {
-            // Get the video modes available on this monitor
-            if let Some(video_mode) = primary_monitor.video_modes().next() {
-                // Set the window to fullscreen with the selected video mode
-                window.set_fullscreen(Some(Fullscreen::Exclusive(video_mode)));
-            } else {
-                // Fallback to borderless fullscreen if no video mode is available
-                window.set_fullscreen(Some(Fullscreen::Borderless(Some(primary_monitor))));
+
+        if USE_FULLSCREEN == true {
+            if let Some(primary_monitor) = event_loop.primary_monitor() {
+                // Define your desired resolution
+                let desired_width = RESOLUTION.0;
+                let desired_height = RESOLUTION.1;
+                
+                // Find a video mode that matches your desired resolution
+                let video_mode = primary_monitor.video_modes()
+                    .find(|mode| {
+                        let size = mode.size();
+                        size.width == desired_width && size.height == desired_height
+                    });
+                
+                if let Some(mode) = video_mode {
+                    // Use the specific video mode with your desired resolution
+                    window.set_fullscreen(Some(Fullscreen::Exclusive(mode)));
+                } else {
+                    // Fall back to borderless if specific resolution not found
+                    window.set_fullscreen(Some(Fullscreen::Borderless(Some(primary_monitor))));
+                    println!("Desired resolution not available, using borderless fullscreen");
+                }
             }
         }
+
+        // if let Some(video_mode) = primary_monitor.video_modes().next() {
+        //     window.set_fullscreen(Some(Fullscreen::Exclusive(video_mode)));
+        // } else {
+        //     window.set_fullscreen(Some(Fullscreen::Borderless(Some(primary_monitor))));
+        // }
         
         let surface = Surface::from_window(self.instance.clone(), window.clone()).unwrap();
         let window_size = window.inner_size();
@@ -1102,10 +1123,10 @@ impl ApplicationHandler for App {
             WindowEvent::RedrawRequested => {
                 let frame_start = std::time::Instant::now();
                 
-                // if let Some(future) = &mut rcx.previous_frame_end {
-                //     future.cleanup_finished();
-                //     rcx.previous_frame_end = Some(sync::now(self.device.clone()).boxed());
-                // }
+                if let Some(future) = &mut rcx.previous_frame_end {
+                    future.cleanup_finished();
+                    rcx.previous_frame_end = Some(sync::now(self.device.clone()).boxed());
+                }
 
                 // if MEASURE_MARCH_DATA == true {
                 //     let stats = self.stat_buffer.read().unwrap();
