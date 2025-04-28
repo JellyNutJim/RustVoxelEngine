@@ -1,4 +1,3 @@
-
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub struct Voxel {
@@ -83,6 +82,10 @@ impl Voxel {
 
     pub fn get_voxel(&self) -> u32 {
         self.voxel
+    }
+
+    pub fn flatten(&self) -> Vec<u32> {
+        vec![self.voxel]
     }
 }
 

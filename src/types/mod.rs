@@ -1,11 +1,36 @@
 mod vec3;
 mod voxel;
-mod geometry;
-mod fourheightsurface;
+mod octo_voxel;
 mod sphere;
+mod four_height_surface;
+mod complex_surface;
+
 
 pub use vec3::Vec3;
 pub use voxel::Voxel;
-pub use geometry::Geometry;
 pub use sphere::Sphere;
-pub use fourheightsurface::FourHeightSurface;
+pub use four_height_surface::FourHeightSurface;
+pub use octo_voxel::OctoVoxel;
+pub use complex_surface::ComplexSurface;
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub enum Geometry {
+    Voxel(Voxel),
+    OctoVoxel(OctoVoxel),
+    Sphere(Sphere),
+    FourHeightSurface(FourHeightSurface),
+    ComplexSurface(ComplexSurface),
+}
+
+impl Geometry {
+    fn flatten(&self) -> Vec<u32> {
+        match self {
+            Geometry::Voxel(voxel) => voxel.flatten(),
+            Geometry::OctoVoxel(octo_voxel) => octo_voxel.flatten(),
+            Geometry::Sphere(sphere) => sphere.flatten(),
+            Geometry::FourHeightSurface(four_height) => four_height.flatten(),
+            Geometry::ComplexSurface(complex) => complex.flatten(),
+        }
+    }
+}

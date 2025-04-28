@@ -61,7 +61,7 @@ use rendering::{ WorldUpdateMessage, WorldUpdater, Update, CameraBufferData, Cam
 use world::{get_grid_from_seed, get_empty_grid, ShaderChunk, ShaderGrid};
 
 
-use types::{Vec3, Voxel};
+use types::{Vec3, Voxel, Geometry};
 use noise_gen::PerlinNoise; 
 
 // Camera Settings

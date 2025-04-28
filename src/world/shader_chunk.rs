@@ -1,5 +1,5 @@
 use crate::Voxel;
-
+use crate::Geometry;
 
 #[repr(C)]
 #[derive(Debug, Clone)]
@@ -13,20 +13,20 @@ pub struct ShaderChunk {
 #[repr(C)]
 #[derive(Debug, Clone)]
 enum ChunkContent {
-    Leaf(VoxelData),
-    Octants(Box<OctantsData>, u32),
+    Leaf(GeometryData),
+    Octants(Box<ChildOctants>, u32),
 }
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
-struct VoxelData(
+struct GeometryData(
     Voxel, 
     bool // Determine whether the current "voxel" is a voxel or an octant
 );
 
 #[repr(C)]
 #[derive(Debug, Clone)]
-struct OctantsData([ChunkContent; 8]);
+struct ChildOctants([ChunkContent; 8]);
 
 
 // Depth = Octants of Size
@@ -55,7 +55,7 @@ impl ShaderChunk {
             pos,
             generation_level: 0,
             max_generation_level: 0,
-            data: ChunkContent::Leaf(VoxelData(Voxel::new(), false)),
+            data: ChunkContent::Leaf(GeometryData(Voxel::new(), false)),
         }
     }
 
@@ -64,7 +64,7 @@ impl ShaderChunk {
             pos,
             generation_level: 0,
             max_generation_level: 0,
-            data: ChunkContent::Leaf(VoxelData(Voxel::from_type(data as u8), false)),
+            data: ChunkContent::Leaf(GeometryData(Voxel::from_type(data as u8), false)),
         }
     }
 
@@ -143,15 +143,15 @@ impl ShaderChunk {
 
             if let ChunkContent::Leaf(data) = current {
                 *current = ChunkContent::Octants( Box::new(
-                    OctantsData([ 
-                        ChunkContent::Leaf(VoxelData(Voxel::new(), is_voxel)),
-                        ChunkContent::Leaf(VoxelData(Voxel::new(), is_voxel)),
-                        ChunkContent::Leaf(VoxelData(Voxel::new(), is_voxel)),
-                        ChunkContent::Leaf(VoxelData(Voxel::new(), is_voxel)),
-                        ChunkContent::Leaf(VoxelData(Voxel::new(), is_voxel)),
-                        ChunkContent::Leaf(VoxelData(Voxel::new(), is_voxel)),
-                        ChunkContent::Leaf(VoxelData(Voxel::new(), is_voxel)),
-                        ChunkContent::Leaf(VoxelData(Voxel::new(), is_voxel)),
+                    ChildOctants([ 
+                        ChunkContent::Leaf(GeometryData(Voxel::new(), is_voxel)),
+                        ChunkContent::Leaf(GeometryData(Voxel::new(), is_voxel)),
+                        ChunkContent::Leaf(GeometryData(Voxel::new(), is_voxel)),
+                        ChunkContent::Leaf(GeometryData(Voxel::new(), is_voxel)),
+                        ChunkContent::Leaf(GeometryData(Voxel::new(), is_voxel)),
+                        ChunkContent::Leaf(GeometryData(Voxel::new(), is_voxel)),
+                        ChunkContent::Leaf(GeometryData(Voxel::new(), is_voxel)),
+                        ChunkContent::Leaf(GeometryData(Voxel::new(), is_voxel)),
                     ])), data.0.get_voxel()
                 );
             }
@@ -161,7 +161,7 @@ impl ShaderChunk {
                 curr_octant = Self::get_octant_at_depth(pos, i);
                 if ground_insert == true && i == depth { 
                     if curr_octant > 3 {
-                        octants.0[curr_octant - 4] = ChunkContent::Leaf(VoxelData(Voxel::from_type(2), is_voxel));
+                        octants.0[curr_octant - 4] = ChunkContent::Leaf(GeometryData(Voxel::from_type(2), is_voxel));
                     }
                 }
 
@@ -170,7 +170,7 @@ impl ShaderChunk {
         }
 
         // Set current octants value to the given voxel type
-        *current = ChunkContent::Leaf(VoxelData(voxel, is_voxel));
+        *current = ChunkContent::Leaf(GeometryData(voxel, is_voxel));
 
     }
 

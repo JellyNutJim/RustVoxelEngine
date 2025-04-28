@@ -1,4 +1,5 @@
-#[allow(unused)]
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
 pub struct FourHeightSurface {
     quadrants: [u8; 4],
     meta: u32,
@@ -23,4 +24,7 @@ impl FourHeightSurface {
         result
     }
     
+    pub fn flatten(&self) -> Vec<u32> {
+        Vec::new()
+    }
 }

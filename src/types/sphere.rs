@@ -1,4 +1,6 @@
 
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
 pub struct Sphere {
     radius: u32,
     origin: [u8; 3]
@@ -17,5 +19,9 @@ impl Sphere {
             radius,
             origin
         }
+    }
+
+    pub fn flatten(&self) -> Vec<u32> {
+        Vec::new()
     }
 }
