@@ -1,10 +1,8 @@
 use std::i32::MAX;
 
-use crate::world::ShaderChunk;
+use crate::{types::Geometry, world::Octree};
 
 use super::{
-    PerlinNoise,
-    HeightMap,
     chunk_generator::*,
     Voxel,
 };
@@ -14,7 +12,7 @@ use super::{
 // Origin will always be smaller than the current position
 #[repr(C)]
 #[derive(Debug, Clone)]
-pub struct ShaderGrid {
+pub struct OctreeGrid {
 
     // Meta Data
     pub origin: [i32; 3],  // Origin of the current grid = the origin of the chunk with the lowest positional value 
@@ -26,7 +24,7 @@ pub struct ShaderGrid {
 
 
     // World Data
-    pub chunks: Vec<ShaderChunk>,
+    pub chunks: Vec<Octree>,
 
     // Chunks as array of u32
     flat_chunks: Vec<Vec<u32>>,
@@ -41,7 +39,7 @@ pub struct ShaderGrid {
 // Layer sizes -> Will be dynamically determined at some point
 
 #[allow(unused)]
-impl ShaderGrid {
+impl OctreeGrid {
     // Create grid with given origin and size
     pub fn new(width: u32, origin: [i32; 3], seed: u64, sea_level: u32, res_8_layer_width: u32, res_4_layer_width: u32, res_2_layer_width: u32, res_1_layer_width: u32) -> Self {
         let mut s = Self {
@@ -68,7 +66,7 @@ impl ShaderGrid {
         for x in 0..width {
             for y in 0..width {
                 for z in 0..width {
-                    s.chunks.push(ShaderChunk::new([(64 * x) + origin[0], (64 * y) + origin[1], (64 * z) + origin[2]]));
+                    s.chunks.push(Octree::new([(64 * x) + origin[0], (64 * y) + origin[1], (64 * z) + origin[2]]));
                 }
             }
         }
@@ -109,7 +107,7 @@ impl ShaderGrid {
         origin
     }
 
-    pub fn insert_voxel(&mut self, pos: [i32; 3], voxel: Voxel, ground_insert: bool) {
+    pub fn insert_geometry(&mut self, pos: [i32; 3], geometry: Geometry, ground_insert: bool) {
 
         let chunk_pos = self.get_chunk_pos(&pos);
         let chunk_index = chunk_pos[0] + chunk_pos[1] * self.width + chunk_pos[2] * (self.width * self.width);
@@ -121,10 +119,10 @@ impl ShaderGrid {
             (((pos[2] % 64) + 64) % 64) as u32
         ];
 
-        self.chunks[self.grid[chunk_index as usize] as usize].insert_voxel(pos, voxel, ground_insert);
+        self.chunks[self.grid[chunk_index as usize] as usize].insert_geometry(pos, geometry, ground_insert);
     }
 
-    pub fn insert_subchunk(&mut self, pos: [i32; 3], voxel: Voxel, depth: u32, ground_insert: bool) {
+    pub fn insert_subchunk(&mut self, pos: [i32; 3], geometry: Geometry, depth: u32, ground_insert: bool) {
         let chunk_pos = self.get_chunk_pos(&pos);
         let chunk_index = chunk_pos[0] + chunk_pos[1] * self.width + chunk_pos[2] * (self.width * self.width);
         
@@ -135,10 +133,10 @@ impl ShaderGrid {
             (((pos[2] % 64) + 64) % 64) as u32
         ];
 
-        self.chunks[self.grid[chunk_index as usize] as usize].insert_subchunk(pos, depth, voxel, ground_insert);
+        self.chunks[self.grid[chunk_index as usize] as usize].insert_subchunk(pos, depth, geometry, ground_insert);
     }
 
-    pub fn insert_simple_voxel(&mut self, pos: [i32; 3], voxel_type: u8) {
+    pub fn insert_simple_voxel(&mut self, pos: [i32; 3], voxel_type: u32) {
         let chunk_pos = self.get_chunk_pos(&pos);
         let chunk_index = chunk_pos[0] + chunk_pos[1] * self.width + chunk_pos[2] * (self.width * self.width);
         let pos = [
@@ -146,10 +144,10 @@ impl ShaderGrid {
             (((pos[1] % 64) + 64) % 64) as u32,
             (((pos[2] % 64) + 64) % 64) as u32
         ];
-        self.chunks[self.grid[chunk_index as usize] as usize].insert_voxel(pos, Voxel::from_type(voxel_type), false);
+        self.chunks[self.grid[chunk_index as usize] as usize].insert_geometry(pos, Geometry::Voxel(Voxel::from(voxel_type)), false);
     }
 
-    pub fn insert_simple_subchunk(&mut self, pos: [i32; 3], voxel_type: u8, depth: u32) {
+    pub fn insert_simple_subchunk(&mut self, pos: [i32; 3], voxel_type: u32, depth: u32) {
         let chunk_pos = self.get_chunk_pos(&pos);
         let chunk_index = chunk_pos[0] + chunk_pos[1] * self.width + chunk_pos[2] * (self.width * self.width);
         let pos = [
@@ -157,11 +155,11 @@ impl ShaderGrid {
             (((pos[1] % 64) + 64) % 64) as u32,
             (((pos[2] % 64) + 64) % 64) as u32
         ];
-        self.chunks[self.grid[chunk_index as usize] as usize].insert_subchunk(pos, depth, Voxel::from_type(voxel_type as u8), false);
+        self.chunks[self.grid[chunk_index as usize] as usize].insert_subchunk(pos, depth, Geometry::Voxel(Voxel::from(voxel_type)), false);
     }
 
     // Finds the smallest chunk origin, and sets that to the grid origin
-    fn get_origin_from_chunks(shader_chunks: &Vec<ShaderChunk>) -> [i32; 3] {
+    fn get_origin_from_chunks(shader_chunks: &Vec<Octree>) -> [i32; 3] {
         let mut origin = [0, 0, 0];
         let mut curr_min = MAX;
 
@@ -320,7 +318,7 @@ impl ShaderGrid {
 
 
 // GENERATION PIPELINE
-impl ShaderGrid {
+impl OctreeGrid {
     pub fn shift(&mut self, axis: usize, dir: i32) {
 
         if axis == 1 { panic!("Invalid shift axis") }; 
@@ -356,7 +354,7 @@ impl ShaderGrid {
 
             if origin[axis] == remove_axis {
                 origin[axis] = new_axis;
-                self.chunks[i] = ShaderChunk::new(origin);
+                self.chunks[i] = Octree::new(origin);
 
             }
         }
@@ -449,13 +447,13 @@ impl ShaderGrid {
             for j in 0..self.width {
                 let grid_index = update_chunk_pos[0] as u32 + (update_chunk_pos[1] as u32 + j)  * self.width + update_chunk_pos[2] as u32 * self.width.pow(2);
                 let index = self.grid[grid_index as usize] as usize;
-                self.chunks[index] = ShaderChunk::new(self.chunks[index].get_origin());
+                self.chunks[index] = Octree::new(self.chunks[index].get_origin());
 
                 self.chunks[index].set_generation_level(3);
 
                 let grid_index = delete_chunk_pos[0] as u32 + (delete_chunk_pos[1] as u32 + j)  * self.width + delete_chunk_pos[2] as u32 * self.width.pow(2);
                 let index = self.grid[grid_index as usize] as usize;
-                self.chunks[index] = ShaderChunk::new(self.chunks[index].get_origin());
+                self.chunks[index] = Octree::new(self.chunks[index].get_origin());
 
                 self.chunks[index].set_generation_level(2);
             }
@@ -534,7 +532,7 @@ impl ShaderGrid {
 
                 let grid_index = delete_chunk_pos[0] as u32 + (delete_chunk_pos[1] as u32 + j)  * self.width + delete_chunk_pos[2] as u32 * self.width.pow(2);
                 let index = self.grid[grid_index as usize] as usize;
-                self.chunks[index] = ShaderChunk::new(self.chunks[index].get_origin());
+                self.chunks[index] = Octree::new(self.chunks[index].get_origin());
 
                 self.chunks[index].set_generation_level(3);
             }

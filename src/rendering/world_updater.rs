@@ -17,7 +17,7 @@ use vulkano::{
 };
 
 
-use crate::{ShaderGrid, get_grid_from_seed, Voxel};
+use crate::{get_grid_from_seed, types::Geometry, OctreeGrid, Voxel};
 
 #[derive(Debug)]
 pub enum WorldUpdateMessage {
@@ -38,7 +38,7 @@ pub enum Update {
 pub struct WorldUpdater {
     sender: Sender<WorldUpdateMessage>,
     update_thread: Option<thread::JoinHandle<()>>,
-    world: Arc<Mutex<ShaderGrid>>,
+    world: Arc<Mutex<OctreeGrid>>,
 }
 
 impl WorldUpdater {
@@ -49,7 +49,7 @@ impl WorldUpdater {
         compute_queue: Arc<Queue>,
         voxel_buffers: [Subbuffer<[u32]>; 2],
         world_meta_data_buffers: [Subbuffer<[i32]>; 2],
-        intial_world: ShaderGrid,
+        intial_world: OctreeGrid,
     ) -> (Self, Receiver<WorldUpdateMessage>) {
         // Create a single channel pair
         let (command_tx, command_rx) = unbounded(); 
@@ -122,7 +122,7 @@ impl WorldUpdater {
                             Update::AddVoxel(x, y, z , t) => {
                                 println!("Adding type: {} at: {} {} {}", t, x, y, z);
 
-                                world.insert_voxel([x,y,z], Voxel::from_u32(t), false); 
+                                world.insert_geometry([x,y,z], Geometry::Voxel(Voxel::from(2)), false); 
 
                                 world.update_flat_chunk_with_world_pos([x, y, z]);
                             }
@@ -134,8 +134,6 @@ impl WorldUpdater {
                             Update::Shift(axis, dir) => {
                                 // Shift origin
                                 world.shift(axis, dir);
-
-                                // Shift internal layers
                                 
                             }
                         };

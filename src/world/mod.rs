@@ -1,6 +1,6 @@
 // Shader Usage
-mod shader_chunk;
-mod shader_grid;
+mod octree;
+mod octree_grid;
 mod chunk_generator;
 mod height_map;
 mod biome_map;
@@ -8,8 +8,8 @@ mod biome_map;
 // Rust usage
 mod chunk;
 
-pub use shader_chunk::ShaderChunk;
-pub use shader_grid::ShaderGrid;
+pub use octree::Octree;
+pub use octree_grid::OctreeGrid;
 pub use chunk_generator::*;
 pub use height_map::HeightMap;
 pub use biome_map::{BiomeMap, Biome};
@@ -17,7 +17,7 @@ pub use biome_map::{BiomeMap, Biome};
 
 use crate::{
     noise_gen::{PerlinNoise, ScalablePerlin}, 
-    Voxel
+    Voxel, FourHeightSurface, Geometry,
 };
 
 // VOXEL TYPES
@@ -29,7 +29,7 @@ use crate::{
 
 
 // WIDTH MUST ALWAYS BE ODD
-pub fn get_grid_from_seed(seed: u64, width: i32, camera_origin: [i32; 3]) -> ShaderGrid {
+pub fn get_grid_from_seed(seed: u64, width: i32, camera_origin: [i32; 3]) -> OctreeGrid {
     let r8w: u32 = width as u32;
     let r4w: u32 = 151;
     let r2w: u32 = 101;
@@ -43,7 +43,7 @@ pub fn get_grid_from_seed(seed: u64, width: i32, camera_origin: [i32; 3]) -> Sha
     println!("camera chunk: {:?}", camera_chunk);
     println!("grid origin: {:?}", origin);
 
-    let mut p = ShaderGrid::new(width as u32, origin, seed, 816, r8w, r4w, r2w, r1w);
+    let mut p = OctreeGrid::new(width as u32, origin, seed, 816, r8w, r4w, r2w, r1w);
 
 
     // Intial World Builder Pipelin
@@ -62,7 +62,7 @@ pub fn get_grid_from_seed(seed: u64, width: i32, camera_origin: [i32; 3]) -> Sha
     p
 }
 
-pub fn get_empty_grid(width: i32, camera_origin: [i32; 3]) -> ShaderGrid {
+pub fn get_empty_grid(width: i32, camera_origin: [i32; 3]) -> OctreeGrid {
     let r8w: u32 = width as u32;
     let r4w: u32 = 151;
     let r2w: u32 = 101;
@@ -76,7 +76,7 @@ pub fn get_empty_grid(width: i32, camera_origin: [i32; 3]) -> ShaderGrid {
     println!("camera chunk: {:?}", camera_chunk);
     println!("grid origin: {:?}", origin);
 
-    let mut grid = ShaderGrid::new(width as u32, origin, 42, 816, r8w, r4w, r2w, r1w);
+    let mut grid = OctreeGrid::new(width as u32, origin, 42, 816, r8w, r4w, r2w, r1w);
 
     // Set all generation levels to voxel depth
     for x in 0..grid.width {
@@ -96,7 +96,7 @@ pub fn get_empty_grid(width: i32, camera_origin: [i32; 3]) -> ShaderGrid {
 // Intial World Gen Helper Functions
 
 // Layer 1 
-fn create_res_8_land(world: &mut ShaderGrid) {
+fn create_res_8_land(world: &mut OctreeGrid) {
     for x in 0..world.width {
         for z in 0..world.width {
             let c_x = x * 64 + world.origin[0] as u32;
@@ -113,7 +113,7 @@ fn create_res_8_land(world: &mut ShaderGrid) {
     }
 }
 
-fn create_res_4_land(world: &mut ShaderGrid) {
+fn create_res_4_land(world: &mut OctreeGrid) {
     let layer_width = world.get_res_4_width();
     let layer_half_width = layer_width / 2;
 
@@ -144,7 +144,7 @@ fn create_res_4_land(world: &mut ShaderGrid) {
 }
 
 // Second Inner Most
-fn create_intial_merged_land(world: &mut ShaderGrid) {
+fn create_intial_merged_land(world: &mut OctreeGrid) {
     let layer_width = world.get_res_2_width();
     let layer_half_width = layer_width / 2;
 
@@ -176,7 +176,7 @@ fn create_intial_merged_land(world: &mut ShaderGrid) {
 
 
 // InnerMost
-fn create_inner_land(world: &mut ShaderGrid) {
+fn create_inner_land(world: &mut OctreeGrid) {
     let layer_width = world.get_res_1_width();
     let layer_half_width = layer_width / 2;
 

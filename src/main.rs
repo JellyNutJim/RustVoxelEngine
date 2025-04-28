@@ -58,10 +58,10 @@ mod rendering;
 mod testing;
 
 use rendering::{ WorldUpdateMessage, WorldUpdater, Update, CameraBufferData, CameraLocation };
-use world::{get_grid_from_seed, get_empty_grid, ShaderChunk, ShaderGrid};
+use world::{get_grid_from_seed, get_empty_grid, Octree, OctreeGrid};
+use testing::test;
 
-
-use types::{Vec3, Voxel, Geometry};
+use types::{Vec3, Geometry, Voxel, FourHeightSurface};
 use noise_gen::PerlinNoise; 
 
 // Camera Settings
@@ -78,7 +78,7 @@ const MEASURE_MARCH_DATA: bool = false; // frame times must also be true
 const PRINT_FRAME_STATS: bool = false;
 
 // Render Options
-const USE_BEAM_OPTIMISATION: bool = true;
+const USE_BEAM_OPTIMISATION: bool = false;
 const RESIZEABLE_WINDOW: bool = false;
 const USE_VSYNC: bool = false;
 const USE_FULLSCREEN: bool = false;
@@ -92,7 +92,7 @@ const USE_EMPTY_GRID: bool = false;
 fn main() -> Result<(), impl Error> {
 
     // Demonstration of memory
-    //test();
+    test();
 
     let event_loop = EventLoop::new().unwrap();
     let mut app = App::new(&event_loop);
@@ -216,6 +216,7 @@ impl App {
     }
 
     fn new(event_loop: &EventLoop<()>) -> Self {
+        //std::process::exit(0);
 
         // Ready extensions
         let library = VulkanLibrary::new().unwrap();
@@ -385,7 +386,7 @@ impl App {
 
 
         let mut x = 17700.0;
-        let y = 1400.0;
+        let y = 970.0;
         let z = 10560.0;
 
         //let seed = 42;

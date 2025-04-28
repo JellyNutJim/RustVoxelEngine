@@ -24,7 +24,7 @@ pub enum Geometry {
 }
 
 impl Geometry {
-    fn flatten(&self) -> Vec<u32> {
+    pub fn flatten(&self) -> Vec<u32> {
         match self {
             Geometry::Voxel(voxel) => voxel.flatten(),
             Geometry::OctoVoxel(octo_voxel) => octo_voxel.flatten(),

@@ -1,6 +1,6 @@
 use std::u8;
 
-use super::{BiomeMap, Biome, HeightMap, PerlinNoise, ScalablePerlin, ShaderGrid, Voxel};
+use super::{BiomeMap, Biome, HeightMap, PerlinNoise, ScalablePerlin, OctreeGrid, FourHeightSurface, Voxel, Geometry};
 
 // Contains all noises used throughout the generation process
 #[allow(unused)]
@@ -428,12 +428,12 @@ static POSITIONS_EXLCUDING: [(usize, usize); 3] = [(0, 1), (1, 0), (1, 1)];
 // Visible API, 
 
 // Intialises the base heightmap, intialises the base biome map, inserts 16x16 voxels
-pub fn generate_res_8(world: &mut ShaderGrid, x_pos: u32, z_pos: u32) {
+pub fn generate_res_8(world: &mut OctreeGrid, x_pos: u32, z_pos: u32) {
     let mut map_c = world.generator.get_map_coords(x_pos, z_pos, world.origin);
 
     // Update intial biome and heightmap
     world.generator.res_8_map_gen(x_pos, z_pos, map_c);
-    let mut voxels: [(f64, Voxel); 4] = Default::default();
+    let mut voxels: [(f64, FourHeightSurface); 4] = Default::default();
 
     map_c.0 *= 2;
     map_c.1 *= 2;
@@ -453,28 +453,26 @@ pub fn generate_res_8(world: &mut ShaderGrid, x_pos: u32, z_pos: u32) {
             let mut voxel_type = 1;
 
             if y < 15.7 + world.generator.sea_level {
-                let v2 = Voxel::from_octants([3, 3, 3, 3, 3, 3, 3, 3]);
-                voxel_type = 4;
 
                 world.insert_subchunk([
                     x_adj as i32,
                     (world.generator.sea_level) as i32,
                     z_adj as i32,
                 ], 
-                v2, 2, true
+                Geometry::Voxel(Voxel::from(3)), 2, true
                 );
             }
 
             // Round y to nearest eigth
             let y_leveled = ((y as i32 - 8) / 8) * 8;
-            let v = Voxel::from_type(voxel_type);
+            let v = FourHeightSurface::from_type(voxel_type);
 
             world.insert_subchunk([
                     x_adj as i32,
                     y_leveled,
                     z_adj as i32,
                 ], 
-                v, 2, true
+                Geometry::Voxel(Voxel::from(2)), 2, true
             );
 
         }
@@ -483,13 +481,13 @@ pub fn generate_res_8(world: &mut ShaderGrid, x_pos: u32, z_pos: u32) {
 
 
 // Essentially a higher resolution of gen 8, accept it generates all required base biome and heightmap data, not 1/8th or 1/4th but only inserts size 4 voxels
-pub fn generate_res_4(world: &mut ShaderGrid, x_pos: u32, z_pos: u32) {
+pub fn generate_res_4(world: &mut OctreeGrid, x_pos: u32, z_pos: u32) {
     let mut map_c = world.generator.get_map_coords(x_pos, z_pos, world.origin);
 
     // Populate the remaining unfilled heightmap and biome map
     world.generator.res_4_map_gen(x_pos, z_pos, map_c);
     
-    let mut voxels: [(f64, Voxel); 4] = Default::default();
+    let mut voxels: [(f64, FourHeightSurface); 4] = Default::default();
     map_c.0 *= 2;
     map_c.1 *= 2;
 
@@ -517,7 +515,7 @@ pub fn generate_res_4(world: &mut ShaderGrid, x_pos: u32, z_pos: u32) {
                         voxels[k].0 as i32 - 1,
                         z_adj as i32,
                     ], 
-                    voxels[k].1,  
+                    Geometry::FourHeightSurface(voxels[k].1),  
                     3,
                     true
                 );
@@ -529,7 +527,7 @@ pub fn generate_res_4(world: &mut ShaderGrid, x_pos: u32, z_pos: u32) {
                         (world.generator.sea_level + 15.0) as i32,
                         z_adj  as i32,
                     ], 
-                    Voxel::from_octants([3, 3, 3, 3, 3, 3, 3, 3]),  
+                    Geometry::Voxel(Voxel::from(3)),  
                     3,
                     false
                 );
@@ -542,13 +540,13 @@ pub fn generate_res_4(world: &mut ShaderGrid, x_pos: u32, z_pos: u32) {
 }
 
 // Shows a higher resolution, and applys biome merging
-pub fn generate_res_2(world: &mut ShaderGrid, x_pos: u32, z_pos: u32) {
+pub fn generate_res_2(world: &mut OctreeGrid, x_pos: u32, z_pos: u32) {
     let mut map_c = world.generator.get_map_coords(x_pos, z_pos, world.origin);
 
     map_c.0 *= 2;
     map_c.1 *= 2;
 
-    let mut voxels: [(f64, Voxel); 4] = Default::default();
+    let mut voxels: [(f64, FourHeightSurface); 4] = Default::default();
 
     for x in 0..32 {
         for z in 0..32 {
@@ -571,7 +569,7 @@ pub fn generate_res_2(world: &mut ShaderGrid, x_pos: u32, z_pos: u32) {
                         voxels[k].0 as i32 - 1,
                         z_adj as i32,
                     ], 
-                    voxels[k].1,  
+                    Geometry::FourHeightSurface(voxels[k].1),  
                     4,
                     true
                 );
@@ -583,7 +581,7 @@ pub fn generate_res_2(world: &mut ShaderGrid, x_pos: u32, z_pos: u32) {
                         (world.generator.sea_level + 15.0) as i32,
                         z_adj  as i32,
                     ], 
-                    Voxel::from_octants([3, 3, 3, 3, 3, 3, 3, 3]),  
+                    Geometry::Voxel(Voxel::from(3)),  
                     4,
                     false
                 );
@@ -592,13 +590,13 @@ pub fn generate_res_2(world: &mut ShaderGrid, x_pos: u32, z_pos: u32) {
     }
 }
 
-pub fn generate_res_1(world: &mut ShaderGrid, x_pos: u32, z_pos: u32) {
+pub fn generate_res_1(world: &mut OctreeGrid, x_pos: u32, z_pos: u32) {
     let mut map_c = world.generator.get_map_coords(x_pos, z_pos, world.origin);
     map_c.0 *= 2;
     map_c.1 *= 2;
     // Apply biomes
 
-    let mut voxels: [(f64, Voxel); 4] = Default::default();
+    let mut voxels: [(f64, FourHeightSurface); 4] = Default::default();
 
     for x in 0..64 {
         for z in 0..64 {
@@ -612,28 +610,26 @@ pub fn generate_res_1(world: &mut ShaderGrid, x_pos: u32, z_pos: u32) {
 
             generate_4_height_voxel(world, &mut v_len, &mut voxels, (c0, c1));
 
- 
-
             for k in 0..v_len {
                 voxels[k].1.update_4_part_voxel();
 
-                world.insert_voxel([
+                world.insert_geometry([
                         x_adj as i32,
                         voxels[k].0 as i32,
                         z_adj as i32,
                     ], 
-                    voxels[k].1,  
+                    Geometry::FourHeightSurface(voxels[k].1),  
                     true
                 );
             }
 
             if voxels[0].0 < 15.7 + world.generator.sea_level {
-                world.insert_voxel([
+                world.insert_geometry([
                         x_adj as i32,
                         (world.generator.sea_level + 15.0) as i32,
                         z_adj  as i32,
                     ], 
-                    Voxel::from_octants([3, 3, 3, 3, 3, 3, 3, 3]),  
+                    Geometry::Voxel(Voxel::from(3)),  
                     false
                 );
             }
@@ -660,7 +656,7 @@ fn get_leveled_quad_height(y: f64, level: f64, scale: f64) -> u8 {
     ((y / scale) * 254.0).floor() as u8 + 1
 }
 
-fn generate_4_height_voxel(world: &ShaderGrid, v_len: &mut usize, voxels: &mut [(f64, Voxel); 4], map_pos: (usize, usize)) {
+fn generate_4_height_voxel(world: &OctreeGrid, v_len: &mut usize, voxels: &mut [(f64, FourHeightSurface); 4], map_pos: (usize, usize)) {
     let mut octant_height;
 
     // Get height values and then sort them 
@@ -695,7 +691,7 @@ fn generate_4_height_voxel(world: &ShaderGrid, v_len: &mut usize, voxels: &mut [
         }
 
         if !exists {
-            let mut temp_v = Voxel::from_quadrants(default);
+            let mut temp_v = FourHeightSurface::from_quadrants(default);
             temp_v.set_surface_octant(octant, octant_height);
             voxels[*v_len] = (y_level, temp_v);
             *v_len += 1;
@@ -706,15 +702,8 @@ fn generate_4_height_voxel(world: &ShaderGrid, v_len: &mut usize, voxels: &mut [
     }
 }
 
-fn generate_4_height_leveled_voxel(world: &ShaderGrid, v_len: &mut usize, voxels: &mut [(f64, Voxel); 4], scale: usize, map_pos: (usize, usize)) {
-
-    // let t = (world.generator.height_map.get(map_pos.0, map_pos.1) / scale as f64).floor() * scale as f64;
-    // let v = Voxel::from_quadrants([10, 10, 230, 200]);
-
-    // *v_len = 1;
-
-    // voxels[0] = (t, v);
-    // return;
+fn generate_4_height_leveled_voxel(world: &OctreeGrid, v_len: &mut usize, voxels: &mut [(f64, FourHeightSurface); 4], scale: usize, map_pos: (usize, usize)) {
+    //println!("{} {}", map_pos.0, map_pos.1);
 
 
     let mut octant_height;
@@ -757,7 +746,7 @@ fn generate_4_height_leveled_voxel(world: &ShaderGrid, v_len: &mut usize, voxels
         }
 
         if !exists {
-            let mut temp_v = Voxel::from_quadrants(default);
+            let mut temp_v = FourHeightSurface::from_quadrants(default);
             temp_v.set_surface_octant(octant, octant_height);
             voxels[*v_len] = (y_level, temp_v);
             *v_len += 1;
@@ -768,27 +757,27 @@ fn generate_4_height_leveled_voxel(world: &ShaderGrid, v_len: &mut usize, voxels
     }
 }
 
-fn insert_tree(world: &mut ShaderGrid, x: u32, y: u32, z: u32) {
+fn insert_tree(world: &mut OctreeGrid, x: u32, y: u32, z: u32) {
     let mut rng = rand::rngs::StdRng::seed_from_u64(world.seed + x as u64 + z as u64);
     let height = rng.random_range(5..10);
 
     for i in 0..height {
-        world.insert_voxel([
+        world.insert_geometry([
             x as i32,
             (y + i) as i32,
             z as i32,
         ], 
-        Voxel::from_type(2),  
+        Geometry::Voxel(Voxel::from(2)),  
         false
         );
     }
 
-    world.insert_voxel([
+    world.insert_geometry([
         x as i32,
         (y + height) as i32,
         z as i32,
     ], 
-    Voxel::from_type(1),  
+    Geometry::Voxel(Voxel::from(2)),  
     false
     );
 
