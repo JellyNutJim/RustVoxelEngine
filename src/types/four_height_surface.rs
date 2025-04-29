@@ -85,7 +85,7 @@ impl FourHeightSurface {
     }
 
     pub fn flatten(&self) -> Vec<u32> {
-        vec![0b1000_0001_0000_0000_0000_0000_0000_0000, self.voxel]
+        vec![0b0000_0001_0000_0000_0000_0000_0000_0000, self.voxel]
     }
 }
 

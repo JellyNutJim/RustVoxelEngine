@@ -74,15 +74,15 @@ const STARTING_ORIENTATION: (f64, f64) = (PI, 0.0);
 
 // Testing constants
 const MEASURE_FRAME_TIMES: bool = false;
-const MEASURE_MARCH_DATA: bool = false; // frame times must also be true
+const MEASURE_MARCH_DATA: bool = false; // frame times must also be true + Atomic add uncommented in shaders
 const PRINT_FRAME_STATS: bool = false;
 
 // Render Options
-const USE_BEAM_OPTIMISATION: bool = false;
-const RESIZEABLE_WINDOW: bool = false;
+const USE_BEAM_OPTIMISATION: bool = true;
+const RESIZEABLE_WINDOW: bool = true;
 const USE_VSYNC: bool = false;
 const USE_FULLSCREEN: bool = false;
-const RESOLUTION: (u32, u32) = (1920, 1080);
+const RESOLUTION: (u32, u32) = (400, 400);
 
 // Sarting conditions
 const SEED: u64 = 42;
@@ -403,7 +403,7 @@ impl App {
             if temp.get_noise_at_point(x, z) > 0.05 {
                 found = true;
             } else {
-                x += 1.0;
+                    x += 1.0;
             }
         }
 

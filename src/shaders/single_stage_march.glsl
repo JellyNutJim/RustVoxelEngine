@@ -48,6 +48,10 @@ const int WIDTH = 321;
 const bool DETAIL = false;
 const bool RENDER_OUT_OF_WORLD_FEATURES = false;
 
+// Geometry Types
+const uint four_height_surface_code = 1 << 24;
+const uint sphere = 2 << 24;
+
 uint get_octant(vec3 pos, uint mid) {
     uint octant = 0;
     if (pos.x > mid) {
@@ -113,24 +117,27 @@ float get_perlin_noise(float x, float z) {
 } 
 
 uvec2 get_geom(uint type, uint index) {
+    // Quick return for air
     if (type == 1) {
         return uvec2(0, 0);
     }
 
-    if ((type & 0x80000000u) == 0) {
+    // Get Geometry Type
+    uint geom_type = type & 0xFF000000u;
+
+    // Voxel
+    if (geom_type == 0) {
         return uvec2(0, type);
+    } 
+    // Four Height Surface
+    else if (geom_type == four_height_surface_code) {
+        return uvec2(1, v_buf.voxels[index + 1]);
     }
 
-    uint complex_type = (type >> 24) & 0x7Fu;
-
-    // Four Height Surface
-    return uvec2(1, v_buf.voxels[index + 1]);
     return uvec2(0,0);
 }
 
-
 uvec2 get_depth(vec3 pos, inout int multiplier) {
-    
     uvec3 realitive_chunk_location = uvec3((floor((pos) / 64)) - (w_buf.origin) / 64);
 
     vec3 local_pos = mod(pos, 64.0);
@@ -381,9 +388,6 @@ bool intersection_test(vec3 origin, vec3 dir, vec3 v0, vec3 v1, vec3 v2, inout f
 
     return false;
 }
-
-
-
 
 bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_delta, ivec3 step, vec3 dir, inout vec3 hit_colour, inout float curr_distance, inout uint steps) {
 

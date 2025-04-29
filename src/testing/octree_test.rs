@@ -19,7 +19,7 @@ pub fn test() {
     let g1 = Geometry::FourHeightSurface(f);
 
     //p.insert_voxel([0, 0, 0], v, false);
-    p.insert_subchunk([0,0,0], 0, g1, false);
+    p.insert_subchunk([32,0,0], 0, g1, false);
 
     // let g2 = Geometry::FourHeightSurface(f);
     // p.insert_subchunk([32,0,0], 0, g1, false);
@@ -29,7 +29,7 @@ pub fn test() {
     // p.insert_subchunk([32,32,0], 0, g1, false);
     // p.insert_subchunk([32,0,32], 0, g1, false);
     // p.insert_subchunk([0,32,32], 0, g1, false);
-    p.insert_subchunk([32,32,32], 0, g1, false);
+    //p.insert_subchunk([32,32,32], 0, g1, false);
 
 
     p.set_generation_level(2);
