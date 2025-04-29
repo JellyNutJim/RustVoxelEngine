@@ -384,7 +384,6 @@ bool intersection_test(vec3 origin, vec3 dir, vec3 v0, vec3 v1, vec3 v2, inout f
         return true;
     }
 
-
     return false;
 }
 
@@ -529,9 +528,9 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
 
 
             // Check if side has been hit
-            //vec3 rel_pos = fract(c.origin + dir * curr_distance);
+            // vec3 rel_pos = fract(c.origin + dir * curr_distance);
 
-            // x
+            // //x
             // if (hit_axis == 0) {
             //     if (step.x == 1) {
             //         float m = h2 - h0;

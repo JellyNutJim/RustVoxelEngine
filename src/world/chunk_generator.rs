@@ -612,11 +612,28 @@ pub fn generate_res_1(world: &mut OctreeGrid, x_pos: u32, z_pos: u32) {
             let mut v_len = 0;
 
             generate_4_height_voxel(world, &mut v_len, &mut voxels, (c0, c1));
+            let mut under_water = false;
 
             for k in 0..v_len {
                 voxels[k].1.update_4_part_voxel();
 
-                world.insert_geometry([
+                if voxels[k].0 < 15.7 + world.generator.sea_level && voxels[k].0 > 14.9 + world.generator.sea_level  {
+                    under_water = true;
+                    let mut temp = voxels[k].1.clone();
+                    temp.set_water(true);
+
+                    world.insert_geometry([
+                        x_adj as i32,
+                        voxels[k].0 as i32,
+                        z_adj as i32,
+                    ], 
+                    Geometry::FourHeightSurface(temp),  
+                    true
+                    );
+                    
+
+                } else {
+                    world.insert_geometry([
                         x_adj as i32,
                         voxels[k].0 as i32,
                         z_adj as i32,
@@ -624,17 +641,20 @@ pub fn generate_res_1(world: &mut OctreeGrid, x_pos: u32, z_pos: u32) {
                     Geometry::FourHeightSurface(voxels[k].1),  
                     true
                 );
+                }
             }
 
-            if voxels[0].0 < 15.7 + world.generator.sea_level {
-                world.insert_geometry([
-                        x_adj as i32,
-                        (world.generator.sea_level + 15.0) as i32,
-                        z_adj  as i32,
-                    ], 
-                    Geometry::Voxel(Voxel::from(3)),  
-                    false
-                );
+            if under_water == false && voxels[0].0 < 15.7 + world.generator.sea_level {
+                if voxels[0].0 < 15.7 + world.generator.sea_level {
+                    world.insert_geometry([
+                            x_adj as i32,
+                            (world.generator.sea_level + 15.0) as i32,
+                            z_adj  as i32,
+                        ], 
+                        Geometry::Voxel(Voxel::from(3)),  
+                        false
+                    );
+                }
             }
         }
     }
@@ -687,15 +707,15 @@ fn generate_4_height_voxel(world: &OctreeGrid, v_len: &mut usize, voxels: &mut [
         // If new height lies within an existing voxel, insert, else set that voxels quadrant to 255 or 0 (full/empty)
         for k in 0..*v_len {
             if y_level == voxels[k].0 {
-                voxels[k].1.set_surface_octant(octant, octant_height);
+                voxels[k].1.set_quadrant(octant, octant_height);
                 exists = true;
                 break;
             } 
         }
 
         if !exists {
-            let mut temp_v = FourHeightSurface::from_quadrants(default);
-            temp_v.set_surface_octant(octant, octant_height);
+            let mut temp_v = FourHeightSurface::from(default);
+            temp_v.set_quadrant(octant, octant_height);
             voxels[*v_len] = (y_level, temp_v);
             *v_len += 1;
         }
@@ -747,15 +767,15 @@ fn generate_4_height_leveled_voxel(world: &OctreeGrid, v_len: &mut usize, voxels
         // If new height lies within an existing voxel, insert, else set that voxels quadrant to 255 or 0 (full/empty)
         for k in 0..*v_len {
             if y_level == voxels[k].0 {
-                voxels[k].1.set_surface_octant(octant, octant_height);
+                voxels[k].1.set_quadrant(octant, octant_height);
                 exists = true;
                 break;
             } 
         }
 
         if !exists {
-            let mut temp_v = FourHeightSurface::from_quadrants(default);
-            temp_v.set_surface_octant(octant, octant_height);
+            let mut temp_v = FourHeightSurface::from(default);
+            temp_v.set_quadrant(octant, octant_height);
             voxels[*v_len] = (y_level, temp_v);
             *v_len += 1;
         }

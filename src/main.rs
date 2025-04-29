@@ -18,7 +18,7 @@ use vulkano::{
     buffer::{Buffer, BufferCreateInfo, BufferUsage, Subbuffer},
     command_buffer::{
         allocator::StandardCommandBufferAllocator, AutoCommandBufferBuilder, CommandBufferUsage,
-        RenderingAttachmentInfo, RenderingInfo,
+        RenderingAttachmentInfo, RenderingInfo, CopyBufferInfo,
     },
     device::{
         physical::PhysicalDeviceType, Device, DeviceCreateInfo, DeviceExtensions,
@@ -43,8 +43,6 @@ use winit::{
 
 };
 
-use vulkano::command_buffer::CopyBufferInfo;
-
 use chrono::Local;
 use rand::Rng;
 use std::{time::Instant, fs::File, io::Write, path::Path};
@@ -61,7 +59,7 @@ use rendering::{ WorldUpdateMessage, WorldUpdater, Update, CameraBufferData, Cam
 use world::{get_grid_from_seed, get_empty_grid, Octree, OctreeGrid};
 use testing::test;
 
-use types::{Vec3, Geometry, Voxel, FourHeightSurface};
+use types::{Vec3, Geometry, Voxel, FourHeightSurface, SteepFourHeightSurface};
 use noise_gen::PerlinNoise; 
 
 // Camera Settings
@@ -76,18 +74,18 @@ const STARTING_ORIENTATION: (f64, f64) = (PI, 0.0);
 const MEASURE_FRAME_TIMES: bool = false;
 const MEASURE_MARCH_DATA: bool = false; // frame times must also be true + Atomic add uncommented in shaders
 const PRINT_FRAME_STATS: bool = false;
+const EARLY_EXIT: bool = false;
 
 // Render Options
-const USE_BEAM_OPTIMISATION: bool = true;
+const USE_BEAM_OPTIMISATION: bool = false;
 const RESIZEABLE_WINDOW: bool = true;
 const USE_VSYNC: bool = false;
 const USE_FULLSCREEN: bool = false;
-const RESOLUTION: (u32, u32) = (400, 400);
+const RESOLUTION: (u32, u32) = (800, 800);
 
 // Sarting conditions
 const SEED: u64 = 42;
 const USE_EMPTY_GRID: bool = false;
-
 
 fn main() -> Result<(), impl Error> {
 
@@ -216,7 +214,10 @@ impl App {
     }
 
     fn new(event_loop: &EventLoop<()>) -> Self {
-        //std::process::exit(0);
+        
+        if EARLY_EXIT {
+            std::process::exit(0);
+        }
 
         // Ready extensions
         let library = VulkanLibrary::new().unwrap();
@@ -386,7 +387,7 @@ impl App {
 
 
         let mut x = 17700.0;
-        let y = 970.0;
+        let y = 850.0;
         let z = 10560.0;
 
         //let seed = 42;
@@ -434,19 +435,45 @@ impl App {
         };
 
         // For testing
-        // let v32 = Voxel::from_quadrants(
-        //     [
-        //         0b_00000001,
-        //         0b_00001100,
-        //         0b_10001000,
-        //         0b_11111111,
+        let v32 = Geometry::FourHeightSurface(FourHeightSurface::from(
+            [
+                0b_00000001,
+                0b_00001100,
+                0b_10001000,
+                0b_11111111,
+            ]
+        ));
 
-        //     ]
-        // );
+        let v33 = Geometry::FourHeightSurface(FourHeightSurface::from_water_level(
+            [
+                0b_00000001,
+                0b_00001100,
+                0b_10001000,
+                0b_11111111,
+            ]
+        ));
 
-        //intial_world.insert_subchunk([middle.x as i32, middle.y as i32, (middle.z + 1.0) as i32], v32, 4, false);
-        //intial_world.insert_voxel([middle.x as i32, middle.y as i32, (middle.z + 4.0) as i32], v32, false);
+        let v34 = Geometry::SteepFourHeightSurface(SteepFourHeightSurface::from_water_level(
+            [
+                0b10_0000_0100_1000,
+                0b10_0100_0000_1000,
+                0b10_0000_0001_0000,
+                0b10_0000_0100_0001,
+            ]
+        ));
 
+        initial_world.insert_subchunk([middle.x as i32, middle.y as i32, (middle.z + 1.0) as i32], v32, 4, false);
+        initial_world.insert_geometry([middle.x as i32, middle.y as i32, (middle.z + 4.0) as i32], v32, false);
+
+        initial_world.insert_subchunk([middle.x as i32, middle.y as i32, (middle.z - 1.0) as i32], v33, 4, false);
+        initial_world.insert_geometry([middle.x as i32, middle.y as i32, (middle.z - 4.0) as i32], v33, false);
+
+        
+        initial_world.insert_subchunk([middle.x as i32 - 8, middle.y as i32, (middle.z - 1.0) as i32], v34, 4, false);
+        initial_world.insert_geometry([middle.x as i32 - 8, middle.y as i32, (middle.z - 4.0) as i32], v34, false);
+
+
+        println!("{:?}", v34.flatten());
         println!("{:?}", middle);
 
         // Get Vector World Data
@@ -1068,6 +1095,15 @@ impl ApplicationHandler for App {
             }
             #[allow(unused_variables)]
             WindowEvent::MouseInput { device_id, state, button } => {
+                match button {
+                    MouseButton::Middle => {
+                        let voxel_loc = self.camera_location.location + self.camera_location.direction * 2.0;
+                        print!("{} {} {}", voxel_loc.x, voxel_loc.y, voxel_loc.z);
+                    }
+                    _ => {}
+                }
+
+
                 if WORLD_INTERACTION == false {
                     return;
                 }
