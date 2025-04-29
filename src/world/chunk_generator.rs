@@ -446,34 +446,37 @@ pub fn generate_res_8(world: &mut OctreeGrid, x_pos: u32, z_pos: u32) {
             let c0 = map_c.0 + (x * 16) as usize;
             let c1 = map_c.1 + (z * 16) as usize;
 
-            let y = world.generator.get_full_biome_height(c0, c1);
+            //let y = world.generator.get_full_biome_height(c0, c1);
             let mut v_len = 0;
-            //generate_4_height_leveled_voxel(world, &mut v_len, &mut voxels, 8, (c0, c1));
+            generate_4_height_leveled_voxel(world, &mut v_len, &mut voxels, 8, (c0, c1));
 
-            let mut voxel_type = 1;
+            //let mut voxel_type = 1;
 
-            if y < 15.7 + world.generator.sea_level {
+            for k in 0..v_len {
+                voxels[k].1.update_4_part_voxel();
 
                 world.insert_subchunk([
-                    x_adj as i32,
-                    (world.generator.sea_level) as i32,
-                    z_adj as i32,
-                ], 
-                Geometry::Voxel(Voxel::from(3)), 2, true
+                        x_adj as i32,
+                        voxels[k].0 as i32 - 1,
+                        z_adj as i32,
+                    ], 
+                    Geometry::FourHeightSurface(voxels[k].1),  
+                    2,
+                    true
                 );
             }
 
-            // Round y to nearest eigth
-            let y_leveled = ((y as i32 - 8) / 8) * 8;
-            let v = FourHeightSurface::from_type(voxel_type);
-
-            world.insert_subchunk([
-                    x_adj as i32,
-                    y_leveled,
-                    z_adj as i32,
-                ], 
-                Geometry::Voxel(Voxel::from(2)), 2, true
-            );
+            if voxels[0].0 < 15.7 + world.generator.sea_level {
+                world.insert_subchunk([
+                        x_adj as i32,
+                        (world.generator.sea_level + 15.0) as i32,
+                        z_adj  as i32,
+                    ], 
+                    Geometry::Voxel(Voxel::from(3)),  
+                    2,
+                    false
+                );
+            }
 
         }
     }
@@ -703,8 +706,13 @@ fn generate_4_height_voxel(world: &OctreeGrid, v_len: &mut usize, voxels: &mut [
 }
 
 fn generate_4_height_leveled_voxel(world: &OctreeGrid, v_len: &mut usize, voxels: &mut [(f64, FourHeightSurface); 4], scale: usize, map_pos: (usize, usize)) {
-    //println!("{} {}", map_pos.0, map_pos.1);
+    // println!("{} {} {}", map_pos.0, map_pos.1, world.generator.height_map.length() );
+    
+    // println!("{} {}", map_pos.0 + 1 * scale * 2, map_pos.1 + 1 * scale * 2);
 
+    if map_pos.0 == 41072 || map_pos.1 == 41072 {
+        return;
+    }
 
     let mut octant_height;
     let scale_f64 = scale as f64;

@@ -1025,7 +1025,7 @@ impl ApplicationHandler for App {
                     return;
                 }
 
-                let dis = Vec3::from(0.25, 0.25, 0.25) * 2.0;
+                let dis = Vec3::from(0.25, 0.25, 0.25) * 4.0;
                 let up = Vec3::from(0.0, 1.0, 0.0);
 
                 match event.physical_key {

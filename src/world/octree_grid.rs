@@ -320,7 +320,7 @@ impl OctreeGrid {
 // GENERATION PIPELINE
 impl OctreeGrid {
     pub fn shift(&mut self, axis: usize, dir: i32) {
-
+        return;
         if axis == 1 { panic!("Invalid shift axis") }; 
 
         let new_axis: i32;
@@ -398,13 +398,11 @@ impl OctreeGrid {
         }
 
         // Now the world has been shifted, multiresolution work can take place
-
-        //self.complete_biome_heightmap_gen(dir, axis, alt_axis);
+        self.complete_biome_heightmap_gen(dir, axis, alt_axis);
 
         // Calculates the final per subvoxel heightmap data, inserts features
         self.merge_biome(dir, axis, alt_axis);
 
-        // Close Zone
         // Simply inserts the detail generated at final adjust at a higher resolution
         self.insert_inner(dir, axis, alt_axis);
 
@@ -540,6 +538,8 @@ impl OctreeGrid {
             if generate {
                 generate_res_2(self, update_chunk[0] as u32, update_chunk[2] as u32);
             }
+
+            generate_res_4(self, delete_chunk[0] as u32, delete_chunk[2] as u32);
 
             // Update Flat Chunk Column
             for j in 0..self.width {

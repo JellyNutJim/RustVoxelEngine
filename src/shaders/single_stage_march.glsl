@@ -411,7 +411,7 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
 
         if (steps > 2000) {
             hit_colour = vec3(0.0, 0.0, 0.0);
-            return true;
+            return false;
             break;
         }
 
@@ -491,11 +491,10 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
         // Four Height Surface
         if ( voxel_type.x == 1 ) {
 
-            // Skip if high multi rn
-            // if ( multiplier > 4) {
-            //     steps += 1;
-            //     take_step(step, t_delta, t_max, hit_axis, world_pos, multiplier, dir, curr_distance);
-            //     continue;
+            // Skip low res
+            // if (multiplier == 8) {
+            //     hit_colour = grass(hit_axis, step, c.origin + dir * curr_distance);
+            //     return true;
             // }
 
             uint heights = voxel_type.y;
@@ -586,40 +585,12 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
 
             float t = 0.0;
 
-            if (intersection_test(c.origin, dir, v0, v1, v2, t) == true) {
+            if (intersection_test(c.origin, dir, v0, v1, v2, t) == true || intersection_test(c.origin, dir, v1, v2, v3, t) == true) {
                 vec3 hit_pos = c.origin + dir * t;
 
-                curr_distance = t;
-
-                if (hit_pos.y > 835) {
-                    hit_colour = grass2(hit_pos) * pow((hit_pos.y / 891), 3);
+                if (scale != 1) {
+                    hit_pos.y += scale;
                 }
-                else if (hit_pos.y < 831) {
-                    hit_colour = sand(hit_pos) * pow((hit_pos.y / 891), 3);
-                }
-                else {
-                    float ratio = (hit_pos.y - 831) / 4;
-
-                    hit_colour = sand(hit_pos) * (1 - ratio) + (grass2(hit_pos) * pow((hit_pos.y / 891), 3)) * ratio;  //((sand(hit_pos) * (1 - ratio)) + (grass2(hit_pos) * ratio)) / 2;
-                }
-
-                if (transparent_hits > 0) {
-                    if (dis > 50) { 
-                        hit_colour = tansparent_mask;
-                        return true;
-                    }
-
-                    float t_per = (dis / 164);
-
-                    hit_colour = (hit_colour * (0.3 - t_per) + tansparent_mask * (0.7 + t_per));
-                }
-
-                return true;
-            }
-
-            
-            if (intersection_test(c.origin, dir, v1, v2, v3, t) == true) {
-                vec3 hit_pos = c.origin + dir * t;
 
                 curr_distance = t;
 

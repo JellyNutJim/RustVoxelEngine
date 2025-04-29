@@ -3,6 +3,7 @@ use std::collections::VecDeque;
 #[derive(Debug, Clone)]
 pub struct HeightMap {
     map: VecDeque<VecDeque<f64>>,
+    width: usize,
 }
 
 #[allow(unused)]
@@ -10,6 +11,7 @@ impl HeightMap {
     pub fn new(initial_height: f64, width: usize) -> Self {
         Self {
             map: VecDeque::from(vec![ VecDeque::from(vec![initial_height; width]); width]),
+            width,
         }
     }
 
@@ -23,6 +25,10 @@ impl HeightMap {
 
     pub fn set(&mut self, x: usize, z: usize, y: f64) {
         self.map[x][z] = y;
+    }
+
+    pub fn length(&self) -> usize{
+        self.width
     }
 
     // Always assumes single chunk shift
