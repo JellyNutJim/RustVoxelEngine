@@ -812,7 +812,7 @@ fn generate_four_height_surfaces(world: &OctreeGrid,  scale: usize, map_pos: (us
     }
 
     let mut g_vec: Vec<Geometry> = Vec::new();
-    let range = end - start + 1;
+    let range = end - start32 + 1;
 
 
     let hs_u32 = [
