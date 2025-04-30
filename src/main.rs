@@ -66,7 +66,7 @@ use noise_gen::PerlinNoise;
 const CONFINE_CURSOR: bool = false;
 const ORIENTATION_MOVEMENT: bool = true;
 const POSTIONAL_MOVEMENT: bool = true;
-const WORLD_INTERACTION: bool = false;
+const WORLD_INTERACTION: bool = true;
 const AUTO_MOVE_FORWARDS: bool = false;
 const STARTING_ORIENTATION: (f64, f64) = (PI, 0.0);
 
@@ -85,7 +85,7 @@ const RESOLUTION: (u32, u32) = (800, 800);
 
 // Sarting conditions
 const SEED: u64 = 42;
-const USE_EMPTY_GRID: bool = true;
+const USE_EMPTY_GRID: bool = false;
 
 fn main() -> Result<(), impl Error> {
 
@@ -1066,7 +1066,7 @@ impl ApplicationHandler for App {
                     return;
                 }
 
-                let dis = Vec3::from(0.25, 0.25, 0.25) * 4.0;
+                let dis = Vec3::from(0.25, 0.25, 0.25) * 0.7;
                 let up = Vec3::from(0.0, 1.0, 0.0);
 
                 match event.physical_key {

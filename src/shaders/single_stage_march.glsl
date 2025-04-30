@@ -136,20 +136,19 @@ uvec3 get_geom(uint type, uint index) {
     } 
     // Four Height Surface
     else if (geom_type == four_height_surface_code) {
-        return uvec3(1, v_buf.voxels[index + 1], 0);
+        return uvec3(4, v_buf.voxels[index + 1], 0);
     }
     else if (geom_type == four_height_water_code) {
-        return uvec3(3, v_buf.voxels[index + 1], 0);
+        return uvec3(5, v_buf.voxels[index + 1], 0);
     } 
     else if ((geom_type & steep_four_height_surface_code) == steep_four_height_surface_code) {
 
         if ((geom_type & 1) == 1) {
-            return uvec3(5, v_buf.voxels[index], v_buf.voxels[index + 1]);
+            return uvec3(3, v_buf.voxels[index], v_buf.voxels[index + 1]);
         }
 
-        return uvec3(4, v_buf.voxels[index], v_buf.voxels[index + 1]);
+        return uvec3(2, v_buf.voxels[index], v_buf.voxels[index + 1]);
     }
-
 
     return uvec3(0,0,0);
 }
@@ -374,7 +373,6 @@ vec3 sand(vec3 hit_pos) {
 
 // Triangle intercept
 bool intersection_test(vec3 origin, vec3 dir, vec3 v0, vec3 v1, vec3 v2, inout float t) {
-
     vec3 v0v1 = v1 - v0;
     vec3 v0v2 = v2 - v0;
     vec3 pvec = cross(dir, v0v2);
@@ -402,14 +400,13 @@ bool intersection_test(vec3 origin, vec3 dir, vec3 v0, vec3 v1, vec3 v2, inout f
         return true;
     }
 
-
     return false;
 }
 
 bool point_in_octant(vec3 point, vec3 corner, int scale ) {
-    return point.x >= corner.x && point.x < corner.x + scale &&
-           point.y >= corner.y && point.y < corner.y + scale &&
-           point.z >= corner.z && point.z < corner.z + scale;
+    return point.x >= corner.x && point.x < corner.x + scale + 0.1 &&
+           point.y >= corner.y && point.y < corner.y + scale + 0.1 &&
+           point.z >= corner.z && point.z < corner.z + scale + 0.1;
 }
 
 bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_delta, ivec3 step, vec3 dir, inout vec3 hit_colour, inout float curr_distance, inout uint steps) {
@@ -434,7 +431,6 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
         }
 
         uvec3 voxel_type = get_depth(world_pos, multiplier);
-
 
         if (steps > 2000) {
             hit_colour = vec3(0.0, 0.0, 0.0);
@@ -517,8 +513,8 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
         }
 
         // Water on 4 height surface
-        if (voxel_type.x == 3) {
-            voxel_type.x = 1;
+        if (voxel_type.x == 5) {
+            voxel_type.x = 4;
             if (hit_axis == 1 && step.y == -1) {
                 if (transparent_hits == 0) {
                     transparent_hits = 1;
@@ -529,7 +525,7 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
         }
 \
         // Four Height Surface
-        if ( voxel_type.x == 1 ) {
+        if ( voxel_type.x == 4 ) {
             uint heights = voxel_type.y;
 
             uint height_0 = heights & 0xFFu;                 // Bottom back left
@@ -654,8 +650,8 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
         }
 
 
-        if (voxel_type.x == 5) {
-            voxel_type.x = 4;
+        if (voxel_type.x == 3) {
+            voxel_type.x = 2;
 
             if (hit_axis == 1 && step.y == -1) {
                 if (transparent_hits == 0) {
@@ -666,12 +662,17 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
             } 
         }
 
-        if (voxel_type.x == 4) {
+        if (voxel_type.x == 2) {
 
             uint n1 = voxel_type.y;
             uint n2 = voxel_type.z;
 
             uint rel_pos = n1 >> 26;
+
+            if (rel_pos == 0) {
+                hit_colour = vec3(1, 0, 0);
+                return true;
+            }
 
             uint height_0 = (n1 >> 10) & 0x3FFF;             
             uint height_1 = (n1 & 0x3FF) << 4 | (n2 >> 28);      
@@ -699,11 +700,11 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
             if (intersection_test(c.origin, dir, v0, v1, v2, t) == true || intersection_test(c.origin, dir, v1, v2, v3, t) == true) {
                 vec3 hit_pos = c.origin + dir * t;
 
-                if (point_in_octant(hit_pos, world_pos, multiplier) == false) {
-                    steps += 1;
-                    take_step(step, t_delta, t_max, hit_axis, world_pos, multiplier, dir, curr_distance);
-                    continue;
-                } 
+                // if (point_in_octant(hit_pos, world_pos, multiplier) == false) {
+                //     steps += 1;
+                //     take_step(step, t_delta, t_max, hit_axis, world_pos, multiplier, dir, curr_distance);
+                //     continue;
+                // } 
 
                 if (scale != 1) {
                     hit_pos.y += scale;

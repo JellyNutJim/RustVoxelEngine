@@ -30,6 +30,21 @@ impl FourHeightSurface {
             has_water: false,
         }
     }
+
+    pub fn from_f64_water(v: [f64; 4]) -> Self {
+        let quadrants = [
+            (v[0].fract() * 256.0) as u8,
+            (v[1].fract() * 256.0) as u8,
+            (v[2].fract() * 256.0) as u8,
+            (v[3].fract() * 256.0) as u8
+        ];
+
+        Self {
+            quadrants: quadrants,
+            voxel: quadrants_to_u32(quadrants),
+            has_water: true,
+        }
+    }
  
     pub fn from_water_level(v: [u8; 4]) -> Self {
         Self {
