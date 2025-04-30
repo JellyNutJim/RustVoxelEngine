@@ -1,5 +1,7 @@
 use std::u8;
 
+use crate::types::SteepFourHeightSurface;
+
 use super::{BiomeMap, Biome, HeightMap, PerlinNoise, ScalablePerlin, OctreeGrid, FourHeightSurface, Voxel, Geometry};
 
 // Contains all noises used throughout the generation process
@@ -726,10 +728,6 @@ fn generate_4_height_voxel(world: &OctreeGrid, v_len: &mut usize, voxels: &mut [
 }
 
 fn generate_4_height_leveled_voxel(world: &OctreeGrid, v_len: &mut usize, voxels: &mut [(f64, FourHeightSurface); 4], scale: usize, map_pos: (usize, usize)) {
-    // println!("{} {} {}", map_pos.0, map_pos.1, world.generator.height_map.length() );
-    
-    // println!("{} {}", map_pos.0 + 1 * scale * 2, map_pos.1 + 1 * scale * 2);
-
     if map_pos.0 == 41072 || map_pos.1 == 41072 {
         return;
     }
@@ -784,6 +782,55 @@ fn generate_4_height_leveled_voxel(world: &OctreeGrid, v_len: &mut usize, voxels
         default[octant] = 255;
     }
 }
+
+fn generate_four_height_surfaces(world: &OctreeGrid,  scale: usize, map_pos: (usize, usize)) -> Vec<Geometry> {
+    let scale_f64 = scale as f64;
+
+    // Get height values and then sort them 
+    let mut hs = [
+        world.generator.height_map.get(map_pos.0, map_pos.1),
+        0.0,
+        0.0,
+        0.0,
+    ]; 
+
+    // Fill remaining posistion
+    for &(i, j) in &POSITIONS_EXLCUDING {
+        let height = world.generator.height_map.get(map_pos.0 + i * scale * 2, map_pos.1 + j * scale * 2);
+        hs[i + j * 2] = height;
+    }
+
+    hs.sort_by(|a, b| a.partial_cmp(b).unwrap());
+
+    let start = hs[0].trunc();
+    let start32 = start as u32;
+    let end = hs[3].trunc() as u32;
+    
+    // If highest and lowest componenet are within the same voxel, use fourheightsurface
+    if start32 == end {
+        return vec![Geometry::FourHeightSurface(FourHeightSurface::from_f64([hs[0], hs[1], hs[2], hs[0]]))];
+    }
+
+    let mut g_vec: Vec<Geometry> = Vec::new();
+    let range = end - start + 1;
+
+
+    let hs_u32 = [
+        ((hs[0] - start) * 256.0) as u32,
+        ((hs[1] - start) * 256.0) as u32,
+        ((hs[2] - start) * 256.0) as u32,
+        ((hs[3] - start) * 256.0) as u32,
+    ];
+
+    for i in 0..range {
+        g_vec.push(
+            Geometry::SteepFourHeightSurface(SteepFourHeightSurface::from([hs_u32[0], hs_u32[1], hs_u32[2], hs_u32[0]], i))
+        );
+    }
+
+    g_vec
+}
+
 
 fn insert_tree(world: &mut OctreeGrid, x: u32, y: u32, z: u32) {
     let mut rng = rand::rngs::StdRng::seed_from_u64(world.seed + x as u64 + z as u64);

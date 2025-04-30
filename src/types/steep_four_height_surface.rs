@@ -2,6 +2,7 @@
 #[derive(Debug, Clone, Copy)]
 pub struct SteepFourHeightSurface {
     quadrants: [u32; 4], // High resolution voxel components
+    rel_height: u32,
     flat: (u32, u32),
     has_water: bool,
 }
@@ -10,17 +11,19 @@ pub struct SteepFourHeightSurface {
 
 impl SteepFourHeightSurface {
 
-    pub fn from(v: [u32; 4]) -> Self {
+    pub fn from(v: [u32; 4],  rh: u32) -> Self {
         Self {
             quadrants: v,
+            rel_height: rh,
             flat: quad_to_flat(v),
             has_water: false,
         }
     }
 
-    pub fn from_water_level(v: [u32; 4]) -> Self {
+    pub fn from_water_level(v: [u32; 4], rh: u32) -> Self {
         Self {
             quadrants: v,
+            rel_height: rh,
             flat: quad_to_flat(v),
             has_water: true,
         }
@@ -31,11 +34,15 @@ impl SteepFourHeightSurface {
     }
 
     pub fn flatten(&self) -> Vec<u32> {
-        let g_type =  if self.has_water {
-            0b0000_0101_0000_0000_0000_0000_0000_0000
+
+
+        let mut g_type =  if self.has_water {
+            0b0000_0011_0000_0000_0000_0000_0000_0000
         } else {
-            0b0000_0100_0000_0000_0000_0000_0000_0000
+            0b0000_0010_0000_0000_0000_0000_0000_0000
         };
+
+        g_type = g_type | (self.rel_height << 26);
 
         vec![
             g_type | self.flat.0,

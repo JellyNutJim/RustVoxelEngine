@@ -85,7 +85,7 @@ const RESOLUTION: (u32, u32) = (800, 800);
 
 // Sarting conditions
 const SEED: u64 = 42;
-const USE_EMPTY_GRID: bool = false;
+const USE_EMPTY_GRID: bool = true;
 
 fn main() -> Result<(), impl Error> {
 
@@ -450,16 +450,27 @@ impl App {
                 0b_00001100,
                 0b_10001000,
                 0b_11111111,
-            ]
+            ],
         ));
 
-        let v34 = Geometry::SteepFourHeightSurface(SteepFourHeightSurface::from_water_level(
+        let v34 = Geometry::SteepFourHeightSurface(SteepFourHeightSurface::from(
             [
-                0b10_0000_0100_1000,
-                0b10_0100_0000_1000,
-                0b10_0000_0001_0000,
-                0b10_0000_0100_0001,
-            ]
+                0b00_0000_0000_1000,
+                0b00_0000_0000_0001,
+                0b00_0000_0011_0000,
+                0b00_0100_0100_0001,
+            ],
+            0
+        ));
+
+        let v35 = Geometry::SteepFourHeightSurface(SteepFourHeightSurface::from(
+            [
+                0b00_0000_0000_1000,
+                0b00_0000_0000_0001,
+                0b00_0000_0011_0000,
+                0b00_0100_0100_0001,
+            ],
+            1
         ));
 
         initial_world.insert_subchunk([middle.x as i32, middle.y as i32, (middle.z + 1.0) as i32], v32, 4, false);
@@ -471,6 +482,9 @@ impl App {
         
         initial_world.insert_subchunk([middle.x as i32 - 8, middle.y as i32, (middle.z - 1.0) as i32], v34, 4, false);
         initial_world.insert_geometry([middle.x as i32 - 8, middle.y as i32, (middle.z - 4.0) as i32], v34, false);
+
+        initial_world.insert_subchunk([middle.x as i32 - 8, middle.y as i32 + 2, (middle.z - 1.0) as i32], v35, 4, false);
+        initial_world.insert_geometry([middle.x as i32 - 8, middle.y as i32 + 1, (middle.z - 4.0) as i32], v35, false);
 
 
         println!("{:?}", v34.flatten());

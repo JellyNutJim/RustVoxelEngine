@@ -49,11 +49,11 @@ const bool DETAIL = false;
 const bool RENDER_OUT_OF_WORLD_FEATURES = false;
 
 // Geometry Types
-const uint four_height_surface_code = 1 << 24;
-const uint four_height_water_code = 3 << 24;
+const uint four_height_surface_code = 4 << 24;
+const uint four_height_water_code = 5 << 24;
 
-const uint steep_four_height_surface_code = 4 << 24;
-const uint steep_four_height_water_code = 5 << 24;
+const uint steep_four_height_surface_code = 2 << 24;
+const uint steep_four_height_water_code = 3 << 24;
 
 const uint sphere = 2 << 24;
 
@@ -141,12 +141,15 @@ uvec3 get_geom(uint type, uint index) {
     else if (geom_type == four_height_water_code) {
         return uvec3(3, v_buf.voxels[index + 1], 0);
     } 
-    else if (geom_type == steep_four_height_surface_code) {
+    else if ((geom_type & steep_four_height_surface_code) == steep_four_height_surface_code) {
+
+        if ((geom_type & 1) == 1) {
+            return uvec3(5, v_buf.voxels[index], v_buf.voxels[index + 1]);
+        }
+
         return uvec3(4, v_buf.voxels[index], v_buf.voxels[index + 1]);
     }
-    else if (geom_type == steep_four_height_water_code) {
-        return uvec3(5, v_buf.voxels[index], v_buf.voxels[index + 1]);
-    }   
+
 
     return uvec3(0,0,0);
 }
@@ -668,16 +671,20 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
             uint n1 = voxel_type.y;
             uint n2 = voxel_type.z;
 
+            uint rel_pos = n1 >> 26;
+
             uint height_0 = (n1 >> 10) & 0x3FFF;             
             uint height_1 = (n1 & 0x3FF) << 4 | (n2 >> 28);      
             uint height_2 = (n2 >> 14) & 0x3FFF;    
             uint height_3 = n2 & 0x3FFF;  
 
+            //uint zero_height = min(min(height_0, height_1), min(height_2, height_3));
+
             // Convert to height between 0 and 64
-            float h0 = ((float(height_0) / 16384.0) * 64) - 32;
-            float h1 = ((float(height_1) / 16384.0) * 64) - 32;
-            float h2 = ((float(height_2) / 16384.0) * 64) - 32;
-            float h3 = ((float(height_3) / 16384.0) * 64) - 32;
+            float h0 = ((float(height_0) / 16384.0) * 64) - rel_pos;
+            float h1 = ((float(height_1) / 16384.0) * 64) - rel_pos;
+            float h2 = ((float(height_2) / 16384.0) * 64) - rel_pos;
+            float h3 = ((float(height_3) / 16384.0) * 64) - rel_pos;
 
             float scale = float(multiplier);
             vec3 scaleed_pos = floor(world_pos / scale) * scale;
@@ -717,7 +724,7 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
                 }
 
                 if (transparent_hits > 0) {
-                    dis = curr_distance - transparent_distance;
+                    //dis = curr_distance - transparent_distance;
                     if (dis > 50) { 
                         hit_colour = tansparent_mask;
                         return true;
