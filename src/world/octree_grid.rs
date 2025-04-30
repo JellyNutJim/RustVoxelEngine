@@ -19,12 +19,12 @@ pub struct OctreeGrid {
     pub width: u32,
     pub sea_level: u32,
     pub generator: GenPipeLine,
-    pub grid: Vec<u32>, // Grid to relate world location to memory location
+    pub spatial_map: Vec<u32>, // Grid to relate world location to memory location
     pub seed: u64,
 
 
     // World Data
-    pub chunks: Vec<Octree>,
+    pub trees: Vec<Octree>,
 
     // Chunks as array of u32
     flat_chunks: Vec<Vec<u32>>,
@@ -46,9 +46,9 @@ impl OctreeGrid {
             origin: origin,
             width: width,
             sea_level: sea_level,
-            grid: vec![0; (width.pow(3)) as usize],
+            spatial_map: vec![0; (width.pow(3)) as usize],
             generator: GenPipeLine::new(seed, width as usize, sea_level as f64),
-            chunks: Vec::new(),
+            trees: Vec::new(),
             flat_chunks: Vec::new(),
             seed: seed,
 
@@ -66,7 +66,7 @@ impl OctreeGrid {
         for x in 0..width {
             for y in 0..width {
                 for z in 0..width {
-                    s.chunks.push(Octree::new([(64 * x) + origin[0], (64 * y) + origin[1], (64 * z) + origin[2]]));
+                    s.trees.push(Octree::new([(64 * x) + origin[0], (64 * y) + origin[1], (64 * z) + origin[2]]));
                 }
             }
         }
@@ -119,7 +119,7 @@ impl OctreeGrid {
             (((pos[2] % 64) + 64) % 64) as u32
         ];
 
-        self.chunks[self.grid[chunk_index as usize] as usize].insert_geometry(pos, geometry, ground_insert);
+        self.trees[self.spatial_map[chunk_index as usize] as usize].insert_geometry(pos, geometry, ground_insert);
     }
 
     pub fn insert_subchunk(&mut self, pos: [i32; 3], geometry: Geometry, depth: u32, ground_insert: bool) {
@@ -133,7 +133,7 @@ impl OctreeGrid {
             (((pos[2] % 64) + 64) % 64) as u32
         ];
 
-        self.chunks[self.grid[chunk_index as usize] as usize].insert_subchunk(pos, depth, geometry, ground_insert);
+        self.trees[self.spatial_map[chunk_index as usize] as usize].insert_subchunk(pos, depth, geometry, ground_insert);
     }
 
     pub fn insert_simple_voxel(&mut self, pos: [i32; 3], voxel_type: u32) {
@@ -144,7 +144,7 @@ impl OctreeGrid {
             (((pos[1] % 64) + 64) % 64) as u32,
             (((pos[2] % 64) + 64) % 64) as u32
         ];
-        self.chunks[self.grid[chunk_index as usize] as usize].insert_geometry(pos, Geometry::Voxel(Voxel::from(voxel_type)), false);
+        self.trees[self.spatial_map[chunk_index as usize] as usize].insert_geometry(pos, Geometry::Voxel(Voxel::from(voxel_type)), false);
     }
 
     pub fn insert_simple_subchunk(&mut self, pos: [i32; 3], voxel_type: u32, depth: u32) {
@@ -155,7 +155,7 @@ impl OctreeGrid {
             (((pos[1] % 64) + 64) % 64) as u32,
             (((pos[2] % 64) + 64) % 64) as u32
         ];
-        self.chunks[self.grid[chunk_index as usize] as usize].insert_subchunk(pos, depth, Geometry::Voxel(Voxel::from(voxel_type)), false);
+        self.trees[self.spatial_map[chunk_index as usize] as usize].insert_subchunk(pos, depth, Geometry::Voxel(Voxel::from(voxel_type)), false);
     }
 
     // Finds the smallest chunk origin, and sets that to the grid origin
@@ -195,12 +195,12 @@ impl OctreeGrid {
     fn set_grid_from_chunks(&mut self) {
 
         // Convert to function in grid
-        for (i, chunk) in self.chunks.iter().enumerate() {
+        for (i, chunk) in self.trees.iter().enumerate() {
             let chunk_pos: [u32; 3] = self.get_chunk_pos(&chunk.get_origin());
             
             let grid_index = chunk_pos[0] + chunk_pos[1] * self.width + chunk_pos[2] * self.width.pow(2);
 
-            self.grid[grid_index as usize] = i as u32; 
+            self.spatial_map[grid_index as usize] = i as u32; 
 
         }
     }
@@ -214,7 +214,7 @@ impl OctreeGrid {
         let mut curr_index: i32 = 0;
 
         // Convert to function in grid
-        for chunk in &self.chunks {
+        for chunk in &self.trees {
             let mut flat = chunk.flatten();
             let chunk_pos = self.get_chunk_pos(&flat.0);
 
@@ -245,9 +245,9 @@ impl OctreeGrid {
 
     // Updates a given chunks stored flat data from a given index
     pub fn update_flat_chunk_with_chunk_index(&mut self, index: usize) {
-        let i = self.grid[index] as usize;
+        let i = self.spatial_map[index] as usize;
 
-        self.flat_chunks[i] = self.chunks[i].flatten().1;
+        self.flat_chunks[i] = self.trees[i].flatten().1;
     }
 
     // Returns flattened shader grid, does not do any flattening itself
@@ -259,10 +259,10 @@ impl OctreeGrid {
         let mut curr_index: i32 = 0;
 
         // Loop over flat chunk data to rebuild the 
-        for i in 0..self.chunks.len() {
+        for i in 0..self.trees.len() {
 
             flat_chunks.extend(&self.flat_chunks[i]);
-            let c_pos = self.get_chunk_pos(&self.chunks[i].get_origin());
+            let c_pos = self.get_chunk_pos(&self.trees[i].get_origin());
 
             let grid_index = c_pos[0] + c_pos[1] * self.width + c_pos[2] * self.width * self.width;
             flat_grid[grid_index as usize] = curr_index; 
@@ -282,8 +282,8 @@ impl OctreeGrid {
         let mut curr_index: i32 = 0;
 
         // Loop over flat chunk data to rebuild the 
-        for i in 0..self.chunks.len() {
-            let c_pos = self.get_chunk_pos(&self.chunks[i].get_origin());
+        for i in 0..self.trees.len() {
+            let c_pos = self.get_chunk_pos(&self.trees[i].get_origin());
 
             let grid_index = c_pos[0] + c_pos[1] * self.width + c_pos[2] * self.width * self.width;
             flat_grid[grid_index as usize] = curr_index; 
@@ -349,12 +349,12 @@ impl OctreeGrid {
         // INSTEAD OF SERACHING THROUGH I CAN JUST DO X Y * W Z * W * W WITH SPECIFIC X OR Z !!!
 
         // Replace uneeded chunks with new chunks
-        for i in 0..self.chunks.len() {
-            let mut origin = self.chunks[i].get_origin();
+        for i in 0..self.trees.len() {
+            let mut origin = self.trees[i].get_origin();
 
             if origin[axis] == remove_axis {
                 origin[axis] = new_axis;
-                self.chunks[i] = Octree::new(origin);
+                self.trees[i] = Octree::new(origin);
 
             }
         }
@@ -389,8 +389,8 @@ impl OctreeGrid {
             // Update Flat Chunks
             for j in 0..self.width {
                 let grid_index = c_ind[0] as u32 + (c_ind[1] as u32 + j)  * self.width + c_ind[2] as u32 * self.width.pow(2);
-                let index = self.grid[grid_index as usize] as usize;
-                self.flat_chunks[index] = self.chunks[index].flatten().1;
+                let index = self.spatial_map[grid_index as usize] as usize;
+                self.flat_chunks[index] = self.trees[index].flatten().1;
             }
 
             // Move to next chunk
@@ -444,16 +444,16 @@ impl OctreeGrid {
             // Temp solution of just deleting chunks at layer boundaries
             for j in 0..self.width {
                 let grid_index = update_chunk_pos[0] as u32 + (update_chunk_pos[1] as u32 + j)  * self.width + update_chunk_pos[2] as u32 * self.width.pow(2);
-                let index = self.grid[grid_index as usize] as usize;
-                self.chunks[index] = Octree::new(self.chunks[index].get_origin());
+                let index = self.spatial_map[grid_index as usize] as usize;
+                self.trees[index] = Octree::new(self.trees[index].get_origin());
 
-                self.chunks[index].set_generation_level(3);
+                self.trees[index].set_generation_level(3);
 
                 let grid_index = delete_chunk_pos[0] as u32 + (delete_chunk_pos[1] as u32 + j)  * self.width + delete_chunk_pos[2] as u32 * self.width.pow(2);
-                let index = self.grid[grid_index as usize] as usize;
-                self.chunks[index] = Octree::new(self.chunks[index].get_origin());
+                let index = self.spatial_map[grid_index as usize] as usize;
+                self.trees[index] = Octree::new(self.trees[index].get_origin());
 
-                self.chunks[index].set_generation_level(2);
+                self.trees[index].set_generation_level(2);
             }
 
             generate_res_4(self, update_chunk[0] as u32, update_chunk[2] as u32);
@@ -465,12 +465,12 @@ impl OctreeGrid {
             // Update Flat Chunk Column
             for j in 0..self.width {
                 let grid_index = update_chunk_pos[0] as u32 + (update_chunk_pos[1] as u32 + j)  * self.width + update_chunk_pos[2] as u32 * self.width.pow(2);
-                let index = self.grid[grid_index as usize] as usize;
-                self.flat_chunks[index] = self.chunks[index].flatten().1;
+                let index = self.spatial_map[grid_index as usize] as usize;
+                self.flat_chunks[index] = self.trees[index].flatten().1;
 
                 let grid_index = delete_chunk_pos[0] as u32 + (delete_chunk_pos[1] as u32 + j)  * self.width + delete_chunk_pos[2] as u32 * self.width.pow(2);
-                let index = self.grid[grid_index as usize] as usize;
-                self.flat_chunks[index] = self.chunks[index].flatten().1;
+                let index = self.spatial_map[grid_index as usize] as usize;
+                self.flat_chunks[index] = self.trees[index].flatten().1;
             }
 
             // Move to next chunk along axis
@@ -520,19 +520,19 @@ impl OctreeGrid {
             // Temp solution of just deleting chunks at layer boundaries
             for j in 0..self.width {
                 let grid_index = update_chunk_pos[0] as u32 + (update_chunk_pos[1] as u32 + j)  * self.width + update_chunk_pos[2] as u32 * self.width.pow(2);
-                let index = self.grid[grid_index as usize] as usize;
+                let index = self.spatial_map[grid_index as usize] as usize;
 
-                let chunk = &mut self.chunks[index];
+                let chunk = &mut self.trees[index];
                 if chunk.get_max_generation_level() == 3 {
                     generate = true;
-                    self.chunks[index].set_generation_level(4);
+                    self.trees[index].set_generation_level(4);
                 } 
 
                 let grid_index = delete_chunk_pos[0] as u32 + (delete_chunk_pos[1] as u32 + j)  * self.width + delete_chunk_pos[2] as u32 * self.width.pow(2);
-                let index = self.grid[grid_index as usize] as usize;
-                self.chunks[index] = Octree::new(self.chunks[index].get_origin());
+                let index = self.spatial_map[grid_index as usize] as usize;
+                self.trees[index] = Octree::new(self.trees[index].get_origin());
 
-                self.chunks[index].set_generation_level(3);
+                self.trees[index].set_generation_level(3);
             }
 
             if generate {
@@ -544,12 +544,12 @@ impl OctreeGrid {
             // Update Flat Chunk Column
             for j in 0..self.width {
                 let grid_index = update_chunk_pos[0] as u32 + (update_chunk_pos[1] as u32 + j)  * self.width + update_chunk_pos[2] as u32 * self.width.pow(2);
-                let index = self.grid[grid_index as usize] as usize;
-                self.flat_chunks[index] = self.chunks[index].flatten().1;
+                let index = self.spatial_map[grid_index as usize] as usize;
+                self.flat_chunks[index] = self.trees[index].flatten().1;
 
                 let grid_index = delete_chunk_pos[0] as u32 + (delete_chunk_pos[1] as u32 + j)  * self.width + delete_chunk_pos[2] as u32 * self.width.pow(2);
-                let index = self.grid[grid_index as usize] as usize;
-                self.flat_chunks[index] = self.chunks[index].flatten().1;
+                let index = self.spatial_map[grid_index as usize] as usize;
+                self.flat_chunks[index] = self.trees[index].flatten().1;
             }
 
             // Move to next chunk along axis
@@ -599,17 +599,17 @@ impl OctreeGrid {
             // Temp solution of just deleting chunks at layer boundaries
             for j in 0..self.width {
                 let grid_index = update_chunk_pos[0] as u32 + (update_chunk_pos[1] as u32 + j)  * self.width + update_chunk_pos[2] as u32 * self.width.pow(2);
-                let index = self.grid[grid_index as usize] as usize;
-                let chunk = &mut self.chunks[index];
+                let index = self.spatial_map[grid_index as usize] as usize;
+                let chunk = &mut self.trees[index];
 
                 if chunk.get_max_generation_level() == 4 {
                     generate = true;
-                    self.chunks[index].set_generation_level(5);
+                    self.trees[index].set_generation_level(5);
                 } 
 
                 let grid_index = delete_chunk_pos[0] as u32 + (delete_chunk_pos[1] as u32 + j)  * self.width + delete_chunk_pos[2] as u32 * self.width.pow(2);
-                let index = self.grid[grid_index as usize] as usize;
-                self.chunks[index].set_generation_level(4);
+                let index = self.spatial_map[grid_index as usize] as usize;
+                self.trees[index].set_generation_level(4);
             }
 
             if generate {
@@ -619,12 +619,12 @@ impl OctreeGrid {
             // Update Flat Chunk Column
             for j in 0..self.width {
                 let grid_index = update_chunk_pos[0] as u32 + (update_chunk_pos[1] as u32 + j)  * self.width + update_chunk_pos[2] as u32 * self.width.pow(2);
-                let index = self.grid[grid_index as usize] as usize;
-                self.flat_chunks[index] = self.chunks[index].flatten().1;
+                let index = self.spatial_map[grid_index as usize] as usize;
+                self.flat_chunks[index] = self.trees[index].flatten().1;
 
                 let grid_index = delete_chunk_pos[0] as u32 + (delete_chunk_pos[1] as u32 + j)  * self.width + delete_chunk_pos[2] as u32 * self.width.pow(2);
-                let index = self.grid[grid_index as usize] as usize;
-                self.flat_chunks[index] = self.chunks[index].flatten().1;
+                let index = self.spatial_map[grid_index as usize] as usize;
+                self.flat_chunks[index] = self.trees[index].flatten().1;
             }
 
             // Move to next chunk along axis

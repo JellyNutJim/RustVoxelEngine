@@ -3,7 +3,6 @@ mod voxel;
 mod octo_voxel;
 mod sphere;
 mod four_height_surface;
-mod complex_surface;
 mod steep_four_height_surface;
 
 
@@ -12,7 +11,6 @@ pub use voxel::Voxel;
 pub use sphere::Sphere;
 pub use four_height_surface::FourHeightSurface;
 pub use octo_voxel::OctoVoxel;
-pub use complex_surface::ComplexSurface;
 pub use steep_four_height_surface::SteepFourHeightSurface;
 
 #[repr(C)]

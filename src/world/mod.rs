@@ -5,9 +5,6 @@ mod chunk_generator;
 mod height_map;
 mod biome_map;
 
-// Rust usage
-mod chunk;
-
 pub use octree::Octree;
 pub use octree_grid::OctreeGrid;
 pub use chunk_generator::*;
@@ -83,8 +80,8 @@ pub fn get_empty_grid(width: i32, camera_origin: [i32; 3]) -> OctreeGrid {
         for y in 0..grid.width {
             for z in 0..grid.width { 
                 let grid_index = x + y * grid.width + z * grid.width.pow(2);
-                let index = grid.grid[grid_index as usize] as usize;
-                grid.chunks[index].set_generation_level(5);
+                let index = grid.spatial_map[grid_index as usize] as usize;
+                grid.trees[index].set_generation_level(5);
             }
         }
     }
@@ -104,8 +101,8 @@ fn create_res_8_land(world: &mut OctreeGrid) {
 
             for y in 0..world.width { 
                 let grid_index = x + (y) * world.width  + z * world.width.pow(2);
-                let index = world.grid[grid_index as usize] as usize;
-                world.chunks[index].set_generation_level(2);
+                let index = world.spatial_map[grid_index as usize] as usize;
+                world.trees[index].set_generation_level(2);
             }
 
             generate_res_8(world, c_x, c_z);
@@ -134,8 +131,8 @@ fn create_res_4_land(world: &mut OctreeGrid) {
 
             for y in 0..world.width { 
                 let grid_index = (sp_c[0] + x) + (y) * world.width  + (sp_c[2] + z) * world.width.pow(2);
-                let index = world.grid[grid_index as usize] as usize;
-                world.chunks[index].set_generation_level(3);
+                let index = world.spatial_map[grid_index as usize] as usize;
+                world.trees[index].set_generation_level(3);
             }
 
             generate_res_4(world, c_x, c_z);
@@ -165,8 +162,8 @@ fn create_intial_merged_land(world: &mut OctreeGrid) {
 
             for y in 0..world.width { 
                 let grid_index = (sp_c[0] + x) + (y) * world.width  + (sp_c[2] + z) * world.width.pow(2);
-                let index = world.grid[grid_index as usize] as usize;
-                world.chunks[index].set_generation_level(4);
+                let index = world.spatial_map[grid_index as usize] as usize;
+                world.trees[index].set_generation_level(4);
             }
 
             generate_res_2(world, c_x, c_z);
@@ -197,8 +194,8 @@ fn create_inner_land(world: &mut OctreeGrid) {
 
             for y in 0..world.width { 
                 let grid_index = (sp_c[0] + x) + (y) * world.width  + (sp_c[2] + z) * world.width.pow(2);
-                let index = world.grid[grid_index as usize] as usize;
-                world.chunks[index].set_generation_level(5);
+                let index = world.spatial_map[grid_index as usize] as usize;
+                world.trees[index].set_generation_level(5);
             }
 
             generate_res_1(world, c_x, c_z);

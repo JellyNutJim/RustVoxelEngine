@@ -540,7 +540,7 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
 
 
             // Check if side has been hit
-            vec3 rel_pos = fract(c.origin + dir * curr_distance);
+            //vec3 rel_pos = fract(c.origin + dir * curr_distance);
 
             // // x
             // if (hit_axis == 0) {

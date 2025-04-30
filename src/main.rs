@@ -75,6 +75,7 @@ const MEASURE_FRAME_TIMES: bool = false;
 const MEASURE_MARCH_DATA: bool = false; // frame times must also be true + Atomic add uncommented in shaders
 const PRINT_FRAME_STATS: bool = false;
 const EARLY_EXIT: bool = false;
+const PAUSE_GENERATION: bool = false;
 
 // Render Options
 const USE_BEAM_OPTIMISATION: bool = false;
@@ -435,57 +436,89 @@ impl App {
         };
 
         //For testing
-        let v32 = Geometry::FourHeightSurface(FourHeightSurface::from(
-            [
-                0b_00000001,
-                0b_00001100,
-                0b_10001000,
-                0b_11111111,
-            ]
-        ));
+        // let v32 = Geometry::FourHeightSurface(FourHeightSurface::from(
+        //     [
+        //         0b_00000001,
+        //         0b_00001100,
+        //         0b_10001000,
+        //         0b_11111111,
+        //     ]
+        // ));
 
-        let v33 = Geometry::FourHeightSurface(FourHeightSurface::from_water_level(
-            [
-                0b_00000001,
-                0b_00001100,
-                0b_10001000,
-                0b_11111111,
-            ],
-        ));
+        // let v33 = Geometry::FourHeightSurface(FourHeightSurface::from_water_level(
+        //     [
+        //         0b_00000001,
+        //         0b_00001100,
+        //         0b_10001000,
+        //         0b_11111111,
+        //     ],
+        // ));
 
-        let v34 = Geometry::SteepFourHeightSurface(SteepFourHeightSurface::from_water_level(
-            [
-                0b00_0000_0000_1000,
-                0b00_0000_0000_0001,
-                0b00_0000_0011_0000,
-                0b00_0100_0100_0001,
-            ],
-            0
-        ));
+        // let v34 = Geometry::SteepFourHeightSurface(SteepFourHeightSurface::from_water_level(
+        //     [
+        //         0b00_0000_0000_1000,
+        //         0b00_0000_0000_0001,
+        //         0b00_0000_0011_0000,
+        //         0b00_0100_0100_0001,
+        //     ],
+        //     0
+        // ));
 
-        let v35 = Geometry::SteepFourHeightSurface(SteepFourHeightSurface::from_water_level(
-            [
-                0b00_0000_0000_1000,
-                0b00_0000_0000_0001,
-                0b00_0000_0011_0000,
-                0b00_0100_0100_0001,
-            ],
-            1
-        ));
+        // let v35 = Geometry::SteepFourHeightSurface(SteepFourHeightSurface::from_water_level(
+        //     [
+        //         0b00_0000_0000_1000,
+        //         0b00_0000_0000_0001,
+        //         0b00_0000_0011_0000,
+        //         0b00_0100_0100_0001,
+        //     ],
+        //     1
+        // ));
 
-        initial_world.insert_subchunk([middle.x as i32, middle.y as i32, (middle.z + 1.0) as i32], v32, 4, false);
-        initial_world.insert_geometry([middle.x as i32, middle.y as i32, (middle.z + 4.0) as i32], v32, false);
+        // initial_world.insert_subchunk([middle.x as i32, middle.y as i32, (middle.z + 1.0) as i32], v32, 4, false);
+        // initial_world.insert_geometry([middle.x as i32, middle.y as i32, (middle.z + 4.0) as i32], v32, false);
 
-        initial_world.insert_subchunk([middle.x as i32, middle.y as i32, (middle.z - 1.0) as i32], v33, 4, false);
-        initial_world.insert_geometry([middle.x as i32, middle.y as i32, (middle.z - 4.0) as i32], v33, false);
+        // initial_world.insert_subchunk([middle.x as i32, middle.y as i32, (middle.z - 1.0) as i32], v33, 4, false);
+        // initial_world.insert_geometry([middle.x as i32, middle.y as i32, (middle.z - 4.0) as i32], v33, false);
 
         
-        initial_world.insert_subchunk([middle.x as i32 - 8, middle.y as i32, (middle.z - 1.0) as i32], v34, 4, false);
-        initial_world.insert_geometry([middle.x as i32 - 8, middle.y as i32, (middle.z - 4.0) as i32], v34, false);
+        // initial_world.insert_subchunk([middle.x as i32 - 8, middle.y as i32, (middle.z - 1.0) as i32], v34, 4, false);
+        // initial_world.insert_geometry([middle.x as i32 - 8, middle.y as i32, (middle.z - 4.0) as i32], v34, false);
 
-        initial_world.insert_subchunk([middle.x as i32 - 8, middle.y as i32 + 2, (middle.z - 1.0) as i32], v35, 4, false);
-        initial_world.insert_geometry([middle.x as i32 - 8, middle.y as i32 + 1, (middle.z - 4.0) as i32], v35, false);
+        // initial_world.insert_subchunk([middle.x as i32 - 8, middle.y as i32 + 2, (middle.z - 1.0) as i32], v35, 4, false);
+        // initial_world.insert_geometry([middle.x as i32 - 8, middle.y as i32 + 1, (middle.z - 4.0) as i32], v35, false);
 
+        // let test1 = Geometry::FourHeightSurface(FourHeightSurface::from(
+        //     [
+        //         0b_00000000,
+        //         0b_00000000,
+        //         0b_11111111,
+        //         0b_11111111,
+        //     ]
+        // ));
+
+        // let test2 = Geometry::FourHeightSurface(FourHeightSurface::from(
+        //     [
+        //         0b_00001000,
+        //         0b_00001000,
+        //         0b_11111111,
+        //         0b_11111111,
+        //     ]
+        // ));
+
+        // let test3 = Geometry::FourHeightSurface(FourHeightSurface::from(
+        //     [
+        //         0b_00000000,
+        //         0b_00000000,
+        //         0b_00001000,
+        //         0b_00001000,
+        //     ]
+        // ));
+
+        
+
+        // initial_world.insert_geometry([middle.x as i32, middle.y as i32, (middle.z + 4.0) as i32], test1, false);
+        // initial_world.insert_geometry([middle.x as i32, middle.y as i32 + 1, (middle.z + 4.0) as i32], test3, false);
+        // initial_world.insert_geometry([middle.x as i32, middle.y as i32 + 1, (middle.z + 5.0) as i32], test2, false);
 
         // println!("{:?}", v34.flatten());
         println!("{:?}", middle);
@@ -1272,17 +1305,17 @@ impl ApplicationHandler for App {
                     let diff = curr_pos_chunk - old_pos_chunk;
 
 
-
-                    if diff.x != 0.0 {
-                        //println!("axis: {}, dir: {}", 0, diff.x);
-                        self.world_updater.request_update(Update::Shift(0, diff.x as i32));
+                    if PAUSE_GENERATION == false {
+                        if diff.x != 0.0 {
+                            //println!("axis: {}, dir: {}", 0, diff.x);
+                            self.world_updater.request_update(Update::Shift(0, diff.x as i32));
+                        }
+    
+                        if diff.z != 0.0 {
+                            //println!("axis: {}, dir: {}", 2, diff.z)
+                            self.world_updater.request_update(Update::Shift(2, diff.z as i32));
+                        }
                     }
-
-                    if diff.z != 0.0 {
-                        //println!("axis: {}, dir: {}", 2, diff.z)
-                        self.world_updater.request_update(Update::Shift(2, diff.z as i32));
-                    }
-
 
                     let look_distance = 1.0;
                     let look_at = self.camera_location.location + self.camera_location.direction * look_distance;

@@ -7,19 +7,19 @@ pub struct Octree {
     pos: [i32; 3], // position in 3d space
     generation_level: u32, // Level of detail to send to gpu
     max_generation_level: u32, // Highest level of terrain generated
-    data: ChunkContent,
+    data: Octant,
 }
 
 #[repr(C)]
 #[derive(Debug, Clone)]
-enum ChunkContent {
+enum Octant {
     Leaf(Geometry),
-    Octants(Box<ChildOctants>, Geometry),
+    Branch(Box<ChildOctants>, Geometry),
 }
 
 #[repr(C)]
 #[derive(Debug, Clone)]
-struct ChildOctants([ChunkContent; 8]);
+struct ChildOctants([Octant; 8]);
 
 
 // Depth = Octants of Size
@@ -48,7 +48,7 @@ impl Octree {
             pos,
             generation_level: 0,
             max_generation_level: 0,
-            data: ChunkContent::Leaf(Geometry::Voxel(Voxel::new() )),
+            data: Octant::Leaf(Geometry::Voxel(Voxel::new() )),
         }
     }
 
@@ -57,7 +57,7 @@ impl Octree {
             pos,
             generation_level: 0,
             max_generation_level: 0,
-            data: ChunkContent::Leaf( Geometry::Voxel(Voxel::from(data) )),
+            data: Octant::Leaf( Geometry::Voxel(Voxel::from(data) )),
         }
     }
 
@@ -132,27 +132,27 @@ impl Octree {
         for i in 0..=depth {
             // Create octants if they do not already exist
 
-            if let ChunkContent::Leaf(data) = current {
-                *current = ChunkContent::Octants( Box::new(
+            if let Octant::Leaf(data) = current {
+                *current = Octant::Branch( Box::new(
                     ChildOctants([ 
-                        ChunkContent::Leaf(Geometry::Voxel(Voxel::new())),
-                        ChunkContent::Leaf(Geometry::Voxel(Voxel::new())),
-                        ChunkContent::Leaf(Geometry::Voxel(Voxel::new())),
-                        ChunkContent::Leaf(Geometry::Voxel(Voxel::new())),
-                        ChunkContent::Leaf(Geometry::Voxel(Voxel::new())),
-                        ChunkContent::Leaf(Geometry::Voxel(Voxel::new())),
-                        ChunkContent::Leaf(Geometry::Voxel(Voxel::new())),
-                        ChunkContent::Leaf(Geometry::Voxel(Voxel::new())),
+                        Octant::Leaf(Geometry::Voxel(Voxel::new())),
+                        Octant::Leaf(Geometry::Voxel(Voxel::new())),
+                        Octant::Leaf(Geometry::Voxel(Voxel::new())),
+                        Octant::Leaf(Geometry::Voxel(Voxel::new())),
+                        Octant::Leaf(Geometry::Voxel(Voxel::new())),
+                        Octant::Leaf(Geometry::Voxel(Voxel::new())),
+                        Octant::Leaf(Geometry::Voxel(Voxel::new())),
+                        Octant::Leaf(Geometry::Voxel(Voxel::new())),
                     ])), data.clone()
                 );
             }
 
             // Set current to the next octant the given position lies in
-            if let ChunkContent::Octants(ref mut octants, _geom) = current {
+            if let Octant::Branch(ref mut octants, _geom) = current {
                 curr_octant = Self::get_octant_at_depth(pos, i);
                 if ground_insert == true && i == depth { 
                     if curr_octant > 3 {
-                        octants.0[curr_octant - 4] = ChunkContent::Leaf(Geometry::Voxel(Voxel::new()));
+                        octants.0[curr_octant - 4] = Octant::Leaf(Geometry::Voxel(Voxel::new()));
                     }
                 }
 
@@ -161,14 +161,14 @@ impl Octree {
         }
 
         // Set current octants value to the given voxel type
-        *current = ChunkContent::Leaf(geometry);
+        *current = Octant::Leaf(geometry);
 
     }
 
     // Convert entire octree to flat u32 vector
     pub fn flatten(&self) -> ([i32; 3], Vec<u32>){
         // Check if chunk has no depth
-        if let ChunkContent::Leaf(geom) = self.data {
+        if let Octant::Leaf(geom) = self.data {
             return (self.pos, geom.flatten())
         }
 
@@ -177,7 +177,7 @@ impl Octree {
         let max_depth = self.get_generation_level(); 
 
         // Otherwise recursively search octree
-        if let ChunkContent::Octants(ref octants, _geom) = self.data {
+        if let Octant::Branch(ref octants, _geom) = self.data {
             octant_vec = Self::get_flattened_octant(&octants.0, curr_depth, max_depth);
         }
 
@@ -185,18 +185,18 @@ impl Octree {
     }
 
     // currently only works for voxels (four height data)
-    fn get_flattened_octant(octants: &[ChunkContent; 8], curr_depth: u32, max_depth: u32) -> Vec<u32>{
+    fn get_flattened_octant(octants: &[Octant; 8], curr_depth: u32, max_depth: u32) -> Vec<u32>{
         let mut octant_vec: Vec<Vec<u32>> = Vec::new(); 
         let mut result: Vec<u32> = Vec::new();
         let mut curr_len = 0;
 
         for octant in octants {
             match octant { 
-                ChunkContent::Leaf(voxel_data) => { 
+                Octant::Leaf(voxel_data) => { 
                     octant_vec.push(voxel_data.flatten()); 
                 }
 
-                ChunkContent::Octants(ref octants, geom) => {
+                Octant::Branch(ref octants, geom) => {
                     if curr_depth == max_depth {
                         octant_vec.push(geom.flatten());
                         continue;
