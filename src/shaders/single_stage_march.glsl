@@ -143,7 +143,7 @@ uvec3 get_geom(uint type, uint index) {
     } 
     else if ((geom_type & steep_four_height_surface_code) == steep_four_height_surface_code) {
 
-        if ((geom_type & 1) == 1) {
+        if ((geom_type & steep_four_height_water_code) == steep_four_height_water_code) {
             return uvec3(3, v_buf.voxels[index], v_buf.voxels[index + 1]);
         }
 
@@ -533,33 +533,16 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
             uint height_2 = (heights & 0xFF0000u) >> 16u;    // Bottom back right
             uint height_3 = (heights & 0xFF000000u) >> 24u;  // Bottom front right
 
-            // Temp fix to deal with missing octants
-            if (height_0 == 0) { 
-                height_0 = 1;
-            }
-
-            if (height_1 == 0) { 
-                height_1 = 1;
-            }
-
-            if (height_2 == 0) { 
-                height_2 = 1;
-            }
-
-            if (height_3 == 0) { 
-                height_3 = 1;
-            }
-
-            float h0 = (float(height_0 - 1) / 253);
-            float h1 = (float(height_1 - 1) / 253);
-            float h2 = (float(height_2 - 1) / 253);
-            float h3 = (float(height_3 - 1) / 253);
+            float h0 = (float(height_0) / 255);
+            float h1 = (float(height_1) / 255);
+            float h2 = (float(height_2) / 255);
+            float h3 = (float(height_3) / 255);
 
 
             // Check if side has been hit
-            //vec3 rel_pos = fract(c.origin + dir * curr_distance);
+            vec3 rel_pos = fract(c.origin + dir * curr_distance);
 
-            // x
+            // // x
             // if (hit_axis == 0) {
             //     if (step.x == 1) {
             //         float m = h2 - h0;
@@ -669,23 +652,21 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
 
             uint rel_pos = n1 >> 26;
 
-            if (rel_pos == 0) {
-                hit_colour = vec3(1, 0, 0);
-                return true;
-            }
+            // if (rel_pos == 0) {
+            //     hit_colour = vec3(1, 0, 0);
+            //     return true;
+            // }
 
             uint height_0 = (n1 >> 10) & 0x3FFF;             
             uint height_1 = (n1 & 0x3FF) << 4 | (n2 >> 28);      
             uint height_2 = (n2 >> 14) & 0x3FFF;    
             uint height_3 = n2 & 0x3FFF;  
 
-            //uint zero_height = min(min(height_0, height_1), min(height_2, height_3));
-
             // Convert to height between 0 and 64
-            float h0 = ((float(height_0) / 16384.0) * 64) - rel_pos;
-            float h1 = ((float(height_1) / 16384.0) * 64) - rel_pos;
-            float h2 = ((float(height_2) / 16384.0) * 64) - rel_pos;
-            float h3 = ((float(height_3) / 16384.0) * 64) - rel_pos;
+            float h0 = ((float(height_0) / 16383.0) * 64) - rel_pos;
+            float h1 = ((float(height_1) / 16383.0) * 64) - rel_pos;
+            float h2 = ((float(height_2) / 16383.0) * 64) - rel_pos;
+            float h3 = ((float(height_3) / 16383.0) * 64) - rel_pos;
 
             float scale = float(multiplier);
             vec3 scaleed_pos = floor(world_pos / scale) * scale;
@@ -700,11 +681,11 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
             if (intersection_test(c.origin, dir, v0, v1, v2, t) == true || intersection_test(c.origin, dir, v1, v2, v3, t) == true) {
                 vec3 hit_pos = c.origin + dir * t;
 
-                // if (point_in_octant(hit_pos, world_pos, multiplier) == false) {
-                //     steps += 1;
-                //     take_step(step, t_delta, t_max, hit_axis, world_pos, multiplier, dir, curr_distance);
-                //     continue;
-                // } 
+                if (point_in_octant(hit_pos, world_pos, multiplier) == false) {
+                    steps += 1;
+                    take_step(step, t_delta, t_max, hit_axis, world_pos, multiplier, dir, curr_distance);
+                    continue;
+                } 
 
                 if (scale != 1) {
                     hit_pos.y += scale;

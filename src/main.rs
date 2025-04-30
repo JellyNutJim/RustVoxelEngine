@@ -434,7 +434,7 @@ impl App {
             get_grid_from_seed(42, width as i32, [middle.x as i32, middle.y as i32, middle.z as i32])
         };
 
-        // For testing
+        //For testing
         let v32 = Geometry::FourHeightSurface(FourHeightSurface::from(
             [
                 0b_00000001,
@@ -453,7 +453,7 @@ impl App {
             ],
         ));
 
-        let v34 = Geometry::SteepFourHeightSurface(SteepFourHeightSurface::from(
+        let v34 = Geometry::SteepFourHeightSurface(SteepFourHeightSurface::from_water_level(
             [
                 0b00_0000_0000_1000,
                 0b00_0000_0000_0001,
@@ -463,7 +463,7 @@ impl App {
             0
         ));
 
-        let v35 = Geometry::SteepFourHeightSurface(SteepFourHeightSurface::from(
+        let v35 = Geometry::SteepFourHeightSurface(SteepFourHeightSurface::from_water_level(
             [
                 0b00_0000_0000_1000,
                 0b00_0000_0000_0001,
@@ -487,7 +487,7 @@ impl App {
         initial_world.insert_geometry([middle.x as i32 - 8, middle.y as i32 + 1, (middle.z - 4.0) as i32], v35, false);
 
 
-        println!("{:?}", v34.flatten());
+        // println!("{:?}", v34.flatten());
         println!("{:?}", middle);
 
         // Get Vector World Data
@@ -1066,7 +1066,7 @@ impl ApplicationHandler for App {
                     return;
                 }
 
-                let dis = Vec3::from(0.25, 0.25, 0.25) * 0.7;
+                let dis = Vec3::from(0.25, 0.25, 0.25) * 3.0;
                 let up = Vec3::from(0.0, 1.0, 0.0);
 
                 match event.physical_key {
@@ -1126,7 +1126,7 @@ impl ApplicationHandler for App {
                 match button {
                     MouseButton::Left => {
                         let voxel_loc = self.camera_location.location + self.camera_location.direction * 2.0;
-                        let u = Update::AddVoxel(voxel_loc.x as i32, voxel_loc.y as i32, voxel_loc.z as i32, 858993459);
+                        let u = Update::AddVoxel(voxel_loc.x as i32, voxel_loc.y as i32, voxel_loc.z as i32, 3);
 
                         let now = Instant::now();
                         if self.last_n_press == false {

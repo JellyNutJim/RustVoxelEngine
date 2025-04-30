@@ -618,7 +618,7 @@ pub fn generate_res_1(world: &mut OctreeGrid, x_pos: u32, z_pos: u32) {
                         z_adj as i32,
                     ], 
                     geom,  
-                    true
+                    false
                 );
             }
         }
@@ -765,10 +765,7 @@ fn generate_four_height_surfaces(world: &OctreeGrid,  scale: usize, map_pos: (us
     let start32 = start as u32;
     let end32 = ordered[3].trunc() as u32;
 
-    //let single = world.generator.get_map_coords(17703, 10565, world.origin);
-    let double = world.generator.get_map_coords(17711, 10553, world.origin);
-
-    let water_issue = world.generator.get_map_coords(17717, 10756, world.origin);
+    let test = world.generator.get_map_coords(17863, 10792, world.origin);
 
     if ordered[3] < 15.0 + world.generator.sea_level {
         g_vec.push(
@@ -778,7 +775,7 @@ fn generate_four_height_surfaces(world: &OctreeGrid,  scale: usize, map_pos: (us
     
     //println!("{:?} {:?}", single, double);
 
-    if map_pos.0 == water_issue.0 * 2 && map_pos.1 == water_issue.1 * 2 {
+    if map_pos.0 == test.0 * 2 && map_pos.1 == test.1 * 2 {
         println!("single");
         println!("start: {} end: {}", {start}, {end32});
         println!("f64: {:?}", v_hs);
@@ -798,22 +795,12 @@ fn generate_four_height_surfaces(world: &OctreeGrid,  scale: usize, map_pos: (us
     let range = end32 - start32 + 1;
 
     let v_hs_u32 = [
-        ((v_hs[0] - start) * 256.0) as u32,
-        ((v_hs[1] - start) * 256.0) as u32,
-        ((v_hs[2] - start) * 256.0) as u32,
-        ((v_hs[3] - start) * 256.0) as u32,
+        ((v_hs[0] - start) * 255.0) as u32,
+        ((v_hs[1] - start) * 255.0) as u32,
+        ((v_hs[2] - start) * 255.0) as u32,
+        ((v_hs[3] - start) * 255.0) as u32,
     ];
 
-    if map_pos.0 == double.0 * 2 && map_pos.1 == double.1 * 2 {
-        println!("Double");
-        println!("start: {} end: {}", {start}, {end32});
-        println!("f64: {:?}", v_hs);
-        println!("leveled: {:?}", v_hs_u32);
-    }
-
-    // single 17703 849 10565
-
-    // double 17711 851 10553
 
     for i in 0..range {
         let height = start32 + i;
@@ -835,14 +822,9 @@ fn generate_four_height_surfaces(world: &OctreeGrid,  scale: usize, map_pos: (us
         }
     }
 
-    if map_pos.0 == water_issue.0 * 2 && map_pos.1 == water_issue.1 * 2 {
-        println!("single passed again");
+    if map_pos.0 == test.0 * 2 && map_pos.1 == test.1 * 2 {
+        println!("Is Steep");
         println!("leveled: {:?}", v_hs_u32);
-        println!("gvec: {:?}", g_vec);
-    }
-
-    if map_pos.0 == double.0 * 2 && map_pos.1 == double.1 * 2 {
-        println!("Double again");
         println!("gvec: {:?}", g_vec);
     }
 
