@@ -78,7 +78,7 @@ const EARLY_EXIT: bool = false;
 const PAUSE_GENERATION: bool = false;
 
 // Render Options
-const USE_BEAM_OPTIMISATION: bool = false;
+const USE_BEAM_OPTIMISATION: bool = true;
 const RESIZEABLE_WINDOW: bool = true;
 const USE_VSYNC: bool = false;
 const USE_FULLSCREEN: bool = false;
