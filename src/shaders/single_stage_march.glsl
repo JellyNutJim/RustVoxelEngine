@@ -155,7 +155,7 @@ uvec3 get_geom(uint type, uint index) {
 
 uvec3 get_depth(vec3 pos, inout int multiplier) {
     uvec3 realitive_chunk_location = uvec3((floor((pos) / 64)) - (w_buf.origin) / 64);
-
+    
     vec3 local_pos = mod(pos, 64.0);
 
     uint index = realitive_chunk_location.x + realitive_chunk_location.y * WIDTH + realitive_chunk_location.z * WIDTH * WIDTH;
@@ -218,7 +218,6 @@ uvec3 get_depth(vec3 pos, inout int multiplier) {
 }
 
 void take_step(ivec3 step, vec3 t_delta, inout vec3 t_max, inout uint hit_axis, inout vec3 world_pos, int multiplier, vec3 dir, inout float curr_distance) {
-
     if (multiplier > 4) {
         float minT = 1e10;
 
@@ -265,12 +264,8 @@ void take_step(ivec3 step, vec3 t_delta, inout vec3 t_max, inout uint hit_axis, 
         t_max += (abs(temp - world_pos)) * t_delta;
         
         world_pos = temp;
-
-        //curr_distance += 0.01;
-
         return;
     }
-
     if(t_max.x < t_max.y) {
         if(t_max.x < t_max.z) {
             world_pos.x += step.x;
@@ -427,14 +422,13 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
         // Go through chunks
 
         if (world_pos.y > 64*41 || world_pos.y < 0) {
+            return false;
             break;
         }
 
-        uvec3 voxel_type = get_depth(world_pos, multiplier);
-
         if (steps > 2000) {
             hit_colour = vec3(0.0, 0.0, 0.0);
-            return false;
+            return true;
             break;
         }
 
@@ -445,6 +439,8 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
                 return true;
             }
         }
+
+        uvec3 voxel_type = get_depth(world_pos, multiplier);
 
         // View octant boundaries
         // if (curr_distance < 500.0 && curr_distance > 2.0) {
@@ -599,10 +595,6 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
             if (intersection_test(c.origin, dir, v0, v1, v2, t) == true || intersection_test(c.origin, dir, v1, v2, v3, t) == true) {
                 vec3 hit_pos = c.origin + dir * t;
 
-                if (scale != 1) {
-                    hit_pos.y += scale;
-                }
-
                 curr_distance = t;
 
                 if (hit_pos.y > 835) {
@@ -650,23 +642,18 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
             uint n1 = voxel_type.y;
             uint n2 = voxel_type.z;
 
-            uint rel_pos = n1 >> 26;
+            uint rel_pos = (n1 >> 26) * multiplier;
 
-            // if (rel_pos == 0) {
-            //     hit_colour = vec3(1, 0, 0);
-            //     return true;
-            // }
+            float height_0 = float ( (n1 >> 10) & 0x3FFF );    
+            float height_1 = float ( (n1 & 0x3FF) << 4 | (n2 >> 28) );
+            float height_2 = float ( (n2 >> 14) & 0x3FFF );
+            float height_3 = float ( n2 & 0x3FFF );
 
-            uint height_0 = (n1 >> 10) & 0x3FFF;             
-            uint height_1 = (n1 & 0x3FF) << 4 | (n2 >> 28);      
-            uint height_2 = (n2 >> 14) & 0x3FFF;    
-            uint height_3 = n2 & 0x3FFF;  
-
-            // Convert to height between 0 and 64
-            float h0 = ((float(height_0) / 16383.0) * 64) - rel_pos;
-            float h1 = ((float(height_1) / 16383.0) * 64) - rel_pos;
-            float h2 = ((float(height_2) / 16383.0) * 64) - rel_pos;
-            float h3 = ((float(height_3) / 16383.0) * 64) - rel_pos;
+            // get relative height within voxel
+            float h0 = (height_0 / 255.0) - rel_pos;
+            float h1 = (height_1 / 255.0) - rel_pos;
+            float h2 = (height_2 / 255.0) - rel_pos;
+            float h3 = (height_3 / 255.0) - rel_pos;
 
             float scale = float(multiplier);
             vec3 scaleed_pos = floor(world_pos / scale) * scale;
@@ -686,10 +673,6 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
                     take_step(step, t_delta, t_max, hit_axis, world_pos, multiplier, dir, curr_distance);
                     continue;
                 } 
-
-                if (scale != 1) {
-                    hit_pos.y += scale;
-                }
 
                 curr_distance = t;
 
@@ -1007,3 +990,138 @@ void main() {
     imageStore(storageImage, pixel_coords, output_colour);
     
 }
+
+
+// testing
+// float scale = float(multiplier);
+        // float minT = 1e10;
+
+        // vec3 origin = c.origin + dir * curr_distance;
+        // vec3 rel_origin = origin - (floor(origin / scale) * scale); // switch for mod
+        // vec3 current_chunk = floor(origin / scale) * scale;
+
+        // float t;
+        
+        // hit_axis = 0;
+
+        // for (int i = 0; i < 3; i++) {
+        //     if (dir[i] == 0) {
+        //         continue;
+        //     }
+
+        //     if (step[i] == 1) {
+        //         t = (scale - rel_origin[i]) * t_delta[i];
+        //     }
+        //     else {
+        //         if (rel_origin[i] < 1e-5) {
+        //             t = (scale) * t_delta[i];
+        //         } else{
+        //             t = (rel_origin[i]) * t_delta[i];
+        //         }
+        //     } 
+            
+        //     if (t < minT) {
+        //         minT = t;
+        //         hit_axis = uint(i);
+        //     }
+        // }
+
+        // current_chunk[hit_axis] += step[hit_axis] * scale;
+
+        // vec3 hit_pos = vec3(0,0,0);
+
+        // t = abs((current_chunk[hit_axis] - c.origin[hit_axis]) / dir[hit_axis]);
+
+        // uint nextIndex = (hit_axis + 1) % 3;
+        // uint lastIndex = (hit_axis + 2) % 3;
+        
+        // hit_pos[hit_axis]  = current_chunk[hit_axis];
+        // hit_pos[nextIndex] = c.origin[nextIndex] + t * dir[nextIndex];
+        // hit_pos[lastIndex] = c.origin[lastIndex] + t * dir[lastIndex];
+
+        // curr_distance = t;
+
+        // vec3 new_pos = floor(hit_pos);
+
+        // if (step[hit_axis] == -1) {
+        //     new_pos[hit_axis] += step[hit_axis];
+        // }
+
+        // t_max += (abs(new_pos - world_pos)) * t_delta;
+
+        // ///new_pos[hit_axis] += step[hit_axis];
+        // world_pos = new_pos;
+
+    //       if (multiplier > 4) {
+    //     float scale = float(multiplier);
+
+    //     vec3 origin = c.origin + dir * curr_distance;
+    //     vec3 current_chunk = floor(origin / scale) * scale;
+    //     float t;
+        
+    //     vec3 f_max = vec3(0,0,0);
+
+    //     if (step[0] == -1) {
+    //         f_max.x = ((current_chunk.x) - origin.x);
+    //     }
+    //     else {
+    //         f_max.x = ((current_chunk.x + scale) - origin.x);
+    //     }
+
+    //     if (step[1] == -1) {
+    //         f_max.y = ((current_chunk.y) - origin.y);
+    //     }
+    //     else {
+    //         f_max.y = ((current_chunk.y + scale) - origin.y);
+    //     }
+
+    //     if (step[2] == -1) {
+    //         f_max.z = ((current_chunk.z) - origin.z);
+    //     }
+    //     else {
+    //         f_max.z = ((current_chunk.z + scale) - origin.z);
+    //     }
+
+    //     f_max /= dir;
+
+    //     float f_min;
+
+    //     if (f_max.x < f_max.y) {
+    //         if (f_max.x < f_max.z) {
+    //             hit_axis = 0;
+    //             f_min = f_max.x;
+    //         } else {
+    //             hit_axis = 2;
+    //             f_min = f_max.z;
+    //         }
+    //     } 
+    //     else  {
+    //         if (f_max.y < f_max.z) {
+    //             hit_axis = 1;
+    //             f_min = f_max.y;
+    //         } else {
+    //             hit_axis = 2;
+    //             f_min = f_max.z;
+    //         }
+    //     }
+
+
+    //     curr_distance += f_min;
+        
+    //     vec3 hit_pos = c.origin + (dir) * curr_distance;
+        
+
+    //     vec3 new_pos = floor(hit_pos);
+
+    //     if (step[hit_axis] == -1) {
+    //         new_pos[hit_axis] += step[hit_axis];
+    //     }
+
+    //     t_max += (abs(new_pos - world_pos)) * t_delta;
+
+
+        
+    //     world_pos = new_pos;
+
+    //     return;
+    // }

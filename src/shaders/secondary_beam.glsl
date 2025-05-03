@@ -600,9 +600,9 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
             if (intersection_test(c.origin, dir, v0, v1, v2, t) == true || intersection_test(c.origin, dir, v1, v2, v3, t) == true) {
                 vec3 hit_pos = c.origin + dir * t;
 
-                if (scale != 1) {
-                    hit_pos.y += scale;
-                }
+                // if (scale != 1) {
+                //     hit_pos.y += scale;
+                // }
 
                 curr_distance = t;
 
@@ -658,16 +658,19 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
             //     return true;
             // }
 
-            uint height_0 = (n1 >> 10) & 0x3FFF;             
-            uint height_1 = (n1 & 0x3FF) << 4 | (n2 >> 28);      
-            uint height_2 = (n2 >> 14) & 0x3FFF;    
-            uint height_3 = n2 & 0x3FFF;  
+            // hit_colour = vec3(1,0,0);
+            // return true;
 
-            // Convert to height between 0 and 64
-            float h0 = ((float(height_0) / 16383.0) * 64) - rel_pos;
-            float h1 = ((float(height_1) / 16383.0) * 64) - rel_pos;
-            float h2 = ((float(height_2) / 16383.0) * 64) - rel_pos;
-            float h3 = ((float(height_3) / 16383.0) * 64) - rel_pos;
+            float height_0 = float ( (n1 >> 10) & 0x3FFF );    
+            float height_1 = float ( (n1 & 0x3FF) << 4 | (n2 >> 28) );
+            float height_2 = float ( (n2 >> 14) & 0x3FFF );
+            float height_3 = float ( n2 & 0x3FFF );
+
+            // get relative height within voxel
+            float h0 = (height_0 / 255.0) - (rel_pos * multiplier);
+            float h1 = (height_1 / 255.0) - (rel_pos * multiplier);
+            float h2 = (height_2 / 255.0) - (rel_pos * multiplier);
+            float h3 = (height_3 / 255.0) - (rel_pos * multiplier);
 
             float scale = float(multiplier);
             vec3 scaleed_pos = floor(world_pos / scale) * scale;
@@ -687,10 +690,6 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
                     take_step(step, t_delta, t_max, hit_axis, world_pos, multiplier, dir, curr_distance);
                     continue;
                 } 
-
-                if (scale != 1) {
-                    hit_pos.y += scale;
-                }
 
                 curr_distance = t;
 

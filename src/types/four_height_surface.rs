@@ -16,12 +16,51 @@ impl FourHeightSurface {
         }
     }
 
+    pub fn from_u32(v: [u32; 4]) -> Self {
+        let v8 = [
+            v[0] as u8,
+            v[1] as u8,
+            v[2] as u8,
+            v[3] as u8,
+        ];
+
+        Self {
+            quadrants: v8,
+            voxel: quadrants_to_u32(v8),
+            has_water: false,
+        }
+    }
+
+    pub fn from_u32_water(v: [u32; 4]) -> Self {
+        let v8 = [
+            v[0] as u8,
+            v[1] as u8,
+            v[2] as u8,
+            v[3] as u8,
+        ];
+
+        Self {
+            quadrants: v8,
+            voxel: quadrants_to_u32(v8),
+            has_water: true,
+        }
+    }
+
+
+    pub fn from_water_level(v: [u8; 4]) -> Self {
+        Self {
+            quadrants: v,
+            voxel: quadrants_to_u32(v),
+            has_water: true,
+        }
+    }
+
     pub fn from_f64(v: [f64; 4]) -> Self {
         let quadrants = [
-            (v[0].fract() * 256.0) as u8,
-            (v[1].fract() * 256.0) as u8,
-            (v[2].fract() * 256.0) as u8,
-            (v[3].fract() * 256.0) as u8
+            (v[0].fract() * 255.0) as u8,
+            (v[1].fract() * 255.0) as u8,
+            (v[2].fract() * 255.0) as u8,
+            (v[3].fract() * 255.0) as u8
         ];
 
         Self {
@@ -33,10 +72,10 @@ impl FourHeightSurface {
 
     pub fn from_f64_water(v: [f64; 4]) -> Self {
         let quadrants = [
-            (v[0].fract() * 256.0) as u8,
-            (v[1].fract() * 256.0) as u8,
-            (v[2].fract() * 256.0) as u8,
-            (v[3].fract() * 256.0) as u8
+            (v[0].fract() * 255.0) as u8,
+            (v[1].fract() * 255.0) as u8,
+            (v[2].fract() * 255.0) as u8,
+            (v[3].fract() * 255.0) as u8
         ];
 
         Self {
@@ -46,14 +85,6 @@ impl FourHeightSurface {
         }
     }
  
-    pub fn from_water_level(v: [u8; 4]) -> Self {
-        Self {
-            quadrants: v,
-            voxel: quadrants_to_u32(v),
-            has_water: true,
-        }
-    }
-
     // sets quadrant
     pub fn set_quadrant(&mut self, octant: usize, v_type: u8) {
         self.quadrants[octant] = v_type;

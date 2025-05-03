@@ -163,6 +163,7 @@ fn create_intial_merged_land(world: &mut OctreeGrid) {
             for y in 0..world.width { 
                 let grid_index = (sp_c[0] + x) + (y) * world.width  + (sp_c[2] + z) * world.width.pow(2);
                 let index = world.spatial_map[grid_index as usize] as usize;
+                world.trees[index] = Octree::new(world.trees[index].get_origin());
                 world.trees[index].set_generation_level(4);
             }
 
@@ -195,6 +196,7 @@ fn create_inner_land(world: &mut OctreeGrid) {
             for y in 0..world.width { 
                 let grid_index = (sp_c[0] + x) + (y) * world.width  + (sp_c[2] + z) * world.width.pow(2);
                 let index = world.spatial_map[grid_index as usize] as usize;
+                world.trees[index] = Octree::new(world.trees[index].get_origin());
                 world.trees[index].set_generation_level(5);
             }
 

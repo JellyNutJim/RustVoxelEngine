@@ -69,13 +69,14 @@ const POSTIONAL_MOVEMENT: bool = true;
 const WORLD_INTERACTION: bool = true;
 const AUTO_MOVE_FORWARDS: bool = false;
 const STARTING_ORIENTATION: (f64, f64) = (PI, 0.0);
+const INITIAL_SPEED_MULTILIER: f64 = 30.0;
 
 // Testing constants
 const MEASURE_FRAME_TIMES: bool = false;
 const MEASURE_MARCH_DATA: bool = false; // frame times must also be true + Atomic add uncommented in shaders
 const PRINT_FRAME_STATS: bool = false;
 const EARLY_EXIT: bool = false;
-const PAUSE_GENERATION: bool = false;
+const PAUSE_GENERATION: bool = true;
 
 // Render Options
 const USE_BEAM_OPTIMISATION: bool = true;
@@ -388,8 +389,10 @@ impl App {
 
 
         let mut x = 17700.0;
-        let y = 850.0;
+        let y = 1000.0;
         let z = 10560.0;
+
+        //21300 2286 8063
 
         //let seed = 42;
         //let seed = 1023;
@@ -445,82 +448,45 @@ impl App {
         //     ]
         // ));
 
-        // let v33 = Geometry::FourHeightSurface(FourHeightSurface::from_water_level(
+        // let v33 = Geometry::FourHeightSurface(FourHeightSurface::from(
         //     [
-        //         0b_00000001,
-        //         0b_00001100,
-        //         0b_10001000,
-        //         0b_11111111,
+        //         0b_00010101,
+        //         0b_00010101,
+        //         0b_00010101,
+        //         0b_00010101,
         //     ],
         // ));
 
-        // let v34 = Geometry::SteepFourHeightSurface(SteepFourHeightSurface::from_water_level(
-        //     [
-        //         0b00_0000_0000_1000,
-        //         0b00_0000_0000_0001,
-        //         0b00_0000_0011_0000,
-        //         0b00_0100_0100_0001,
-        //     ],
-        //     0
-        // ));
+        let v34 = Geometry::SteepFourHeightSurface(SteepFourHeightSurface::from(
+            [
+                0b00_0001_0001_0100,
+                0b00_0001_0001_0100,
+                0b00_0001_0001_0100,
+                0b00_0001_0001_0100,
+            ],
+            0
+        ));
 
-        // let v35 = Geometry::SteepFourHeightSurface(SteepFourHeightSurface::from_water_level(
-        //     [
-        //         0b00_0000_0000_1000,
-        //         0b00_0000_0000_0001,
-        //         0b00_0000_0011_0000,
-        //         0b00_0100_0100_0001,
-        //     ],
-        //     1
-        // ));
+        let v35 = Geometry::SteepFourHeightSurface(SteepFourHeightSurface::from(
+            [
+                0b00_0001_0001_0100,
+                0b00_0001_0001_0100,
+                0b00_0001_0001_0100,
+                0b00_0001_0001_0100,
+            ],
+            1
+        ));
 
-        // initial_world.insert_subchunk([middle.x as i32, middle.y as i32, (middle.z + 1.0) as i32], v32, 4, false);
-        // initial_world.insert_geometry([middle.x as i32, middle.y as i32, (middle.z + 4.0) as i32], v32, false);
 
-        // initial_world.insert_subchunk([middle.x as i32, middle.y as i32, (middle.z - 1.0) as i32], v33, 4, false);
-        // initial_world.insert_geometry([middle.x as i32, middle.y as i32, (middle.z - 4.0) as i32], v33, false);
+        // initial_world.insert_geometry([middle.x as i32 - 8, middle.y as i32 + 1, (middle.z - 4.0) as i32], v34,false);
+        // initial_world.insert_geometry([middle.x as i32 - 8, middle.y as i32 + 2, (middle.z - 4.0) as i32], v35, false);
 
-        
-        // initial_world.insert_subchunk([middle.x as i32 - 8, middle.y as i32, (middle.z - 1.0) as i32], v34, 4, false);
-        // initial_world.insert_geometry([middle.x as i32 - 8, middle.y as i32, (middle.z - 4.0) as i32], v34, false);
+        // initial_world.insert_geometry([middle.x as i32 - 8, middle.y as i32 - 2, (middle.z - 4.0) as i32], Geometry::Voxel(Voxel::from(2)), false);
+        // initial_world.insert_geometry([middle.x as i32 - 8, middle.y as i32 - 1, (middle.z - 5.0) as i32], Geometry::Voxel(Voxel::from(2)), false);
 
-        // initial_world.insert_subchunk([middle.x as i32 - 8, middle.y as i32 + 2, (middle.z - 1.0) as i32], v35, 4, false);
-        // initial_world.insert_geometry([middle.x as i32 - 8, middle.y as i32 + 1, (middle.z - 4.0) as i32], v35, false);
+        // initial_world.insert_geometry([middle.x as i32 - 8, middle.y as i32 + 2, (middle.z - 5.0) as i32], v33, false);
 
-        // let test1 = Geometry::FourHeightSurface(FourHeightSurface::from(
-        //     [
-        //         0b_00000000,
-        //         0b_00000000,
-        //         0b_11111111,
-        //         0b_11111111,
-        //     ]
-        // ));
 
-        // let test2 = Geometry::FourHeightSurface(FourHeightSurface::from(
-        //     [
-        //         0b_00001000,
-        //         0b_00001000,
-        //         0b_11111111,
-        //         0b_11111111,
-        //     ]
-        // ));
-
-        // let test3 = Geometry::FourHeightSurface(FourHeightSurface::from(
-        //     [
-        //         0b_00000000,
-        //         0b_00000000,
-        //         0b_00001000,
-        //         0b_00001000,
-        //     ]
-        // ));
-
-        
-
-        // initial_world.insert_geometry([middle.x as i32, middle.y as i32, (middle.z + 4.0) as i32], test1, false);
-        // initial_world.insert_geometry([middle.x as i32, middle.y as i32 + 1, (middle.z + 4.0) as i32], test3, false);
-        // initial_world.insert_geometry([middle.x as i32, middle.y as i32 + 1, (middle.z + 5.0) as i32], test2, false);
-
-        // println!("{:?}", v34.flatten());
         println!("{:?}", middle);
 
         // Get Vector World Data
@@ -1099,7 +1065,7 @@ impl ApplicationHandler for App {
                     return;
                 }
 
-                let dis = Vec3::from(0.25, 0.25, 0.25) * 3.0;
+                let dis = Vec3::from(0.25, 0.25, 0.25) * INITIAL_SPEED_MULTILIER;
                 let up = Vec3::from(0.0, 1.0, 0.0);
 
                 match event.physical_key {
@@ -1221,7 +1187,7 @@ impl ApplicationHandler for App {
                     let delta_time = frame_start.duration_since(self.last_frame_time);
 
                     self.last_frame_time = frame_start;
-                    let base_speed = Vec3::from(0.2, 0.2, 0.2);
+                    let base_speed = Vec3::from(0.25, 0.25, 0.25) * INITIAL_SPEED_MULTILIER;
 
                     let delta_seconds = delta_time.as_secs_f64() + delta_time.subsec_nanos() as f64 / 1_000_000_000.0;
                     let movement = self.camera_location.direction * base_speed * delta_seconds * 60.0; 
@@ -1269,14 +1235,14 @@ impl ApplicationHandler for App {
                 // Free finished resources
                 rcx.previous_frame_end.as_mut().unwrap().cleanup_finished();
 
-                let present_mode = if USE_VSYNC == true {
-                    vulkano::swapchain::PresentMode::Fifo
-                } else {
-                    vulkano::swapchain::PresentMode::Immediate
-                };
-
                 // Recreate everything upon screen resize
                 if rcx.recreate_swapchain {
+                    let present_mode = if USE_VSYNC == true {
+                        vulkano::swapchain::PresentMode::Fifo
+                    } else {
+                        vulkano::swapchain::PresentMode::Immediate
+                    };
+                    
                     let (new_swapchain, new_images) = rcx
                         .swapchain
                         .recreate(SwapchainCreateInfo {
@@ -1292,7 +1258,6 @@ impl ApplicationHandler for App {
                     rcx.viewport.extent = window_size.into();
                     rcx.recreate_swapchain = false;
                 }
-
 
                 // Calculate camera buffer variables and set them to the buffer
                 let uniform_camera_subbuffer = {

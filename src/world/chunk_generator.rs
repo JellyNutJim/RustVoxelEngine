@@ -84,20 +84,16 @@ impl GenPipeLine {
         //return 1.0;
 
         if temp > 60.0 && y > 700.0 {
-            if temp > 80.0 && y > 720.0 {
-                Biome::Single(2)
-            }
-            else {
-                let t;
-                if temp > 79.8 {
-                    t = 20.0;
-                } else {
-                    t = temp - 60.0;
-                }
+            let t;
 
-                let dif = t / 20.0;
-                Biome::Double(1, 2, dif)
-            }
+            // if temp > 79.8 {
+            //     t = 20.0;
+            // } else {
+            //     t = temp - 60.0;
+            // }
+            t = temp - 60.0;
+            let dif = t / 20.0;
+            Biome::Double(1, 2, dif)
 
         } else {
             Biome::Single(1)
@@ -278,23 +274,16 @@ impl GenPipeLine {
                 res = self.get_biome_height(b, x_pos, z_pos, height_map_coord, true);
             }
             Biome::Double(b1, b2, p) => {
+                //res = self.get_biome_height(b1, x_pos, z_pos, height_map_coord, true);
+
                 let h1 =  self.get_biome_height(b1, x_pos, z_pos, height_map_coord, true);
                 let h2 =  self.get_biome_height(b2, x_pos, z_pos, height_map_coord, true);
+
+
                 let height = h1.1 * (1.0 - p) + h2.1 * p;
-                //println!("{}", p);
-                
 
-                if x_pos.trunc() == 17361.0 && z_pos.trunc() == 10449.0 {
-                    println!("h1 {}", h1.1);
-                    println!("h2 {}", h2.1);
-                    println!("height {}", height);
-                }
-
-                if x_pos.trunc() == 17672.0 && z_pos.trunc() == 10507.0 {
-                    println!("h1 {}", h1.1);
-                    println!("h2 {}", h2.1);
-                    println!("height {}", height);
-                }
+                // let cubic_p = p * p * (3.0 - 2.0 * p);
+                // let height = h1.1 * (1.0 - cubic_p) + h2.1 * cubic_p;                
 
                 self.height_map.set(height_map_coord.0, height_map_coord.1, height);
                 res = (h1.0, height);
@@ -488,11 +477,11 @@ pub fn generate_res_8(world: &mut OctreeGrid, x_pos: u32, z_pos: u32) {
 // Essentially a higher resolution of gen 8, accept it generates all required base biome and heightmap data, not 1/8th or 1/4th but only inserts size 4 voxels
 pub fn generate_res_4(world: &mut OctreeGrid, x_pos: u32, z_pos: u32) {
     let mut map_c = world.generator.get_map_coords(x_pos, z_pos, world.origin);
+    let sea_height = 12.0 + world.generator.sea_level;
 
     // Populate the remaining unfilled heightmap and biome map
     world.generator.res_4_map_gen(x_pos, z_pos, map_c);
     
-    let mut voxels: [(f64, FourHeightSurface); 4] = Default::default();
     map_c.0 *= 2;
     map_c.1 *= 2;
 
@@ -503,41 +492,20 @@ pub fn generate_res_4(world: &mut OctreeGrid, x_pos: u32, z_pos: u32) {
 
             let c0 =  map_c.0 + (x * 8) as usize;
             let c1 =  map_c.1 + (z * 8) as usize;
-            let mut v_len = 0;
 
-            generate_4_height_leveled_voxel(world, &mut v_len, &mut voxels, 4, (c0, c1));
+            let geometry = generate_four_height_surfaces(world, 4, 4.0, 4, sea_height, (c0, c1));
 
-            if x_adj == 17532 && z_adj == 10364 {
-                println!("{:?}", voxels);
-                println!("{}", v_len);
-            }
-
-            for k in 0..v_len {
-                voxels[k].1.update_4_part_voxel();
-
+            for (geom, height) in geometry {
                 world.insert_subchunk([
                         x_adj as i32,
-                        voxels[k].0 as i32 - 1,
+                        height as i32,
                         z_adj as i32,
                     ], 
-                    Geometry::FourHeightSurface(voxels[k].1),  
-                    3,
-                    true
-                );
-            }
-
-            if voxels[0].0 < 15.7 + world.generator.sea_level {
-                world.insert_subchunk([
-                        x_adj as i32,
-                        (world.generator.sea_level + 15.0) as i32,
-                        z_adj  as i32,
-                    ], 
-                    Geometry::Voxel(Voxel::from(3)),  
-                    3,
+                    geom, 
+                    3, 
                     false
                 );
             }
-
         }
     }
 
@@ -547,11 +515,10 @@ pub fn generate_res_4(world: &mut OctreeGrid, x_pos: u32, z_pos: u32) {
 // Shows a higher resolution, and applys biome merging
 pub fn generate_res_2(world: &mut OctreeGrid, x_pos: u32, z_pos: u32) {
     let mut map_c = world.generator.get_map_coords(x_pos, z_pos, world.origin);
+    let sea_height = 14.0 + world.generator.sea_level;
 
     map_c.0 *= 2;
     map_c.1 *= 2;
-
-    let mut voxels: [(f64, FourHeightSurface); 4] = Default::default();
 
     for x in 0..32 {
         for z in 0..32 {
@@ -561,33 +528,17 @@ pub fn generate_res_2(world: &mut OctreeGrid, x_pos: u32, z_pos: u32) {
 
             let c0 =  map_c.0 + (x * 4) as usize;
             let c1 =  map_c.1 + (z * 4) as usize;
-            
-            let mut v_len = 0;
 
-            generate_4_height_leveled_voxel(world, &mut v_len, &mut voxels, 2, (c0, c1));
+            let geometry = generate_four_height_surfaces(world, 2, 2.0, 2, sea_height, (c0, c1));
 
-            for k in 0..v_len {
-                voxels[k].1.update_4_part_voxel();
-
+            for (geom, height) in geometry {
                 world.insert_subchunk([
                         x_adj as i32,
-                        voxels[k].0 as i32 - 1,
+                        height as i32,
                         z_adj as i32,
                     ], 
-                    Geometry::FourHeightSurface(voxels[k].1),  
-                    4,
-                    true
-                );
-            }
-
-            if voxels[0].0 < 15.7 + world.generator.sea_level {
-                world.insert_subchunk([
-                        x_adj as i32,
-                        (world.generator.sea_level + 15.0) as i32,
-                        z_adj  as i32,
-                    ], 
-                    Geometry::Voxel(Voxel::from(3)),  
-                    4,
+                    geom, 
+                    4, 
                     false
                 );
             }
@@ -597,6 +548,7 @@ pub fn generate_res_2(world: &mut OctreeGrid, x_pos: u32, z_pos: u32) {
 
 pub fn generate_res_1(world: &mut OctreeGrid, x_pos: u32, z_pos: u32) {
     let mut map_c = world.generator.get_map_coords(x_pos, z_pos, world.origin);
+    let sea_height = 15.0 + world.generator.sea_level;
     map_c.0 *= 2;
     map_c.1 *= 2;
 
@@ -609,7 +561,7 @@ pub fn generate_res_1(world: &mut OctreeGrid, x_pos: u32, z_pos: u32) {
             let x_adj = x_pos + x;
             let z_adj = z_pos + z;
 
-            let geometry = generate_four_height_surfaces(world, 1, (c0, c1));
+            let geometry = generate_four_height_surfaces(world, 1, 1.0, 1, sea_height, (c0, c1));
 
             for (geom, height) in geometry {
                 world.insert_geometry([
@@ -746,8 +698,7 @@ fn generate_4_height_leveled_voxel(world: &OctreeGrid, v_len: &mut usize, voxels
     }
 }
 
-fn generate_four_height_surfaces(world: &OctreeGrid,  scale: usize, map_pos: (usize, usize)) -> Vec<(Geometry, u32)> {
-
+fn generate_four_height_surfaces(world: &OctreeGrid,  scale: usize, scale_f64: f64, scale_u32: u32, sea_height: f64, map_pos: (usize, usize)) -> Vec<(Geometry, u32)> {
     let mut g_vec: Vec<(Geometry, u32)> = Vec::new();
 
     // Get height values and then sort them 
@@ -758,136 +709,127 @@ fn generate_four_height_surfaces(world: &OctreeGrid,  scale: usize, map_pos: (us
         world.generator.height_map.get(map_pos.0 + scale * 2, map_pos.1 + scale * 2),
     ]; 
 
+    // Order height values to get max and min
     let mut ordered = v_hs.clone();
     ordered.sort_by(|a, b| a.partial_cmp(b).unwrap());
 
-    let start = ordered[0].trunc();
-    let start32 = start as u32;
-    let end32 = ordered[3].trunc() as u32;
+    // Calculate start and end voxels
+    let start_height_floor = (ordered[0].trunc() / scale_f64).floor() * scale_f64;
+    let end_voxel = (ordered[3].trunc() / scale_f64) as u32 * scale_u32;
+    let start_voxel = start_height_floor as u32;
 
-    let test = world.generator.get_map_coords(17863, 10792, world.origin);
-
-    if ordered[3] < 15.0 + world.generator.sea_level {
+    // If max is below sea height, place a water voxel at sea height
+    if ordered[3] < sea_height {
         g_vec.push(
-            ( Geometry::Voxel(Voxel::from(3)), world.sea_level + 15)
+            ( Geometry::Voxel(Voxel::from(3)), sea_height as u32)
         );
-    }
-    
-    //println!("{:?} {:?}", single, double);
-
-    if map_pos.0 == test.0 * 2 && map_pos.1 == test.1 * 2 {
-        println!("single");
-        println!("start: {} end: {}", {start}, {end32});
-        println!("f64: {:?}", v_hs);
-    }
-    
-    // If highest and lowest componenet are within the same voxel, use fourheightsurface
-    if start32 == end32 {
-        if start < 16.0 + world.generator.sea_level { //&& start > 15.0 + world.generator.sea_level
-            g_vec.push((Geometry::FourHeightSurface(FourHeightSurface::from_f64_water([v_hs[0], v_hs[1], v_hs[2], v_hs[3]])), start32));
-            return g_vec;
-        }
-        g_vec.push((Geometry::FourHeightSurface(FourHeightSurface::from_f64([v_hs[0], v_hs[1], v_hs[2], v_hs[3]])), start32));
-        return g_vec;
-
-    }
-
-    let range = end32 - start32 + 1;
+    }  
 
     let v_hs_u32 = [
-        ((v_hs[0] - start) * 255.0) as u32,
-        ((v_hs[1] - start) * 255.0) as u32,
-        ((v_hs[2] - start) * 255.0) as u32,
-        ((v_hs[3] - start) * 255.0) as u32,
+        ((((v_hs[0] - start_height_floor)) * 255.0) / scale_f64) as u32,
+        ((((v_hs[1] - start_height_floor)) * 255.0) / scale_f64) as u32,
+        ((((v_hs[2] - start_height_floor)) * 255.0) / scale_f64) as u32,
+        ((((v_hs[3] - start_height_floor)) * 255.0) / scale_f64) as u32,
     ];
 
+    // If highest and lowest componenet are within the same voxel, use fourheightsurface
+    if start_voxel == end_voxel {
+        // Calc heights
+
+        if start_height_floor == sea_height {
+            g_vec.push((Geometry::FourHeightSurface(FourHeightSurface::from_u32_water([v_hs_u32[0], v_hs_u32[1], v_hs_u32[2], v_hs_u32[3]])), start_voxel));
+            return g_vec;
+        }
+        g_vec.push((Geometry::FourHeightSurface(FourHeightSurface::from_u32([v_hs_u32[0], v_hs_u32[1], v_hs_u32[2], v_hs_u32[3]])), start_voxel));
+        return g_vec;
+    }
+
+    let range =
+    if scale == 1 {
+        end_voxel - start_voxel + 1
+    } else {
+        ((end_voxel - start_voxel) / scale_u32) + 1
+    };
 
     for i in 0..range {
-        let height = start32 + i;
-            
-        if height == 15 + world.sea_level {
+        let height = start_voxel + i;
+        if height == sea_height as u32 {
             g_vec.push(
                 (
                     Geometry::SteepFourHeightSurface(SteepFourHeightSurface::from_water_level([v_hs_u32[0], v_hs_u32[1], v_hs_u32[2], v_hs_u32[3]], i)),
-                    start32 + i
+                    start_voxel + (i * scale_u32)
                 )
             );
         } else {
             g_vec.push(
                 (
                     Geometry::SteepFourHeightSurface(SteepFourHeightSurface::from([v_hs_u32[0], v_hs_u32[1], v_hs_u32[2], v_hs_u32[3]], i)),
-                    start32 + i
+                    start_voxel + (i * scale_u32)
                 )
             );
         }
-    }
-
-    if map_pos.0 == test.0 * 2 && map_pos.1 == test.1 * 2 {
-        println!("Is Steep");
-        println!("leveled: {:?}", v_hs_u32);
-        println!("gvec: {:?}", g_vec);
     }
 
     g_vec
 }
 
 
-fn insert_tree(world: &mut OctreeGrid, x: u32, y: u32, z: u32) {
-    let mut rng = rand::rngs::StdRng::seed_from_u64(world.seed + x as u64 + z as u64);
-    let height = rng.random_range(5..10);
+// fn insert_tree(world: &mut OctreeGrid, x: u32, y: u32, z: u32) {
+//     let mut rng = rand::rngs::StdRng::seed_from_u64(world.seed + x as u64 + z as u64);
+//     let height = rng.random_range(5..10);
 
-    for i in 0..height {
-        world.insert_geometry([
-            x as i32,
-            (y + i) as i32,
-            z as i32,
-        ], 
-        Geometry::Voxel(Voxel::from(2)),  
-        false
-        );
-    }
+//     for i in 0..height {
+//         world.insert_geometry([
+//             x as i32,
+//             (y + i) as i32,
+//             z as i32,
+//         ], 
+//         Geometry::Voxel(Voxel::from(2)),  
+//         false
+//         );
+//     }
 
-    world.insert_geometry([
-        x as i32,
-        (y + height) as i32,
-        z as i32,
-    ], 
-    Geometry::Voxel(Voxel::from(2)),  
-    false
-    );
+//     world.insert_geometry([
+//         x as i32,
+//         (y + height) as i32,
+//         z as i32,
+//     ], 
+//     Geometry::Voxel(Voxel::from(2)),  
+//     false
+//     );
 
-    for i in 0..4 {
+//     for i in 0..4 {
 
-    }
+//     }
 
-}
+// }
 
     
-// Assuming pos within - 0 - 1
-fn get_voxel_octant(pos: [f64; 3]) -> usize {
+// // Assuming pos within - 0 - 1
+// fn get_voxel_octant(pos: [f64; 3]) -> usize {
     
-    let mut octant = 0;
-    let mid = 0.5;
+//     let mut octant = 0;
+//     let mid = 0.5;
     
-    if pos[0] > mid {
-        octant += 1;
-    }
+//     if pos[0] > mid {
+//         octant += 1;
+//     }
 
-    if pos[1] > mid {
-        octant += 4;
-    }
+//     if pos[1] > mid {
+//         octant += 4;
+//     }
 
-    if pos[2] > mid {
-        octant += 2;
-    }
+//     if pos[2] > mid {
+//         octant += 2;
+//     }
     
-    octant
-}
+//     octant
+// }
 
-fn get_vertical_octant(y: f64) -> usize {
-    if y > 0.5 {
-        4
-    } else  {
-        0
-    }
-}
+// fn get_vertical_octant(y: f64) -> usize {
+//     if y > 0.5 {
+//         4
+//     } else  {
+//         0
+//     }
+// }

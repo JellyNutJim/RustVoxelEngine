@@ -117,7 +117,7 @@ impl WorldUpdater {
                         // Get next buffer index
                         let next_buffer = (current_buffer + 1) % 2;
                         
-                        //let i = Instant::now();
+                        let i = Instant::now();
                         match update {
                             Update::AddVoxel(x, y, z , t) => {
                                 println!("Adding type: {} at: {} {} {}", t, x, y, z);
@@ -133,11 +133,12 @@ impl WorldUpdater {
                             }
                             Update::Shift(axis, dir) => {
                                 // Shift origin
+                                println!("ORIGIN BEFORE: {:?}", world.origin);
                                 world.shift(axis, dir);
-                                
+                                println!("ORIGIN AFTER: {:?}", world.origin);
                             }
                         };
-                        //println!("add time: {}", i.elapsed().as_millis());
+                        println!("Shift time: {}", i.elapsed().as_millis());
 
                         // Generate new world data
                         //let mut rng = rand::rng();

@@ -320,7 +320,6 @@ impl OctreeGrid {
 // GENERATION PIPELINE
 impl OctreeGrid {
     pub fn shift(&mut self, axis: usize, dir: i32) {
-        return;
         if axis == 1 { panic!("Invalid shift axis") }; 
 
         let new_axis: i32;
@@ -397,6 +396,9 @@ impl OctreeGrid {
             update_chunk[alt_axis] += 64;
         }
 
+        let self_ptr = self as *mut OctreeGrid;
+
+    
         // Now the world has been shifted, multiresolution work can take place
         self.complete_biome_heightmap_gen(dir, axis, alt_axis);
 
@@ -594,28 +596,24 @@ impl OctreeGrid {
             let update_chunk_pos   = self.get_chunk_pos(&update_chunk);
             let delete_chunk_pos = self.get_chunk_pos(&delete_chunk);
 
-            let mut generate = false;
-
             // Temp solution of just deleting chunks at layer boundaries
             for j in 0..self.width {
                 let grid_index = update_chunk_pos[0] as u32 + (update_chunk_pos[1] as u32 + j)  * self.width + update_chunk_pos[2] as u32 * self.width.pow(2);
                 let index = self.spatial_map[grid_index as usize] as usize;
-                let chunk = &mut self.trees[index];
+                self.trees[index] = Octree::new(self.trees[index].get_origin());
 
-                if chunk.get_max_generation_level() == 4 {
-                    generate = true;
-                    self.trees[index].set_generation_level(5);
-                } 
+
+                self.trees[index].set_generation_level(5);
+
 
                 let grid_index = delete_chunk_pos[0] as u32 + (delete_chunk_pos[1] as u32 + j)  * self.width + delete_chunk_pos[2] as u32 * self.width.pow(2);
                 let index = self.spatial_map[grid_index as usize] as usize;
                 self.trees[index].set_generation_level(4);
             }
 
-            if generate {
-                generate_res_1(self, update_chunk[0] as u32, update_chunk[2] as u32);
-            }
-
+            generate_res_1(self, update_chunk[0] as u32, update_chunk[2] as u32);
+            generate_res_2(self, delete_chunk[0] as u32, delete_chunk[2] as u32);
+            
             // Update Flat Chunk Column
             for j in 0..self.width {
                 let grid_index = update_chunk_pos[0] as u32 + (update_chunk_pos[1] as u32 + j)  * self.width + update_chunk_pos[2] as u32 * self.width.pow(2);
