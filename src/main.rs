@@ -24,7 +24,10 @@ use vulkano::{
         physical::PhysicalDeviceType, Device, DeviceCreateInfo, DeviceExtensions,
         Queue, QueueCreateInfo, QueueFlags,
     },
-    image::{view::ImageView, Image, ImageUsage},
+    image::{view::ImageView, Image, ImageUsage, 
+        sampler::{
+            Sampler, Filter, SamplerCreateInfo, SamplerAddressMode, SamplerMipmapMode
+        }},
     instance::{Instance, InstanceCreateFlags, InstanceCreateInfo},
     memory::allocator::{AllocationCreateInfo, MemoryTypeFilter, StandardMemoryAllocator},
     pipeline::{
@@ -43,9 +46,15 @@ use winit::{
 
 };
 
+
+use vulkano::command_buffer::CopyBufferToImageInfo;
+use vulkano::format::Format;
+use vulkano::image::{ ImageCreateInfo, ImageType};
+
+
 use chrono::Local;
 use rand::Rng;
-use std::{time::Instant, fs::File, io::Write, path::Path};
+use std::{time::Instant, fs::File, io::Write, path::Path, collections::HashMap};
 use crossbeam_channel::Receiver;
 
 mod asset_load;
@@ -56,10 +65,10 @@ mod rendering;
 mod testing;
 
 use rendering::{ WorldUpdateMessage, WorldUpdater, Update, CameraBufferData, CameraLocation };
-use world::{get_grid_from_seed, get_empty_grid, Octree, OctreeGrid};
+use world::{get_grid_from_seed, get_empty_grid, create_octree_mask, Octree, OctreeGrid};
 use testing::test;
 
-use types::{Vec3, Geometry, Voxel, FourHeightSurface, SteepFourHeightSurface};
+use types::{Vec3, Geometry, Voxel, FourHeightSurface, SteepFourHeightSurface, TextureInfo};
 use noise_gen::PerlinNoise; 
 
 // Camera Settings
@@ -79,7 +88,7 @@ const EARLY_EXIT: bool = false;
 const PAUSE_GENERATION: bool = true;
 
 // Render Options
-const USE_BEAM_OPTIMISATION: bool = true;
+const USE_BEAM_OPTIMISATION: bool = false;
 const RESIZEABLE_WINDOW: bool = true;
 const USE_VSYNC: bool = false;
 const USE_FULLSCREEN: bool = false;
@@ -99,6 +108,11 @@ fn main() -> Result<(), impl Error> {
     event_loop.run_app(&mut app)
 }
 
+static TEXTURES: [TextureInfo; 1] = 
+[
+    TextureInfo { path: "assets\\Ground054_4K-PNG_Color.png", name: "Grass" }
+];
+
 struct App {
     instance: Arc<Instance>,
     device: Arc<Device>,
@@ -114,7 +128,7 @@ struct App {
     camera_buffer: SubbufferAllocator,
     
     ray_distance_buffer: Subbuffer<[f32]>,
-
+    octant_map_buffer: Subbuffer<[u32]>,
     stat_buffer: Subbuffer<[u32]>,
 
     rcx: Option<RenderContext>, 
@@ -125,6 +139,7 @@ struct App {
 
     last_n_press: bool,
     last_frame_time: Instant,
+    texture_map: HashMap<String, Arc<ImageView>>,
 
     start: Instant,
     frame_times: Vec<f64>,
@@ -490,7 +505,8 @@ impl App {
         meta_data.resize(40000000, 0);
 
         //meta_data.resize(1_000_000, 0);  
-
+        
+        // World buffers
         let voxel_buffers = [
             Buffer::new_slice::<u32>(
                 memory_allocator.clone(),
@@ -520,8 +536,6 @@ impl App {
                 voxels.len() as DeviceSize,
             ).expect("failed to create buffer"),
         ];
-
-        //println!("{:?}", world.0.flatten());
 
         let world_meta_data_buffers = [
             Buffer::new_slice::<i32>(
@@ -565,9 +579,6 @@ impl App {
 
         combined_data.extend(perm.iter().map(|&p| p as f32));
         combined_data.extend(grad.iter().map(|&g| g as f32));
-
-        //println!("com {}", combined_data.len());
-        //println!("com {:?}", combined_data);
 
         // Stores every other pixel, supports up to 8k resolution screen size
         let ray_distance_buffer_size = ( 7680.0 * 4320.0 ) as i32 + 15;
@@ -630,6 +641,8 @@ impl App {
                 ..Default::default()
             },
         );
+        
+        // Staging buffers
 
         let temporary_accessible_buffer = Buffer::from_iter(
             memory_allocator.clone(),
@@ -665,14 +678,104 @@ impl App {
         )
         .unwrap();
 
-        let i = Instant::now();
-
         let mut cbb = AutoCommandBufferBuilder::primary(
             &command_buffer_allocator,
             transfer_queue.queue_family_index(),
             CommandBufferUsage::OneTimeSubmit,
         )
         .unwrap();
+
+        // Create Octant map and staging buffer ------------------------------------------------------------------------------------
+        let oc_map = create_octree_mask();
+        
+        let octant_map_buffer = Buffer::new_slice::<u32>(
+            memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::STORAGE_BUFFER | BufferUsage::TRANSFER_DST,
+                sharing: Sharing::Exclusive,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE,
+                ..Default::default()
+            },
+            oc_map.len() as DeviceSize,
+        ).expect("failed to recreate quarter resolution buffer");
+         
+
+        let octant_transfer_buffer = Buffer::from_iter(
+            memory_allocator.clone(),
+            BufferCreateInfo {
+                // Specify that this buffer will be used as a transfer source.
+                usage: BufferUsage::TRANSFER_SRC,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                // Specify use for upload to the device.
+                memory_type_filter: MemoryTypeFilter::PREFER_HOST
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            },
+            oc_map,
+        )
+        .unwrap();
+
+
+        // Load and Store textures ------------------------------------------------------------------------------------
+        
+        let mut staging_buffers = Vec::new();
+        let mut texture_images = Vec::new();
+  
+        for texture_info in TEXTURES {
+            // Load the PNG file
+            let image = image::open(texture_info.path).expect("Image not found");
+            let image = match image {
+                image::DynamicImage::ImageRgba8(img) => img,
+                img => img.to_rgba8(),
+            };
+            
+            let (width, height) = image.dimensions();
+            let image_data = image.into_raw();
+            
+            // Create staging buffer
+            let staging_buffer = Buffer::from_iter(
+                memory_allocator.clone(),
+                BufferCreateInfo {
+                    usage: BufferUsage::TRANSFER_SRC,
+                    ..Default::default()
+                },
+                AllocationCreateInfo {
+                    memory_type_filter: MemoryTypeFilter::PREFER_HOST
+                        | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                    ..Default::default()
+                },
+                image_data,
+            ).unwrap();
+            
+            // Create texture image
+            let texture = Image::new(
+                memory_allocator.clone(),
+                ImageCreateInfo {
+                    image_type: ImageType::Dim2d,
+                    format: Format::R8G8B8A8_SRGB,
+                    mip_levels: 2,
+                    extent: [width, height, 1],
+                    usage: ImageUsage::TRANSFER_DST | ImageUsage::SAMPLED,
+                    ..Default::default()
+                },
+                AllocationCreateInfo::default(),
+            ).unwrap();
+            
+            // Add copy command to the batch
+            cbb.copy_buffer_to_image(CopyBufferToImageInfo::buffer_image(
+                staging_buffer.clone(),
+                texture.clone(),
+            )).unwrap();
+            
+            staging_buffers.push(staging_buffer);
+            texture_images.push((texture_info.name.to_string(), texture));
+        }
+  
 
         cbb.copy_buffer(CopyBufferInfo::buffers(
             temporary_accessible_buffer.clone(),
@@ -693,6 +796,11 @@ impl App {
             temporary_accessible_buffer2,
             world_meta_data_buffers[1].clone(),
         ))
+        .unwrap()
+        .copy_buffer(CopyBufferInfo::buffers(
+            octant_transfer_buffer,
+            octant_map_buffer.clone(),
+        ))
         .unwrap();
 
         let cb = cbb.build().unwrap();
@@ -702,11 +810,11 @@ impl App {
             .unwrap()
             .then_signal_fence_and_flush()
             .unwrap()
-            .wait(None /* timeout */)
+            .wait(None)
             .unwrap();
 
-        println!("{}", i.elapsed().as_millis());
 
+        // Create world updater thread
         let (world_updater, update_receiver) = WorldUpdater::new(
             device.clone(),
             transfer_queue.clone(),
@@ -716,17 +824,14 @@ impl App {
             initial_world,
         );
 
-        #[allow(unused_mut)]
-        // Default values
+        // save images to hashmap
+        let mut texture_map = HashMap::new();
+        for (name, texture) in texture_images {
+            let texture_view = ImageView::new_default(texture).unwrap();
+            texture_map.insert(name, texture_view);
+        }
 
         let rcx = None;
-
-        let p = Vec3::new();
-        let mut a = Vec3::from(1.0, 2.0, 3.0);
-        a += p;
-
-        println!("{:?}", a);
-
         let last_n_press = false;
         let last_frame_time = Instant::now();
         let start = Instant::now();
@@ -745,6 +850,7 @@ impl App {
             noise_buffer,
             camera_buffer,
             ray_distance_buffer,
+            octant_map_buffer,
             stat_buffer,
             rcx,
             camera_location,
@@ -752,6 +858,7 @@ impl App {
             update_receiver,
             last_n_press,
             last_frame_time,
+            texture_map,
             start,
             frame_times,
             render_data,
@@ -954,7 +1061,25 @@ impl ApplicationHandler for App {
                     DescriptorSetLayoutBinding {
                         stages: ShaderStages::COMPUTE,
                         ..DescriptorSetLayoutBinding::descriptor_type(
+                            DescriptorType::StorageBuffer,
+                        )
+                    }
+                ),
+                (
+                    7,
+                    DescriptorSetLayoutBinding {
+                        stages: ShaderStages::COMPUTE,
+                        ..DescriptorSetLayoutBinding::descriptor_type(
                             DescriptorType::StorageImage,
+                        )
+                    }
+                ),
+                (
+                    8,
+                    DescriptorSetLayoutBinding {
+                        stages: ShaderStages::COMPUTE,
+                        ..DescriptorSetLayoutBinding::descriptor_type(
+                            DescriptorType::CombinedImageSampler,
                         )
                     }
                 )
@@ -1361,8 +1486,21 @@ impl ApplicationHandler for App {
                     rcx.recreate_swapchain = true;
                 }
 
+
+                let sampler = Sampler::new(
+                    self.device.clone(),
+                    SamplerCreateInfo {
+                        mag_filter: Filter::Linear,
+                        min_filter: Filter::Linear,
+                        mipmap_mode: SamplerMipmapMode::Linear,
+                        address_mode: [SamplerAddressMode::Repeat; 3],
+                        ..Default::default()
+                    }
+                ).unwrap();
+
                 let layout = &rcx.main_pipeline.layout().set_layouts()[0];
                 //println!("Layout bindings: {:?}", layout.bindings());
+                
 
                 // Create descriptor set for the buffers
                 let descriptor_set = PersistentDescriptorSet::new(
@@ -1375,7 +1513,9 @@ impl ApplicationHandler for App {
                         WriteDescriptorSet::buffer(3, self.noise_buffer.clone()), 
                         WriteDescriptorSet::buffer(4, self.ray_distance_buffer.clone()), 
                         WriteDescriptorSet::buffer(5, self.stat_buffer.clone()), 
-                        WriteDescriptorSet::image_view(6, rcx.attachment_image_views[image_index as usize].clone()),
+                        WriteDescriptorSet::buffer(6, self.octant_map_buffer.clone()), 
+                        WriteDescriptorSet::image_view(7, rcx.attachment_image_views[image_index as usize].clone()), // output image
+                        WriteDescriptorSet::image_view_sampler(8, self.texture_map["Grass"].clone(), sampler.clone())
                     ],
                     [],
                 )

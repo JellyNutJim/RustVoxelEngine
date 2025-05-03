@@ -4,6 +4,7 @@ mod octo_voxel;
 mod sphere;
 mod four_height_surface;
 mod steep_four_height_surface;
+mod texture_info;
 
 
 pub use vec3::Vec3;
@@ -12,6 +13,7 @@ pub use sphere::Sphere;
 pub use four_height_surface::FourHeightSurface;
 pub use octo_voxel::OctoVoxel;
 pub use steep_four_height_surface::SteepFourHeightSurface;
+pub use texture_info::TextureInfo;
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]

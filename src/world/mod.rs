@@ -89,6 +89,48 @@ pub fn get_empty_grid(width: i32, camera_origin: [i32; 3]) -> OctreeGrid {
     grid
 }
 
+fn get_octant_at_depth(pos: [u32; 3], depth: u32) -> u32 {
+    //println!("{:?} {}", pos, depth);
+
+    let octant_size = 64 / (2u32.pow(depth));
+
+    let mid = (octant_size / 2) - 1;
+    let pos = [pos[0] % octant_size, pos[1] % octant_size, pos[2] % octant_size];
+    let mut octant: u32 = 0;
+   
+    if pos[0] > mid {
+        octant += 1;
+    }
+
+    if pos[1] > mid {
+        octant += 4;
+    }
+
+    if pos[2] > mid {
+        octant += 2;
+    }
+    
+    octant
+}
+
+pub fn create_octree_mask() -> Vec<u32> {
+    let mut octree_map: Vec<u32> = Vec::with_capacity(262144 * 6);
+    
+    for z in 0..64 {
+        for y in 0..64 {
+            for x in 0..64 {
+
+                for i in 0..6 {
+                    octree_map.push(get_octant_at_depth([x, y, z], i as u32));
+                }
+                
+            }
+        }
+    }
+
+    octree_map
+}
+
 
 // Intial World Gen Helper Functions
 

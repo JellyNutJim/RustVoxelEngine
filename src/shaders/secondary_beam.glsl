@@ -39,7 +39,11 @@ layout(set = 0, binding = 5) buffer StatBuffer {
     uint miss_total;
 } stat_buf;
 
-layout(set = 0, binding = 6, rgba8) uniform image2D storageImage;
+layout(set = 0, binding = 6) buffer OctantMapBuffer {
+    uint octant_map[1572864];
+} o_buf;
+
+layout(set = 0, binding = 7, rgba8) uniform image2D storageImage;
 
 #include "triangle.glsl"
 
@@ -153,11 +157,9 @@ uvec3 get_geom(uint type, uint index) {
 }
 
 uvec3 get_depth(vec3 pos, inout int multiplier) {
-    uvec3 realitive_chunk_location = uvec3((floor((pos) / 64)) - (w_buf.origin) / 64);
+    uvec3 rel_chunk_loc = uvec3((floor((pos) / 64)) - (w_buf.origin) / 64);
 
-    vec3 local_pos = mod(pos, 64.0);
-
-    uint index = realitive_chunk_location.x + realitive_chunk_location.y * WIDTH + realitive_chunk_location.z * WIDTH * WIDTH;
+    uint index = rel_chunk_loc.x + rel_chunk_loc.y * WIDTH + rel_chunk_loc.z * WIDTH * WIDTH;
     index = w_buf.chunks[index];
 
     // 0 = has children
@@ -169,7 +171,11 @@ uvec3 get_depth(vec3 pos, inout int multiplier) {
         return get_geom(v_buf.voxels[index], index);
     }
 
-    uint octant = get_octant(mod(local_pos, 64), 31);
+    // Get octant map
+    uvec3 lpos = uvec3(mod(pos, 64.0));
+    uint octant_map_index = (lpos.x + (lpos.y * 64) + (lpos.z * 64 * 64)) * 6;
+    
+    uint octant = o_buf.octant_map[octant_map_index];
     index = index + v_buf.voxels[index + octant + 1];
 
     if (v_buf.voxels[index] != 0) {
@@ -177,7 +183,7 @@ uvec3 get_depth(vec3 pos, inout int multiplier) {
        return get_geom(v_buf.voxels[index], index);
     }
 
-    octant = get_octant(mod(local_pos, 32), 15);
+    octant = o_buf.octant_map[octant_map_index + 1];
     index = index + v_buf.voxels[index + octant + 1];
 
     if (v_buf.voxels[index] != 0) {
@@ -185,7 +191,7 @@ uvec3 get_depth(vec3 pos, inout int multiplier) {
         return get_geom(v_buf.voxels[index], index);
     }
 
-    octant = get_octant(mod(local_pos, 16), 7);
+    octant = o_buf.octant_map[octant_map_index + 2];
     index = index + v_buf.voxels[index + octant + 1];
 
     if (v_buf.voxels[index] != 0) {
@@ -193,7 +199,7 @@ uvec3 get_depth(vec3 pos, inout int multiplier) {
         return get_geom(v_buf.voxels[index], index);
     }
 
-    octant = get_octant(mod(local_pos, 8), 3);
+    octant = o_buf.octant_map[octant_map_index + 3];
     index = index + v_buf.voxels[index + octant + 1];
 
     if (v_buf.voxels[index] != 0) {
@@ -201,7 +207,7 @@ uvec3 get_depth(vec3 pos, inout int multiplier) {
         return get_geom(v_buf.voxels[index], index);
     }
 
-    octant = get_octant(mod(local_pos, 4), 1);
+    octant = o_buf.octant_map[octant_map_index + 4];
     index = index + v_buf.voxels[index + octant + 1];
 
     if (v_buf.voxels[index] != 0) {
@@ -209,7 +215,7 @@ uvec3 get_depth(vec3 pos, inout int multiplier) {
         return get_geom(v_buf.voxels[index], index);
     }
 
-    octant = get_octant(mod(local_pos, 2), 0);
+    octant = o_buf.octant_map[octant_map_index + 5];
     index = index + 2 + ((v_buf.voxels[index + 1] >> (octant * 4u)) & 0xFu) ;
 
     multiplier = 1;
