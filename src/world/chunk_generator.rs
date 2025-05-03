@@ -744,15 +744,11 @@ fn generate_four_height_surfaces(world: &OctreeGrid,  scale: usize, scale_f64: f
         return g_vec;
     }
 
-    let range =
-    if scale == 1 {
-        end_voxel - start_voxel + 1
-    } else {
-        ((end_voxel - start_voxel) / scale_u32) + 1
-    };
+    let range = ((end_voxel - start_voxel) / scale_u32) + 1;
 
     for i in 0..range {
-        let height = start_voxel + i;
+        let height = start_voxel + (i * scale_u32);
+
         if height == sea_height as u32 {
             g_vec.push(
                 (

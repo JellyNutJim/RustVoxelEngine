@@ -69,7 +69,7 @@ const POSTIONAL_MOVEMENT: bool = true;
 const WORLD_INTERACTION: bool = true;
 const AUTO_MOVE_FORWARDS: bool = false;
 const STARTING_ORIENTATION: (f64, f64) = (PI, 0.0);
-const INITIAL_SPEED_MULTILIER: f64 = 30.0;
+const INITIAL_SPEED_MULTILIER: f64 = 35.0;
 
 // Testing constants
 const MEASURE_FRAME_TIMES: bool = false;
@@ -389,7 +389,7 @@ impl App {
 
 
         let mut x = 17700.0;
-        let y = 1000.0;
+        let y = 850.0;
         let z = 10560.0;
 
         //21300 2286 8063
@@ -439,52 +439,41 @@ impl App {
         };
 
         //For testing
-        // let v32 = Geometry::FourHeightSurface(FourHeightSurface::from(
-        //     [
-        //         0b_00000001,
-        //         0b_00001100,
-        //         0b_10001000,
-        //         0b_11111111,
-        //     ]
-        // ));
 
-        // let v33 = Geometry::FourHeightSurface(FourHeightSurface::from(
-        //     [
-        //         0b_00010101,
-        //         0b_00010101,
-        //         0b_00010101,
-        //         0b_00010101,
-        //     ],
-        // ));
+        let v33 = Geometry::FourHeightSurface(FourHeightSurface::from(
+            [
+                0b0000_0100,
+                0b0000_0100,
+                0b0000_0100,
+                0b0000_0100,
+            ],
+        ));
 
         let v34 = Geometry::SteepFourHeightSurface(SteepFourHeightSurface::from(
             [
-                0b00_0001_0001_0100,
-                0b00_0001_0001_0100,
-                0b00_0001_0001_0100,
-                0b00_0001_0001_0100,
-            ],
-            0
-        ));
-
-        let v35 = Geometry::SteepFourHeightSurface(SteepFourHeightSurface::from(
-            [
-                0b00_0001_0001_0100,
-                0b00_0001_0001_0100,
-                0b00_0001_0001_0100,
-                0b00_0001_0001_0100,
+                0b00_0001_0000_0011,
+                0b00_0001_0000_0011,
+                0b00_0001_0000_0011,
+                0b00_0001_0000_0011,
             ],
             1
         ));
 
 
-        // initial_world.insert_geometry([middle.x as i32 - 8, middle.y as i32 + 1, (middle.z - 4.0) as i32], v34,false);
-        // initial_world.insert_geometry([middle.x as i32 - 8, middle.y as i32 + 2, (middle.z - 4.0) as i32], v35, false);
 
-        // initial_world.insert_geometry([middle.x as i32 - 8, middle.y as i32 - 2, (middle.z - 4.0) as i32], Geometry::Voxel(Voxel::from(2)), false);
+        initial_world.insert_geometry([middle.x as i32 - 8, middle.y as i32 + 1, (middle.z - 4.0) as i32], v33,false);
+        initial_world.insert_geometry([middle.x as i32 - 8, middle.y as i32 + 1, (middle.z - 5.0) as i32], v34, false);
+
+        initial_world.insert_geometry([middle.x as i32 - 8, middle.y as i32 - 2, (middle.z - 4.0) as i32], Geometry::Voxel(Voxel::from(2)), false);
         // initial_world.insert_geometry([middle.x as i32 - 8, middle.y as i32 - 1, (middle.z - 5.0) as i32], Geometry::Voxel(Voxel::from(2)), false);
 
         // initial_world.insert_geometry([middle.x as i32 - 8, middle.y as i32 + 2, (middle.z - 5.0) as i32], v33, false);
+
+        
+        initial_world.insert_subchunk([middle.x as i32, middle.y as i32 + 1, (middle.z - 4.0) as i32], v33, 4, false);
+        initial_world.insert_subchunk([middle.x as i32, middle.y as i32 + 1, (middle.z - 6.0) as i32], v34, 4, false);
+
+        initial_world.insert_geometry([middle.x as i32, middle.y as i32 - 2, (middle.z - 4.0) as i32], Geometry::Voxel(Voxel::from(2)), false);
 
 
         println!("{:?}", middle);

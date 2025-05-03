@@ -44,7 +44,7 @@ layout(set = 0, binding = 6, rgba8) uniform image2D storageImage;
 
 const int WIDTH = 321;
 const bool DETAIL = false;
-const bool RENDER_OUT_OF_WORLD_FEATURES = true;
+const bool RENDER_OUT_OF_WORLD_FEATURES = false;
 
 // Geometry Types
 const uint four_height_surface_code = 4 << 24;
@@ -648,7 +648,7 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
             uint n1 = voxel_type.y;
             uint n2 = voxel_type.z;
 
-            uint rel_pos = n1 >> 26;
+            uint rel_pos = (n1 >> 26);
 
             // hit_colour = vec3(1,0,0);
             // return true;
@@ -664,10 +664,10 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
             float height_3 = float ( n2 & 0x3FFF );
 
             // get relative height within voxel
-            float h0 = (height_0 / 255.0) - (rel_pos * multiplier);
-            float h1 = (height_1 / 255.0) - (rel_pos * multiplier);
-            float h2 = (height_2 / 255.0) - (rel_pos * multiplier);
-            float h3 = (height_3 / 255.0) - (rel_pos * multiplier);
+            float h0 = (height_0 / 255.0) - (rel_pos);
+            float h1 = (height_1 / 255.0) - (rel_pos);
+            float h2 = (height_2 / 255.0) - (rel_pos);
+            float h3 = (height_3 / 255.0) - (rel_pos);
 
             float scale = float(multiplier);
             vec3 scaleed_pos = floor(world_pos / scale) * scale;
