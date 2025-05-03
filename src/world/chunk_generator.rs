@@ -406,10 +406,6 @@ impl GenPipeLine {
         self.height_map.get(map_x, map_z)
     }
 
-    fn apply_biome_merging() {
-
-    }
-
 }
 
 
@@ -421,10 +417,9 @@ static POSITIONS_EXLCUDING: [(usize, usize); 3] = [(0, 1), (1, 0), (1, 1)];
 // Intialises the base heightmap, intialises the base biome map, inserts 16x16 voxels
 pub fn generate_res_8(world: &mut OctreeGrid, x_pos: u32, z_pos: u32) {
     let mut map_c = world.generator.get_map_coords(x_pos, z_pos, world.origin);
-
+    let sea_height = 8.0 + world.generator.sea_level;
     // Update intial biome and heightmap
     world.generator.res_8_map_gen(x_pos, z_pos, map_c);
-    let mut voxels: [(f64, FourHeightSurface); 4] = Default::default();
 
     map_c.0 *= 2;
     map_c.1 *= 2;
@@ -437,34 +432,20 @@ pub fn generate_res_8(world: &mut OctreeGrid, x_pos: u32, z_pos: u32) {
             let c0 = map_c.0 + (x * 16) as usize;
             let c1 = map_c.1 + (z * 16) as usize;
 
-            //let y = world.generator.get_full_biome_height(c0, c1);
-            let mut v_len = 0;
-            generate_4_height_leveled_voxel(world, &mut v_len, &mut voxels, 8, (c0, c1));
-
-            //let mut voxel_type = 1;
-
-            for k in 0..v_len {
-                voxels[k].1.update_4_part_voxel();
-
-                world.insert_subchunk([
-                        x_adj as i32,
-                        voxels[k].0 as i32 - 1,
-                        z_adj as i32,
-                    ], 
-                    Geometry::FourHeightSurface(voxels[k].1),  
-                    2,
-                    true
-                );
+            if c0 == 41072 || c1 == 41072 {
+                continue;
             }
 
-            if voxels[0].0 < 15.7 + world.generator.sea_level {
+            let geometry = generate_four_height_surfaces(world, 8, 8.0, 8, sea_height, (c0, c1));
+
+            for (geom, height) in geometry {
                 world.insert_subchunk([
                         x_adj as i32,
-                        (world.generator.sea_level + 15.0) as i32,
-                        z_adj  as i32,
+                        height as i32,
+                        z_adj as i32,
                     ], 
-                    Geometry::Voxel(Voxel::from(3)),  
-                    2,
+                    geom, 
+                    2, 
                     false
                 );
             }
