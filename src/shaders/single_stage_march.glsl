@@ -1,6 +1,4 @@
 #version 460
-// Secondary Beam
-
 layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
 
 layout(set = 0, binding = 0) uniform camera_subbuffer {
@@ -50,6 +48,8 @@ layout(set = 0, binding = 8) uniform sampler2D grassTexture;
 #include "triangle.glsl"
 
 const int WIDTH = 321;
+const int WIDTH_SQUARED = WIDTH * WIDTH;
+const int VOXEL_WIDTH = WIDTH * 64;
 const bool DETAIL = false;
 const bool RENDER_OUT_OF_WORLD_FEATURES = false;
 
@@ -158,13 +158,14 @@ uvec3 get_geom(uint type, uint index) {
     return uvec3(0,0,0);
 }
 
-uvec3 get_depth(vec3 pos, inout int multiplier) {
-    uvec3 rel_chunk_loc = uvec3((floor((pos) / 64)) - (w_buf.origin) / 64);
+uvec3 get_depth(vec3 pos, inout int multiplier, vec3 u_world_origin) {
+    // uvec3 casting wont work for negative but should be fine
+    vec3 chunk_loc = floor(pos / 64);
+    uvec3 rel_chunk_loc = uvec3(chunk_loc - u_world_origin);
 
-    uint index = rel_chunk_loc.x + rel_chunk_loc.y * WIDTH + rel_chunk_loc.z * WIDTH * WIDTH;
+    uint index = rel_chunk_loc.x + (rel_chunk_loc.y * WIDTH) + (rel_chunk_loc.z * WIDTH_SQUARED);
+
     index = w_buf.chunks[index];
-
-    // 0 = has children
     uint current = v_buf.voxels[index];
 
     // Initial check for air
@@ -173,11 +174,13 @@ uvec3 get_depth(vec3 pos, inout int multiplier) {
         return get_geom(v_buf.voxels[index], index);
     }
 
+    uvec3 chunk_loc_u = uvec3(chunk_loc) << 6;
+
     // Get octant map
-    uvec3 lpos = uvec3(mod(pos, 64.0));
-    uint octant_map_index = (lpos.x + (lpos.y * 64) + (lpos.z * 64 * 64)) * 6;
+    uvec3 lpos = uvec3(pos - chunk_loc_u);
+    uint octant_map = o_buf.octant_map[lpos.x + (lpos.y << 6) + (lpos.z << 12)];
     
-    uint octant = o_buf.octant_map[octant_map_index];
+    uint octant = octant_map & 7;
     index = index + v_buf.voxels[index + octant + 1];
 
     if (v_buf.voxels[index] != 0) {
@@ -185,7 +188,7 @@ uvec3 get_depth(vec3 pos, inout int multiplier) {
        return get_geom(v_buf.voxels[index], index);
     }
 
-    octant = o_buf.octant_map[octant_map_index + 1];
+    octant = (octant_map >> 3) & 7;
     index = index + v_buf.voxels[index + octant + 1];
 
     if (v_buf.voxels[index] != 0) {
@@ -193,7 +196,7 @@ uvec3 get_depth(vec3 pos, inout int multiplier) {
         return get_geom(v_buf.voxels[index], index);
     }
 
-    octant = o_buf.octant_map[octant_map_index + 2];
+    octant = (octant_map >> 6) & 7;;
     index = index + v_buf.voxels[index + octant + 1];
 
     if (v_buf.voxels[index] != 0) {
@@ -201,7 +204,7 @@ uvec3 get_depth(vec3 pos, inout int multiplier) {
         return get_geom(v_buf.voxels[index], index);
     }
 
-    octant = o_buf.octant_map[octant_map_index + 3];
+    octant = (octant_map >> 9) & 7;
     index = index + v_buf.voxels[index + octant + 1];
 
     if (v_buf.voxels[index] != 0) {
@@ -209,7 +212,7 @@ uvec3 get_depth(vec3 pos, inout int multiplier) {
         return get_geom(v_buf.voxels[index], index);
     }
 
-    octant = o_buf.octant_map[octant_map_index + 4];
+    octant = (octant_map >> 12) & 7;
     index = index + v_buf.voxels[index + octant + 1];
 
     if (v_buf.voxels[index] != 0) {
@@ -217,7 +220,7 @@ uvec3 get_depth(vec3 pos, inout int multiplier) {
         return get_geom(v_buf.voxels[index], index);
     }
 
-    octant = o_buf.octant_map[octant_map_index + 5];
+    octant = (octant_map >> 15) & 7;
     index = index + 2 + ((v_buf.voxels[index + 1] >> (octant * 4u)) & 0xFu) ;
 
     multiplier = 1;
@@ -335,14 +338,10 @@ vec3 old_grass(uint hit_axis, ivec3 step, vec3 hit_pos) {
 }
 
 vec3 grass2(vec3 hit_pos, float distance_from_camera) {
-    float scale = 0.1;
+    float scale = 1/(distance_from_camera * distance_from_camera);
     vec2 uv = hit_pos.xz * scale;
     
-    // Simple approximation: 1 pixel ≈ 0.001 units at distance 1
-    float mip_level = log2(distance_from_camera * 0.001 * scale * 1024.0);
-    mip_level = clamp(mip_level, 0.0, 10.0);
-    
-    return textureLod(grassTexture, uv, mip_level).rgb * 3.0;
+    return texture(grassTexture, uv).rgb * 3.0;
 }
 
 vec3 grass(vec3 hit_pos, float distance_from_camera) {
@@ -429,25 +428,22 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
     int transparent_hits = 0;
     float transparent_distance = 0.0;
     vec3 tansparent_mask = vec3(0.0);
-
-    float accumculated_curve = 0.0;
-    float curve = 0.01;
     float dis = 0.0;
 
-    int curr_chunk = 0;
+    vec3 world_origin = w_buf.origin;
+    vec3 u_world_origin = world_origin / 64; //uvec3(world_origin);
 
-    while((world_pos.x > w_buf.origin.x && world_pos.x < w_buf.origin.x + 64*WIDTH) && (world_pos.z > w_buf.origin.z && world_pos.z < w_buf.origin.z + 64*WIDTH)) {
+    float y_max = 41 << 6;
+    
+    while((world_pos.x > world_origin.x && world_pos.x < world_origin.x + VOXEL_WIDTH) && (world_pos.z > world_origin.z && world_pos.z < world_origin.z + VOXEL_WIDTH)) {
         // Go through chunks
 
-        if (world_pos.y > 64*41 || world_pos.y < 0) {
+        if (world_pos.y > y_max|| world_pos.y < 0) {
             return false;
-            break;
         }
 
         if (steps > 2000) {
-            hit_colour = vec3(0.0, 0.0, 0.0);
-            return true;
-            break;
+            return false;
         }
 
         if (transparent_hits > 0) {
@@ -458,7 +454,7 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
             }
         }
 
-        uvec3 voxel_type = get_depth(world_pos, multiplier);
+        uvec3 voxel_type = get_depth(world_pos, multiplier, u_world_origin);
 
         // View octant boundaries
         // if (curr_distance < 500.0 && curr_distance > 2.0) {

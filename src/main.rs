@@ -65,7 +65,7 @@ mod rendering;
 mod testing;
 
 use rendering::{ WorldUpdateMessage, WorldUpdater, Update, CameraBufferData, CameraLocation };
-use world::{get_grid_from_seed, get_empty_grid, create_octree_mask, Octree, OctreeGrid};
+use world::{get_grid_from_seed, get_empty_grid, create_octree_map, Octree, OctreeGrid};
 use testing::test;
 
 use types::{Vec3, Geometry, Voxel, FourHeightSurface, SteepFourHeightSurface, TextureInfo};
@@ -88,7 +88,7 @@ const EARLY_EXIT: bool = false;
 const PAUSE_GENERATION: bool = true;
 
 // Render Options
-const USE_BEAM_OPTIMISATION: bool = false;
+const USE_BEAM_OPTIMISATION: bool = true;
 const RESIZEABLE_WINDOW: bool = true;
 const USE_VSYNC: bool = false;
 const USE_FULLSCREEN: bool = false;
@@ -686,7 +686,7 @@ impl App {
         .unwrap();
 
         // Create Octant map and staging buffer ------------------------------------------------------------------------------------
-        let oc_map = create_octree_mask();
+        let oc_map = create_octree_map();
         
         let octant_map_buffer = Buffer::new_slice::<u32>(
             memory_allocator.clone(),
@@ -736,21 +736,8 @@ impl App {
             
             let (width, height) = image.dimensions();
             let image_data = image.into_raw();
-            
-            // Create staging buffer
-            let staging_buffer = Buffer::from_iter(
-                memory_allocator.clone(),
-                BufferCreateInfo {
-                    usage: BufferUsage::TRANSFER_SRC,
-                    ..Default::default()
-                },
-                AllocationCreateInfo {
-                    memory_type_filter: MemoryTypeFilter::PREFER_HOST
-                        | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
-                    ..Default::default()
-                },
-                image_data,
-            ).unwrap();
+
+            let mip_levels = (width.max(height) as f32).log2().floor() as u32 + 1;
             
             // Create texture image
             let texture = Image::new(
@@ -758,13 +745,30 @@ impl App {
                 ImageCreateInfo {
                     image_type: ImageType::Dim2d,
                     format: Format::R8G8B8A8_SRGB,
-                    mip_levels: 2,
+                    mip_levels: mip_levels,
                     extent: [width, height, 1],
                     usage: ImageUsage::TRANSFER_DST | ImageUsage::SAMPLED,
                     ..Default::default()
                 },
                 AllocationCreateInfo::default(),
             ).unwrap();
+
+            // Create staging buffer
+            let staging_buffer = Buffer::from_iter(
+                memory_allocator.clone(),
+                BufferCreateInfo {
+                    usage: BufferUsage::TRANSFER_SRC,
+                        ..Default::default()
+                    },
+                    AllocationCreateInfo {
+                        memory_type_filter: MemoryTypeFilter::PREFER_HOST
+                            | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                        ..Default::default()
+                },
+                image_data,
+            ).unwrap();
+
+            
             
             // Add copy command to the batch
             cbb.copy_buffer_to_image(CopyBufferToImageInfo::buffer_image(

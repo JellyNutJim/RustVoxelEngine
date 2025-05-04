@@ -113,17 +113,17 @@ fn get_octant_at_depth(pos: [u32; 3], depth: u32) -> u32 {
     octant
 }
 
-pub fn create_octree_mask() -> Vec<u32> {
-    let mut octree_map: Vec<u32> = Vec::with_capacity(262144 * 6);
+pub fn create_octree_map() -> Vec<u32> {
+    let mut octree_map: Vec<u32> = Vec::with_capacity(262144);
     
     for z in 0..64 {
         for y in 0..64 {
             for x in 0..64 {
-
+                let mut octants: u32 = 0;
                 for i in 0..6 {
-                    octree_map.push(get_octant_at_depth([x, y, z], i as u32));
+                    octants = octants | (get_octant_at_depth([x, y, z], i as u32) << (3 * i));
                 }
-                
+                octree_map.push(octants);
             }
         }
     }

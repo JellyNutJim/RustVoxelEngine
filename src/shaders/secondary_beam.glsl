@@ -48,6 +48,8 @@ layout(set = 0, binding = 7, rgba8) uniform image2D storageImage;
 #include "triangle.glsl"
 
 const int WIDTH = 321;
+const int WIDTH_SQUARED = WIDTH * WIDTH;
+const int VOXEL_WIDTH = WIDTH * 64;
 const bool DETAIL = false;
 const bool RENDER_OUT_OF_WORLD_FEATURES = false;
 
@@ -156,13 +158,14 @@ uvec3 get_geom(uint type, uint index) {
     return uvec3(0,0,0);
 }
 
-uvec3 get_depth(vec3 pos, inout int multiplier) {
-    uvec3 rel_chunk_loc = uvec3((floor((pos) / 64)) - (w_buf.origin) / 64);
+uvec3 get_depth(vec3 pos, inout int multiplier, vec3 u_world_origin) {
+    // uvec3 casting wont work for negative but should be fine
+    vec3 chunk_loc = floor(pos / 64);
+    uvec3 rel_chunk_loc = uvec3(chunk_loc - u_world_origin);
 
-    uint index = rel_chunk_loc.x + rel_chunk_loc.y * WIDTH + rel_chunk_loc.z * WIDTH * WIDTH;
+    uint index = rel_chunk_loc.x + (rel_chunk_loc.y * WIDTH) + (rel_chunk_loc.z * WIDTH_SQUARED);
+
     index = w_buf.chunks[index];
-
-    // 0 = has children
     uint current = v_buf.voxels[index];
 
     // Initial check for air
@@ -171,11 +174,13 @@ uvec3 get_depth(vec3 pos, inout int multiplier) {
         return get_geom(v_buf.voxels[index], index);
     }
 
+    uvec3 chunk_loc_u = uvec3(chunk_loc) << 6;
+
     // Get octant map
-    uvec3 lpos = uvec3(mod(pos, 64.0));
-    uint octant_map_index = (lpos.x + (lpos.y * 64) + (lpos.z * 64 * 64)) * 6;
+    uvec3 lpos = uvec3(pos - chunk_loc_u);
+    uint octant_map = o_buf.octant_map[lpos.x + (lpos.y << 6) + (lpos.z << 12)];
     
-    uint octant = o_buf.octant_map[octant_map_index];
+    uint octant = octant_map & 7;
     index = index + v_buf.voxels[index + octant + 1];
 
     if (v_buf.voxels[index] != 0) {
@@ -183,7 +188,7 @@ uvec3 get_depth(vec3 pos, inout int multiplier) {
        return get_geom(v_buf.voxels[index], index);
     }
 
-    octant = o_buf.octant_map[octant_map_index + 1];
+    octant = (octant_map >> 3) & 7;
     index = index + v_buf.voxels[index + octant + 1];
 
     if (v_buf.voxels[index] != 0) {
@@ -191,7 +196,7 @@ uvec3 get_depth(vec3 pos, inout int multiplier) {
         return get_geom(v_buf.voxels[index], index);
     }
 
-    octant = o_buf.octant_map[octant_map_index + 2];
+    octant = (octant_map >> 6) & 7;;
     index = index + v_buf.voxels[index + octant + 1];
 
     if (v_buf.voxels[index] != 0) {
@@ -199,7 +204,7 @@ uvec3 get_depth(vec3 pos, inout int multiplier) {
         return get_geom(v_buf.voxels[index], index);
     }
 
-    octant = o_buf.octant_map[octant_map_index + 3];
+    octant = (octant_map >> 9) & 7;
     index = index + v_buf.voxels[index + octant + 1];
 
     if (v_buf.voxels[index] != 0) {
@@ -207,7 +212,7 @@ uvec3 get_depth(vec3 pos, inout int multiplier) {
         return get_geom(v_buf.voxels[index], index);
     }
 
-    octant = o_buf.octant_map[octant_map_index + 4];
+    octant = (octant_map >> 12) & 7;
     index = index + v_buf.voxels[index + octant + 1];
 
     if (v_buf.voxels[index] != 0) {
@@ -215,7 +220,7 @@ uvec3 get_depth(vec3 pos, inout int multiplier) {
         return get_geom(v_buf.voxels[index], index);
     }
 
-    octant = o_buf.octant_map[octant_map_index + 5];
+    octant = (octant_map >> 15) & 7;
     index = index + 2 + ((v_buf.voxels[index + 1] >> (octant * 4u)) & 0xFu) ;
 
     multiplier = 1;
@@ -424,25 +429,21 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
     float transparent_distance = 0.0;
     vec3 tansparent_mask = vec3(0.0);
 
-    float accumculated_curve = 0.0;
-    float curve = 0.01;
     float dis = 0.0;
+    vec3 world_origin = w_buf.origin;
+    vec3 u_world_origin = world_origin / 64;
 
-    int curr_chunk = 0;
+    float y_max = 41 << 6;
 
-    while((world_pos.x > w_buf.origin.x && world_pos.x < w_buf.origin.x + 64*WIDTH) && (world_pos.z > w_buf.origin.z && world_pos.z < w_buf.origin.z + 64*WIDTH)) {
+    while((world_pos.x > world_origin.x && world_pos.x < world_origin.x + VOXEL_WIDTH) && (world_pos.z > world_origin.z && world_pos.z < world_origin.z + VOXEL_WIDTH)) {
         // Go through chunks
 
-        if (world_pos.y > 64*41 || world_pos.y < 0) {
-            break;
+        if (world_pos.y > y_max|| world_pos.y < 0) {
+            return false;
         }
 
-        uvec3 voxel_type = get_depth(world_pos, multiplier);
-
         if (steps > 2000) {
-            hit_colour = vec3(0.0, 0.0, 0.0);
             return false;
-            break;
         }
 
         if (transparent_hits > 0) {
@@ -452,6 +453,8 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
                 return true;
             }
         }
+
+        uvec3 voxel_type = get_depth(world_pos, multiplier, u_world_origin);
 
         // View octant boundaries
         // if (curr_distance < 500.0 && curr_distance > 2.0) {
