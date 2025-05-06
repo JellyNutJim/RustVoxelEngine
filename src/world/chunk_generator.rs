@@ -260,15 +260,6 @@ impl GenPipeLine {
         let b = self.biome_map.get(biome_map_coord.0, biome_map_coord.1);
         let res: (u32, f64);
 
-        
-        if x_pos.trunc() == 17361.0 && z_pos.trunc() == 10449.0 {
-            println!("{:?}", b);
-        }
-
-        if x_pos.trunc() == 17672.0 && z_pos.trunc() == 10507.0 {
-            println!("{:?}", b);
-        }
-
         match b {
             Biome::Single(b) => {
                 res = self.get_biome_height(b, x_pos, z_pos, height_map_coord, true);
@@ -298,11 +289,24 @@ impl GenPipeLine {
 impl GenPipeLine {
 
     // Populates the biome map, and the heightmap for sized 8 voxels (1/4 of the total biome and height data)
-    fn res_8_map_gen(&mut self, x_pos: u32, z_pos: u32, map_coords: (usize, usize)) {
+    fn res_8_map_gen(&mut self, x_pos: u32, z_pos: u32, map_coords: (usize, usize), axis: usize) {
         let map_coords_2 = (map_coords.0 * 2, map_coords.1 * 2);
 
-        for x in 0..8 {
-            for z in 0..8 {
+        let max: (u32,u32) = if axis == 0 {
+            (9, 8)
+        } 
+        else if axis == 1 {
+            (8, 9)
+        }
+        else if axis == 2 {
+            (9,9)
+        }
+        else {
+            (8,8)
+        };
+
+        for x in 0..max.0 {
+            for z in 0..max.1 {
 
                 // World position
                 let x_adj = (x_pos + x * 8) as f64;
@@ -337,11 +341,17 @@ impl GenPipeLine {
     }
 
     // Assumes 1/4th has already been populated by res_8_map_gen, populates the other 3/4 of data
-    fn res_4_map_gen(&mut self, x_pos: u32, z_pos: u32, map_coords: (usize, usize)) {
+    fn res_4_map_gen(&mut self, x_pos: u32, z_pos: u32, map_coords: (usize, usize), edge: bool) {
         let map_coords_2 = (map_coords.0 * 2, map_coords.1 * 2);
 
-        for x in 0..64 {
-            for z in 0..64 {
+        let max = if edge {
+            72
+        } else {
+            64
+        }; 
+
+        for x in 0..max {
+            for z in 0..max {
 
                 // Skip already processed world positions
                 if x % 8 == 0 && z % 8 == 0 {
@@ -414,12 +424,16 @@ static POSITIONS_EXLCUDING: [(usize, usize); 3] = [(0, 1), (1, 0), (1, 1)];
 
 // Visible API, 
 
+pub fn generate_res_8_maps(world: &mut OctreeGrid, x_pos: u32, z_pos: u32, axis: usize)  {
+    let map_c = world.generator.get_map_coords(x_pos, z_pos, world.origin);
+    world.generator.res_8_map_gen(x_pos, z_pos, map_c, axis);
+}
+
 // Intialises the base heightmap, intialises the base biome map, inserts 16x16 voxels
 pub fn generate_res_8(world: &mut OctreeGrid, x_pos: u32, z_pos: u32) {
     let mut map_c = world.generator.get_map_coords(x_pos, z_pos, world.origin);
     let sea_height = 8.0 + world.generator.sea_level;
-    // Update intial biome and heightmap
-    world.generator.res_8_map_gen(x_pos, z_pos, map_c);
+
 
     map_c.0 *= 2;
     map_c.1 *= 2;
@@ -454,17 +468,19 @@ pub fn generate_res_8(world: &mut OctreeGrid, x_pos: u32, z_pos: u32) {
     }
 }
 
+pub fn generate_res_4_maps(world: &mut OctreeGrid, x_pos: u32, z_pos: u32, edge: bool)  {
+    let map_c = world.generator.get_map_coords(x_pos, z_pos, world.origin);
+    world.generator.res_4_map_gen(x_pos, z_pos, map_c, edge);
+}
 
 // Essentially a higher resolution of gen 8, accept it generates all required base biome and heightmap data, not 1/8th or 1/4th but only inserts size 4 voxels
 pub fn generate_res_4(world: &mut OctreeGrid, x_pos: u32, z_pos: u32) {
     let mut map_c = world.generator.get_map_coords(x_pos, z_pos, world.origin);
     let sea_height = 12.0 + world.generator.sea_level;
-
-    // Populate the remaining unfilled heightmap and biome map
-    world.generator.res_4_map_gen(x_pos, z_pos, map_c);
     
     map_c.0 *= 2;
     map_c.1 *= 2;
+
 
     for x in 0..16 {
         for z in 0..16 {

@@ -134,6 +134,7 @@ impl WorldUpdater {
                             Update::Shift(axis, dir) => {
                                 // Shift origin
                                 println!("ORIGIN BEFORE: {:?}", world.origin);
+                                println!("axis: {axis} {dir}");
                                 world.shift(axis, dir);
                                 println!("ORIGIN AFTER: {:?}", world.origin);
                             }

@@ -370,17 +370,17 @@ impl OctreeGrid {
             update_chunk[axis] += (self.width - 1) as i32 * 64;
         }
 
-        // let temp = [
-        //     self.origin[0] as u32,
-        //     self.origin[1] as u32,
-        //     self.origin[2] as u32,
-        // ];
+        let mut update_chunk_copy = update_chunk.clone();
+        for _i in 0..self.width as usize {
+            generate_res_8_maps(self, update_chunk_copy[0] as u32, update_chunk_copy[2] as u32, 4);
+            update_chunk_copy[alt_axis] += 64;
+        }
 
         // Populate moved chunks with new data, loops through the row of chunks to be generated
         for _i in 0..self.width as usize {
 
-            // Update Biome MaP for this chunk
 
+            // Update Chunk
             generate_res_8(self, update_chunk[0] as u32, update_chunk[2] as u32);
 
             let c_ind = self.get_chunk_pos(&update_chunk);
@@ -389,6 +389,7 @@ impl OctreeGrid {
             for j in 0..self.width {
                 let grid_index = c_ind[0] as u32 + (c_ind[1] as u32 + j)  * self.width + c_ind[2] as u32 * self.width.pow(2);
                 let index = self.spatial_map[grid_index as usize] as usize;
+                self.trees[index].set_generation_level(2);
                 self.flat_chunks[index] = self.trees[index].flatten().1;
             }
 
@@ -438,6 +439,12 @@ impl OctreeGrid {
             delete_chunk[axis] += ((layer_width + 1) * 64) as i32;
         }
 
+        let mut update_chunk_copy = update_chunk.clone();
+        for _i in 0..layer_width as usize {
+            generate_res_4_maps(self, update_chunk_copy[0] as u32, update_chunk_copy[2] as u32, true);
+            update_chunk_copy[alt_axis] += 64;
+        }
+
         for _i in 0..layer_width as usize {
 
             let update_chunk_pos   = self.get_chunk_pos(&update_chunk);
@@ -462,7 +469,6 @@ impl OctreeGrid {
 
             // Chunks outside this border are reset
             generate_res_8(self, delete_chunk[0] as u32, delete_chunk[2] as u32);
-
 
             // Update Flat Chunk Column
             for j in 0..self.width {

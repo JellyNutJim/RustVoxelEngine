@@ -28,9 +28,9 @@ use crate::{
 // WIDTH MUST ALWAYS BE ODD
 pub fn get_grid_from_seed(seed: u64, width: i32, camera_origin: [i32; 3]) -> OctreeGrid {
     let r8w: u32 = width as u32;
-    let r4w: u32 = 151;
-    let r2w: u32 = 101;
-    let r1w: u32 = 51;
+    let r4w: u32 = 101;
+    let r2w: u32 = 51;
+    let r1w: u32 = 31;
 
     //let mut p = ShaderGrid::from(chunks, 3);
     let camera_chunk = [(camera_origin[0] / 64) * 64, (camera_origin[1] / 64) * 64, (camera_origin[2] / 64) * 64];
@@ -140,6 +140,15 @@ fn create_res_8_land(world: &mut OctreeGrid) {
         for z in 0..world.width {
             let c_x = x * 64 + world.origin[0] as u32;
             let c_z = z * 64 + world.origin[2] as u32;
+            generate_res_8_maps(world, c_x, c_z, 4);
+        }
+    }
+
+
+    for x in 0..world.width {
+        for z in 0..world.width {
+            let c_x = x * 64 + world.origin[0] as u32;
+            let c_z = z * 64 + world.origin[2] as u32;
 
             for y in 0..world.width { 
                 let grid_index = x + (y) * world.width  + z * world.width.pow(2);
@@ -165,6 +174,14 @@ fn create_res_4_land(world: &mut OctreeGrid) {
     ];
 
     let sp_c = world.get_chunk_pos_u32(&[starting_point[0], 0 , starting_point[1]]);
+
+    for x in 0..layer_width{
+        for z in 0..layer_width {
+            let c_x = x * 64 + starting_point[0] as u32;
+            let c_z = z * 64 + starting_point[1] as u32;
+            generate_res_4_maps(world, c_x, c_z, true);
+        }
+    }
 
     for x in 0..layer_width{
         for z in 0..layer_width {

@@ -78,17 +78,17 @@ const POSTIONAL_MOVEMENT: bool = true;
 const WORLD_INTERACTION: bool = true;
 const AUTO_MOVE_FORWARDS: bool = false;
 const STARTING_ORIENTATION: (f64, f64) = (PI, 0.0);
-const INITIAL_SPEED_MULTILIER: f64 = 35.0;
+const INITIAL_SPEED_MULTILIER: f64 = 50.2;
 
 // Testing constants
 const MEASURE_FRAME_TIMES: bool = false;
 const MEASURE_MARCH_DATA: bool = false; // frame times must also be true + Atomic add uncommented in shaders
 const PRINT_FRAME_STATS: bool = false;
 const EARLY_EXIT: bool = false;
-const PAUSE_GENERATION: bool = true;
+const PAUSE_GENERATION: bool = false;
 
 // Render Options
-const USE_BEAM_OPTIMISATION: bool = true;
+const USE_BEAM_OPTIMISATION: bool = false;
 const RESIZEABLE_WINDOW: bool = true;
 const USE_VSYNC: bool = false;
 const USE_FULLSCREEN: bool = false;
@@ -240,7 +240,7 @@ impl App {
         let library = VulkanLibrary::new().unwrap();
         let required_extensions = Surface::required_extensions(event_loop);
 
-        // Create the instance.
+        // Create the instance
         let instance = Instance::new(
             library,
             InstanceCreateInfo {
@@ -467,28 +467,36 @@ impl App {
         let v34 = Geometry::SteepFourHeightSurface(SteepFourHeightSurface::from(
             [
                 0b00_0001_0000_0011,
-                0b00_0001_0000_0011,
+                0b00_0000_0000_0011,
                 0b00_0001_0000_0011,
                 0b00_0001_0000_0011,
             ],
             1
         ));
 
+        let v35 = Geometry::SteepFourHeightSurface(SteepFourHeightSurface::from(
+            [
+                0b00_0001_0000_0011,
+                0b00_0000_0000_0011,
+                0b00_0001_0000_0011,
+                0b00_0001_0000_0011,
+            ],
+            0
+        ));
 
 
-        initial_world.insert_geometry([middle.x as i32 - 8, middle.y as i32 + 1, (middle.z - 4.0) as i32], v33,false);
-        initial_world.insert_geometry([middle.x as i32 - 8, middle.y as i32 + 1, (middle.z - 5.0) as i32], v34, false);
 
-        initial_world.insert_geometry([middle.x as i32 - 8, middle.y as i32 - 2, (middle.z - 4.0) as i32], Geometry::Voxel(Voxel::from(2)), false);
-        // initial_world.insert_geometry([middle.x as i32 - 8, middle.y as i32 - 1, (middle.z - 5.0) as i32], Geometry::Voxel(Voxel::from(2)), false);
 
-        // initial_world.insert_geometry([middle.x as i32 - 8, middle.y as i32 + 2, (middle.z - 5.0) as i32], v33, false);
+        initial_world.insert_geometry([middle.x as i32 - 8, middle.y as i32, (middle.z - 8.0) as i32], v33,false);
+        initial_world.insert_geometry([middle.x as i32 - 8, middle.y as i32, (middle.z - 7.0) as i32], v34, false);
+        initial_world.insert_geometry([middle.x as i32 - 8, middle.y as i32 - 2, (middle.z - 8.0) as i32], Geometry::Voxel(Voxel::from(2)), false);
 
         
-        initial_world.insert_subchunk([middle.x as i32, middle.y as i32 + 1, (middle.z - 4.0) as i32], v33, 4, false);
-        initial_world.insert_subchunk([middle.x as i32, middle.y as i32 + 1, (middle.z - 6.0) as i32], v34, 4, false);
+        initial_world.insert_subchunk([middle.x as i32, middle.y as i32, (middle.z + 10.0) as i32], v33, 2, false);
+        initial_world.insert_subchunk([middle.x as i32, middle.y as i32, (middle.z) as i32], v34, 2, false);
+        initial_world.insert_subchunk([middle.x as i32, middle.y as i32 - 10, (middle.z) as i32], v35, 2, false);
 
-        initial_world.insert_geometry([middle.x as i32, middle.y as i32 - 2, (middle.z - 4.0) as i32], Geometry::Voxel(Voxel::from(2)), false);
+        initial_world.insert_geometry([middle.x as i32, middle.y as i32 - 20, (middle.z) as i32], Geometry::Voxel(Voxel::from(2)), false);
 
 
         println!("{:?}", middle);
