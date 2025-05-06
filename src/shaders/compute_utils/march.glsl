@@ -18,6 +18,19 @@ bool point_in_octant(vec3 point, vec3 corner, float scale ) {
            point.z >= corner.z && point.z < corner.z + scale;
 }
 
+bool isInWorld(vec3 pos, vec3 world_min, vec3 world_max) {
+    if (pos.x < world_min.x || pos.x > world_max.x)
+        return false;
+        
+    if (pos.z < world_min.z || pos.z > world_max.z)
+        return false;
+        
+    if (pos.y < world_min.y || pos.y > world_max.y)
+        return false;
+
+    return true;
+}
+
 vec3 get_colour(uint hit_axis, ivec3 step, vec3 c) {
     vec3 normal;
     return vec3(0.1, 0.1, 0.1);

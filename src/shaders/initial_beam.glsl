@@ -52,6 +52,14 @@ const int VOXEL_WIDTH = WIDTH * 64;
 const bool DETAIL = false;
 const bool RENDER_OUT_OF_WORLD_FEATURES = false;
 
+// Multiplier levels
+const float mul_64 = 1.0/64.0;
+const float mul_32 = 1.0/32.0;
+const float mul_16 = 1.0/16.0;
+const float mul_8 = 1.0/8.0;
+const float mul_4 = 1.0/4.0;
+const float mul_2 = 1.0/2.0;
+
 // Geometry Types
 const uint four_height_surface_code = 4 << 24;
 const uint four_height_water_code = 5 << 24;
@@ -157,8 +165,7 @@ uvec3 get_geom(uint type, uint index) {
     return uvec3(0,0,0);
 }
 
-uvec3 get_depth(vec3 pos, inout int multiplier, vec3 u_world_origin) {
-    // uvec3 casting wont work for negative but should be fine
+uvec3 get_depth(vec3 pos, vec3 u_world_origin, inout int multiplier, inout float multiplier_div) {
     vec3 chunk_loc = floor(pos / 64);
     uvec3 rel_chunk_loc = uvec3(chunk_loc - u_world_origin);
 
@@ -169,7 +176,8 @@ uvec3 get_depth(vec3 pos, inout int multiplier, vec3 u_world_origin) {
 
     // Initial check for air
     if (current != 0) {
-        multiplier =  64;
+        multiplier = 64;
+        multiplier_div = mul_64;
         return get_geom(v_buf.voxels[index], index);
     }
 
@@ -184,6 +192,7 @@ uvec3 get_depth(vec3 pos, inout int multiplier, vec3 u_world_origin) {
 
     if (v_buf.voxels[index] != 0) {
        multiplier = 32;
+       multiplier_div = mul_32;
        return get_geom(v_buf.voxels[index], index);
     }
 
@@ -192,6 +201,7 @@ uvec3 get_depth(vec3 pos, inout int multiplier, vec3 u_world_origin) {
 
     if (v_buf.voxels[index] != 0) {
         multiplier = 16;
+        multiplier_div = mul_16;
         return get_geom(v_buf.voxels[index], index);
     }
 
@@ -199,7 +209,8 @@ uvec3 get_depth(vec3 pos, inout int multiplier, vec3 u_world_origin) {
     index = index + v_buf.voxels[index + octant + 1];
 
     if (v_buf.voxels[index] != 0) {
-        multiplier =  8;
+        multiplier = 8;
+        multiplier_div = mul_8;
         return get_geom(v_buf.voxels[index], index);
     }
 
@@ -208,6 +219,7 @@ uvec3 get_depth(vec3 pos, inout int multiplier, vec3 u_world_origin) {
 
     if (v_buf.voxels[index] != 0) {
         multiplier = 4;
+        multiplier_div = mul_4;
         return get_geom(v_buf.voxels[index], index);
     }
 
@@ -216,6 +228,7 @@ uvec3 get_depth(vec3 pos, inout int multiplier, vec3 u_world_origin) {
 
     if (v_buf.voxels[index] != 0) {
         multiplier = 2;
+        multiplier_div = mul_2;
         return get_geom(v_buf.voxels[index], index);
     }
 
@@ -223,10 +236,11 @@ uvec3 get_depth(vec3 pos, inout int multiplier, vec3 u_world_origin) {
     index = index + 2 + ((v_buf.voxels[index + 1] >> (octant * 4u)) & 0xFu) ;
 
     multiplier = 1;
+    multiplier_div = 1;
     return get_geom(v_buf.voxels[index], index);
 }
 
-void take_step(ivec3 step, vec3 t_delta, inout vec3 t_max, inout uint hit_axis, inout vec3 world_pos, int multiplier, vec3 dir, inout float curr_distance, vec3 true_origin) {
+void take_step(ivec3 step, vec3 t_delta, inout vec3 t_max, inout uint hit_axis, inout vec3 world_pos, int multiplier, vec3 dir, inout float curr_distance, vec3 true_origin, float multiplier_div) {
     if (multiplier > 4) {
         float minT = 1e10;
 
@@ -240,20 +254,20 @@ void take_step(ivec3 step, vec3 t_delta, inout vec3 t_max, inout uint hit_axis, 
                 continue;
             }
 
-            float current_chunk = floor(origin[i] / multiplier);
+            // Way to keep track of current chunk so this calculation can be avoided?
+            float current_chunk = floor(origin[i] * multiplier_div) * multiplier;
 
             if (step[i] == 1) {
-                current_chunk += 1.0;
+                current_chunk += multiplier;
             }
             else {
-                if (mod(origin[i], float(multiplier)) <= adjust) {
-                    current_chunk -= 1.0;
+                if ((origin[i] - current_chunk) <= adjust) {
+                    current_chunk -= multiplier;
                 } 
             }
-
-            float boundary = current_chunk * multiplier;
             
-            float t = (boundary - origin[i]) / dir[i];
+            // -> pre calc non abs t_delta?
+            float t = abs((origin[i] - current_chunk) * t_delta[i]); 
             
             if ( t < minT) {
                 minT = t;
@@ -264,7 +278,7 @@ void take_step(ivec3 step, vec3 t_delta, inout vec3 t_max, inout uint hit_axis, 
         curr_distance += minT;
 
         if (step[hit_axis] == -1) {
-            curr_distance -= 0.0001;  //15
+            curr_distance -= 0.00045;  //15
         }
         
         vec3 temp = floor(c.origin + (dir) * curr_distance);
@@ -343,6 +357,7 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
 
     uint hit_axis = 0;
     int multiplier = 1;
+    float multiplier_div = 1;
     int transparent_hits = 0;
     vec3 tansparent_mask = vec3(0.0);
     float dis = 0.0;
@@ -352,15 +367,11 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
     vec3 u_world_origin = world_origin / 64; 
 
     float y_max = 41 << 6;
+    vec3 world_max = world_origin + VOXEL_WIDTH;
+    world_max.y = y_max;
         
-    while((world_pos.x > world_origin.x && world_pos.x < world_origin.x + VOXEL_WIDTH) && (world_pos.z > world_origin.z && world_pos.z < world_origin.z + VOXEL_WIDTH)) {
+    while(isInWorld(world_pos, world_origin, world_max)) {
         // Go through chunks
-
-        if (world_pos.y > y_max|| world_pos.y < 0) {
-            return false;
-        }
-
-        uvec3 voxel_type = get_depth(world_pos, multiplier, u_world_origin);
 
         if (steps > 2000) {
             return false;
@@ -373,6 +384,8 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
                 return true;
             }
         }
+
+        uvec3 voxel_type = get_depth(world_pos, u_world_origin, multiplier, multiplier_div);
 
         // View octant boundaries
         // if (curr_distance < 500.0 && curr_distance > 2.0) {
@@ -416,7 +429,7 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
         if ( voxel_type.x == 0 ) {
             if (voxel_type.y == 0 ) {
                 steps += 1;
-                take_step(step, t_delta, t_max, hit_axis, world_pos, multiplier, dir, curr_distance, true_origin);
+                take_step(step, t_delta, t_max, hit_axis, world_pos, multiplier, dir, curr_distance, true_origin, multiplier_div);
                 continue;
             } else if (voxel_type.y == 3) {
 
@@ -427,7 +440,7 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
                 }
                 
                 steps += 1;
-                take_step(step, t_delta, t_max, hit_axis, world_pos, multiplier, dir, curr_distance, true_origin);
+                take_step(step, t_delta, t_max, hit_axis, world_pos, multiplier, dir, curr_distance, true_origin, multiplier_div);
                 continue;
 
             } else if (voxel_type.y == 2) {
@@ -609,7 +622,7 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
                 if (point_in_octant(hit_pos, world_pos, scale) == false) {
                     if (multiplier != 8) {
                         steps += 1;
-                    take_step(step, t_delta, t_max, hit_axis, world_pos, multiplier, dir, curr_distance, true_origin);
+                        take_step(step, t_delta, t_max, hit_axis, world_pos, multiplier, dir, curr_distance, true_origin, multiplier_div);
                         continue;
                     } 
                 } 
@@ -645,7 +658,7 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
         }
 
         steps += 1;
-        take_step(step, t_delta, t_max, hit_axis, world_pos, multiplier, dir, curr_distance, true_origin);
+        take_step(step, t_delta, t_max, hit_axis, world_pos, multiplier, dir, curr_distance, true_origin, multiplier_div);
         continue;
     }
     return false;
