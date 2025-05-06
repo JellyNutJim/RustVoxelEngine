@@ -278,7 +278,7 @@ void take_step(ivec3 step, vec3 t_delta, inout vec3 t_max, inout uint hit_axis, 
         curr_distance += minT;
 
         if (step[hit_axis] == -1) {
-            curr_distance -= 0.00045;  //15
+            curr_distance -= 0.0001;  //15
         }
         
         vec3 temp = floor(c.origin + (dir) * curr_distance);

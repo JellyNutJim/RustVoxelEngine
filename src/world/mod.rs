@@ -36,9 +36,7 @@ pub fn get_grid_from_seed(seed: u64, width: i32, camera_origin: [i32; 3]) -> Oct
     let camera_chunk = [(camera_origin[0] / 64) * 64, (camera_origin[1] / 64) * 64, (camera_origin[2] / 64) * 64];
     let origin = [camera_chunk[0] - ((width - 1) * 64) / 2 as i32,  camera_chunk[1] - ((width - 1) * 64) / 2 as i32, camera_chunk[2] - ((width - 1) * 64) / 2 as i32];
 
-    println!("Starting at: {:?}", camera_origin);
-
-    let mut p = OctreeGrid::new(width as u32, origin, seed, 816, r8w, r4w, r2w, r1w);
+    let mut p = OctreeGrid::new(width as u32, origin, seed, 10288, r8w, r4w, r2w, r1w);
 
     // Intial World Builder Pipelin
     create_res_8_land(&mut p);
@@ -59,10 +57,6 @@ pub fn get_empty_grid(width: i32, camera_origin: [i32; 3]) -> OctreeGrid {
     //let mut p = ShaderGrid::from(chunks, 3);
     let camera_chunk = [(camera_origin[0] / 64) * 64, (camera_origin[1] / 64) * 64, (camera_origin[2] / 64) * 64];
     let origin = [camera_chunk[0] - ((width - 1) * 64) / 2 as i32,  camera_chunk[1] - ((width - 1) * 64) / 2 as i32, camera_chunk[2] - ((width - 1) * 64) / 2 as i32];
-
-    println!("camera: {:?}", camera_origin);
-    println!("camera chunk: {:?}", camera_chunk);
-    println!("grid origin: {:?}", origin);
 
     let mut grid = OctreeGrid::new(width as u32, origin, 42, 816, r8w, r4w, r2w, r1w);
 

@@ -22,7 +22,7 @@ use crate::{get_grid_from_seed, types::Geometry, OctreeGrid, Voxel};
 #[derive(Debug)]
 pub enum WorldUpdateMessage {
     UpdateWorld(Update),
-    BufferUpdated(usize),
+    BufferUpdated(usize, bool, usize, i32),
     Shutdown,
 }
 
@@ -215,7 +215,13 @@ impl WorldUpdater {
 
                         println!("Copy Time {}", i.elapsed().as_millis());
                         
-                        if let Err(_e) = update_tx.send(WorldUpdateMessage::BufferUpdated(next_buffer)) {
+                        if let Err(_e) = update_tx.send(
+                            match update {
+                                Update::Shift(axis, dir) => { WorldUpdateMessage::BufferUpdated(next_buffer, true, axis, dir) },
+                                _ => { WorldUpdateMessage::BufferUpdated(next_buffer, false, 0, 0) }
+                            }
+
+                            ) {
                             println!("Failed");
                             shutdown = true; // Exit if we can't send messages
                         } else {

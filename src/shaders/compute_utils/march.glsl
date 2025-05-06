@@ -25,7 +25,7 @@ bool isInWorld(vec3 pos, vec3 world_min, vec3 world_max) {
     if (pos.z < world_min.z || pos.z > world_max.z)
         return false;
         
-    if (pos.y < world_min.y || pos.y > world_max.y)
+    if (pos.y < world_min.y || pos.y > 100000)
         return false;
 
     return true;

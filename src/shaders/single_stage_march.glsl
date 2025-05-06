@@ -11,8 +11,6 @@ layout(set = 0, binding = 0) uniform camera_subbuffer {
     vec3 time;
 } c;
 
-
-//  TEST IF 3D MATIX OF BIT SHIFTING IS FASTER FOR VOXEL CHECKING!
 layout(set = 0, binding = 1) readonly buffer VoxelBuffer {
     uint voxels[409293];
 } v_buf;
@@ -166,9 +164,9 @@ uvec3 get_geom(uint type, uint index) {
     return uvec3(0,0,0);
 }
 
-uvec3 get_depth(vec3 pos, vec3 u_world_origin, inout int multiplier, inout float multiplier_div) {
+uvec3 get_depth(vec3 pos, inout int multiplier, inout float multiplier_div) {
     vec3 chunk_loc = floor(pos / 64);
-    uvec3 rel_chunk_loc = uvec3(chunk_loc - u_world_origin);
+    uvec3 rel_chunk_loc = uvec3(chunk_loc);
 
     uint index = rel_chunk_loc.x + (rel_chunk_loc.y * WIDTH) + (rel_chunk_loc.z * WIDTH_SQUARED);
 
@@ -322,11 +320,10 @@ void take_step(ivec3 step, vec3 t_delta, inout vec3 t_max, inout uint hit_axis, 
     }
 }
 
-vec3 grass2(vec3 hit_pos, float distance_from_camera) {
-    float scale = 1/(distance_from_camera * distance_from_camera);
-    vec2 uv = hit_pos.xz * scale;
+vec3 grass2(vec3 hit_pos) {
+    vec2 uv = hit_pos.xz * 0.01;
     
-    return texture(grassTexture, uv).rgb * 3.0;
+    return texture(grassTexture, uv).rgb * 10.0;
 }
 
 // Triangle intercept
@@ -373,19 +370,20 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
     float dis = 0.0;
 
     vec3 true_origin = c.origin;
-    vec3 world_origin = w_buf.origin;
-    vec3 u_world_origin = world_origin / 64; //uvec3(world_origin);
+    vec3 world_origin = vec3(0,0,0);
 
     float y_max = 41 << 6;
 
     vec3 world_max = world_origin + VOXEL_WIDTH;
     world_max.y = y_max;
 
+
     while(isInWorld(world_pos, world_origin, world_max)) {
         // Go through chunks
 
         if (steps > 2000) {
-            return false;
+            hit_colour = vec3(0, 1, 0);
+            return true;
         }
 
         if (transparent_hits > 0) {
@@ -396,45 +394,7 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
             }
         }
 
-        uvec3 voxel_type = get_depth(world_pos, u_world_origin, multiplier, multiplier_div);
-
-        // View octant boundaries
-        // if (curr_distance < 500.0 && curr_distance > 2.0) {
-
-        //     vec3 position = c.origin + dir * curr_distance;
-        //     vec3 octant_relative = mod(position, multiplier);
-            
-        //     // bit jank for now but its fine
-
-        //     float threshold = 0.1;
-        //     bool near_x = octant_relative.x < threshold || octant_relative.x > multiplier - threshold;
-        //     bool near_y = octant_relative.y < threshold || octant_relative.y > multiplier - threshold;
-        //     bool near_z = octant_relative.z < threshold || octant_relative.z > multiplier - threshold;
-            
-        //     int boundary_count = 0;
-        //     if (near_x) boundary_count++;
-        //     if (near_y) boundary_count++;
-        //     if (near_z) boundary_count++;
-            
-        //     if (boundary_count >= 2) {
-        //         float r = 0.0;
-        //         float g = 0.0;
-        //         float b = 0.0;
-
-        //         if (multiplier == 64) {
-        //             r = 1.0;
-        //         }
-        //         if (multiplier == 32) {
-        //             g = 1.0;
-        //         }
-        //         if (multiplier == 16) {
-        //             b = 1.0;
-        //         }
-        //         hit_colour = vec3(r, g, b);
-        //         return true;
-        //     }
-        // }
-
+        uvec3 voxel_type = get_depth(world_pos, multiplier, multiplier_div);
 
         // Voxels
         if ( voxel_type.x == 0 ) {
@@ -491,52 +451,6 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
             float h2 = (float(height_2) / 255);
             float h3 = (float(height_3) / 255);
 
-
-            // Check if side has been hit
-            //vec3 rel_pos = fract(c.origin + dir * curr_distance);
-
-            // // x
-            // if (hit_axis == 0) {
-            //     if (step.x == 1) {
-            //         float m = h2 - h0;
-            //         float y_on_line = m * (rel_pos.z) + h0;
-
-            //         if (y_on_line > rel_pos.y) {
-            //             hit_colour = stone();
-            //             return true;
-            //         }
-            //     } else {
-            //         float m = h3 - h1;
-            //         float y_on_line = m * (rel_pos.z) + h1;
-
-            //         if (y_on_line > rel_pos.y) {
-            //             hit_colour = stone();
-            //             return true;
-            //         }
-            //     }
-            // }
-
-            // // z
-            // if (hit_axis == 2) {
-            //      if (step.z == 1) {
-            //         float m = h1 - h0;
-            //         float y_on_line = m * (rel_pos.x) + h0;
-
-            //         if (y_on_line > rel_pos.y) {
-            //             hit_colour = stone();
-            //             return true;
-            //         }
-            //     } else {
-            //         float m = h3 - h2;
-            //         float y_on_line = m * (rel_pos.x) + h2;
-
-            //         if (y_on_line > rel_pos.y) {
-            //             hit_colour = stone();
-            //             return true;
-            //         }
-            //     }
-            // }
-
             float scale = float(multiplier);
 
             // Dodgey temp fix until stepping is sorted out to what it should be
@@ -554,17 +468,18 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
 
                 curr_distance = t;
 
-                if (hit_pos.y > 835) {
-                    hit_colour = grass(hit_pos) * pow((hit_pos.y / 891), 3);
+                if (hit_pos.y > 10308) {
+                    hit_colour = grass(hit_pos) * pow(((hit_pos.y - 9000) / 1374), 5);
                 }
-                else if (hit_pos.y < 831) {
-                    hit_colour = sand(hit_pos) * pow((hit_pos.y / 891), 3);
+                else if (hit_pos.y < 10304) {
+                    hit_colour = sand(hit_pos) * pow(((hit_pos.y - 9000) / 1374), 5);
                 }
                 else {
-                    float ratio = (hit_pos.y - 831) / 4;
+                    float ratio = (hit_pos.y - 10304) / 4;
 
-                    hit_colour = sand(hit_pos) * (1 - ratio) + (grass(hit_pos) * pow((hit_pos.y / 891), 3)) * ratio;  
+                    hit_colour = sand(hit_pos) * (1 - ratio) + (grass(hit_pos) * pow(((hit_pos.y - 9000) / 1374), 5)) * ratio;  
                 }
+
 
                 if (transparent_hits > 0) {
                     if (dis > 50) { 
@@ -635,16 +550,16 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
 
                 curr_distance = t;
 
-                if (hit_pos.y > 835) {
-                    hit_colour = grass(hit_pos) * pow((hit_pos.y / 891), 3);
+                if (hit_pos.y > 10308) {
+                    hit_colour = grass(hit_pos) * pow(((hit_pos.y - 9000) / 1374), 5);
                 }
-                else if (hit_pos.y < 831) {
-                    hit_colour = sand(hit_pos) * pow((hit_pos.y / 891), 3);
+                else if (hit_pos.y < 10304) {
+                    hit_colour = sand(hit_pos) * pow(((hit_pos.y - 9000) / 1374), 5);
                 }
                 else {
-                    float ratio = (hit_pos.y - 831) / 4;
+                    float ratio = (hit_pos.y - 10304) / 4;
 
-                    hit_colour = sand(hit_pos) * (1 - ratio) + (grass(hit_pos) * pow((hit_pos.y / 891), 3)) * ratio;  
+                    hit_colour = sand(hit_pos) * (1 - ratio) + (grass(hit_pos) * pow(((hit_pos.y - 9000) / 1374), 5) ) * ratio;  
                 }
 
                 if (transparent_hits > 0) {
@@ -669,96 +584,6 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
     }
     return false;
 }
-
-// void apply_shadow(vec3 world_pos, vec3 ray_origin, vec3 t_max, vec3 t_delta, ivec3 step, vec3 dir, inout vec3 hit_colour, inout float curr_distance) {
-
-//     uint steps = 0;
-//     uint hit_axis = 0;
-//     int multiplier;
-
-//     //world_pos += step;
-
-//     while(steps < 30) {
-//         // Go through chunks
-
-//         uint voxel_type = get_depth(world_pos, multiplier);
-
-//         if ( multiplier == 1 ) { //world_pos == vec3(54732, 830, 10561) // multiplier == 1
-
-//             if (voxel_type == 0) {
-//                 steps += 1;
-//                 take_step(step, t_delta, t_max, hit_axis, world_pos, multiplier, dir, curr_distance);
-//                 continue;
-//             }
-
-//             uint voxel = voxel_type;
-
-//             uint n0 = voxel_type & 0xFu;                 // Bottom back left 
-//             uint n1 = (voxel_type & 0xF0u) >> 4u;        // Bottom front left
-//             uint n2 = (voxel_type & 0xF00u) >> 8u;       // Bottom back right
-//             uint n3 = (voxel_type & 0xF000u) >> 12u;     // Bottom front right
-
-//             uint n4 = (voxel_type & 0xF0000u) >> 16u;    // Top back left
-//             uint n5 = (voxel_type & 0xF00000u) >> 20u;   // Top front left
-//             uint n6 = (voxel_type & 0xF000000u) >> 24u;  // Top back right
-//             uint n7 = (voxel_type & 0xF0000000u) >> 28u; // Top front right
-            
-//             // For 
-//             uint height_0 = n4 != 0u ? n4 + 15 : n0;
-//             uint height_1 = n5 != 0u ? n5 + 15 : n1;
-//             uint height_2 = n6 != 0u ? n6 + 15 : n2;
-//             uint height_3 = n7 != 0u ? n7 + 15 : n3;
-
-//             // Temp fix to deal with missing voxels
-//             if (height_0 == 0) { 
-//                 height_0 = 1;
-//             }
-
-//             if (height_1 == 0) { 
-//                 height_1 = 1;
-//             }
-
-//             if (height_2 == 0) { 
-//                 height_2 = 1;
-//             }
-
-//             if (height_3 == 0) { 
-//                 height_3 = 1;
-//             }
-
-//             vec3 v0 = world_pos + vec3(0, (float(height_0 - 1) / 29), 0);
-//             vec3 v1 = world_pos + vec3(1, (float(height_1 - 1) / 29), 0);
-//             vec3 v2 = world_pos + vec3(0, (float(height_2 - 1) / 29), 1);
-//             vec3 v3 = world_pos + vec3(1, (float(height_3 - 1) / 29), 1);
-
-//             float t = 0.0;
-
-//             if (intersection_test(ray_origin, dir, v0, v1, v2, t) == true) {
-//                 hit_colour *= 0.9;
-//                 return;
-//             }
-            
-//             if (intersection_test(ray_origin, dir, v1, v2, v3, t) == true) {
-//                 hit_colour *= 0.9;
-//                 return;
-//             }
-
-//             steps += 1;
-//             take_step(step, t_delta, t_max, hit_axis, world_pos, 1, dir, curr_distance);
-//             continue;
-//         }
-
-//         steps += 1;
-//         take_step(step, t_delta, t_max, hit_axis, world_pos, multiplier, dir, curr_distance);
-
-//         // if (voxel_type != 0 && voxel_type != 3) {
-//         //     hit_colour *= 0.5;
-//         //     return;
-//         // }
-//     }
-
-//     return;
-// }
 
 void main() {
     ivec2 pixel_coords = ivec2(gl_GlobalInvocationID.xy);
@@ -823,48 +648,7 @@ void main() {
 
     if (hit == true) {
 
-        //atomicAdd(stat_buf.hit_total, 1);
-
-        // Get lighting
-        vec3 hit_pos = c.origin + dir * (curr_distance - 0.001);
-        world_pos = floor(hit_pos);
-        dir = normalize((c.sun_loc - hit_pos));
-
-        t_delta = abs(vec3(1.0)/dir);
-
-        if (dir.x < 0.0) {
-            step.x = -1;
-            t_max.x = ((world_pos.x) - hit_pos.x);
-        }
-        else {
-            step.x = 1;
-            t_max.x = ((world_pos.x + 1.0) - hit_pos.x);
-        }
-
-        if (dir.y < 0.0) {
-            step.y = -1;
-            t_max.y = ((world_pos.y) - hit_pos.y);
-        }
-        else {
-            step.y = 1;
-            t_max.y = ((world_pos.y + 1.0) - hit_pos.y);
-        }
-
-        if (dir.z < 0.0) {
-            step.z = -1;
-            t_max.z = ((world_pos.z) - hit_pos.z);
-        }
-        else {
-            step.z = 1;
-            t_max.z = ((world_pos.z + 1.0) - hit_pos.z);
-        }
-
-        t_max /= dir;
-
-        //apply_shadow(world_pos, hit_pos, t_max, t_delta, step, dir, hit_colour, curr_distance);
-
         imageStore(storageImage, pixel_coords, vec4(hit_colour, 1.0));
-
         return;
     }
     
@@ -880,10 +664,8 @@ void main() {
 
     // Check for world intersection
     if (origin.y > 816 && dir.y < 0) {
-        // float y_hit_dis = (768 - origin.y) / dir.y;
-        // vec3 hp = origin + dir * y_hit_dis;
 
-        vec3 planet_loc = vec3(origin.x, -900000.0, origin.y);
+        vec3 planet_loc = vec3(origin.x, -900000.0, origin.z);
         float radius = 900768.0;
 
         vec3 oc = planet_loc - c.origin;
@@ -893,8 +675,10 @@ void main() {
         float discriminant = b*b - 4*a*c;
 
         if (discriminant >= 0) {
+            vec3 rel_planet_loc = vec3(origin.x + w_buf.origin.x, origin.y, origin.z + w_buf.origin.z);
+
             float y_hit_dis = (816 - origin.y) / dir.y; 
-            vec3 hp = origin + dir * y_hit_dis;
+            vec3 hp = rel_planet_loc + dir * y_hit_dis;
             float scale = 0.00003;
             float nx = hp.x * scale;
             float nz = hp.z * scale;

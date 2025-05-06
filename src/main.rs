@@ -78,7 +78,7 @@ const POSTIONAL_MOVEMENT: bool = true;
 const WORLD_INTERACTION: bool = true;
 const AUTO_MOVE_FORWARDS: bool = false;
 const STARTING_ORIENTATION: (f64, f64) = (PI, 0.0);
-const INITIAL_SPEED_MULTILIER: f64 = 50.2;
+const INITIAL_SPEED_MULTILIER: f64 = 40.0;
 
 // Testing constants
 const MEASURE_FRAME_TIMES: bool = false;
@@ -88,7 +88,7 @@ const EARLY_EXIT: bool = false;
 const PAUSE_GENERATION: bool = false;
 
 // Render Options
-const USE_BEAM_OPTIMISATION: bool = true;
+const USE_BEAM_OPTIMISATION: bool = false;
 const RESIZEABLE_WINDOW: bool = true;
 const USE_VSYNC: bool = false;
 const USE_FULLSCREEN: bool = false;
@@ -110,7 +110,7 @@ fn main() -> Result<(), impl Error> {
 
 static TEXTURES: [TextureInfo; 1] = 
 [
-    TextureInfo { path: "assets\\Ground054_4K-PNG_Color.png", name: "Grass" }
+    TextureInfo { path: "assets\\Grass008_4K-PNG_Color.png", name: "Grass" }
 ];
 
 struct App {
@@ -143,7 +143,8 @@ struct App {
 
     start: Instant,
     frame_times: Vec<f64>,
-    render_data: Vec<(u32, u32, u32)>
+    render_data: Vec<(u32, u32, u32)>,
+    current_world_origin: [i32; 3],
 }
 
 struct RenderContext {
@@ -397,33 +398,30 @@ impl App {
         ));
 
         let width = 321.0;
-        //let middle = Vec3::from(64.0 * width + (64.0 * width)/2.0, 830.0, 64.0 * width + (64.0 * width)/2.0);
+
         let mid = u32::max_value() as f64 / 100.0;  // Basically i32 mid untio
         println!("{}", mid); 
-        //let middle = Vec3::from(mid,830.0, mid);
 
 
-        let mut x = 17700.0;
-        let y = 850.0;
-        let z = 10560.0;
 
-        //21300 2286 8063
+        let mut start_location = Vec3::from(17700.0, 10272.0, 10560.0);
 
-        //let seed = 42;
-        //let seed = 1023;
+        // Original Testing Coordinates
+        // let mut x = 17700.0;
+        // let y = 850.0;
+        // let z = 10560.0;
 
         let seed = SEED;
-
 
         let temp = PerlinNoise::new(seed, 0.00003);
         let mut found = false;
         
         // Ensures camera always starts on land
         while !found {
-            if temp.get_noise_at_point(x, z) > 0.05 {
+            if temp.get_noise_at_point(start_location.x, start_location.z) > 0.05 {
                 found = true;
             } else {
-                    x += 1.0;
+                    start_location.x += 1.0;
             }
         }
 
@@ -436,23 +434,25 @@ impl App {
             z: h_angle.sin() * v_angle.cos()
         };
 
-        let middle = Vec3::from(x, y, z);
-
         let camera_location = CameraLocation { 
-            location: middle, 
+            location: Vec3::from(width * 31.0, 10356.0, width * 31.0),
             direction: initial_direction, 
-            old_loc: middle, 
+            old_loc: Vec3::from(width * 31.0, 10356.0, width * 31.0), 
             h_angle: h_angle, 
             v_angle: v_angle, 
-            sun_loc: Vec3::from(10000.0, 3000.0, 10000.0)
+            sun_loc: Vec3::from(0.0, 3000.0, 0.0)
         };
+
+        println!("World Position {:?}", start_location);
 
         let mut initial_world = if USE_EMPTY_GRID {
-            get_empty_grid(width as i32, [middle.x as i32, middle.y as i32, middle.z as i32])
+            get_empty_grid(width as i32, [start_location.x as i32, start_location.y as i32, start_location.z as i32])
         } else {
-            get_grid_from_seed(42, width as i32, [middle.x as i32, middle.y as i32, middle.z as i32])
+            get_grid_from_seed(42, width as i32, [start_location.x as i32, start_location.y as i32, start_location.z as i32])
         };
 
+        let current_world_origin = initial_world.origin;
+        println!("INITIAL ORIGIN: {:?}", current_world_origin);
         //For testing
 
         let v33 = Geometry::FourHeightSurface(FourHeightSurface::from(
@@ -487,26 +487,24 @@ impl App {
 
 
 
-        initial_world.insert_geometry([middle.x as i32 - 8, middle.y as i32, (middle.z - 8.0) as i32], v33,false);
-        initial_world.insert_geometry([middle.x as i32 - 8, middle.y as i32, (middle.z - 7.0) as i32], v34, false);
-        initial_world.insert_geometry([middle.x as i32 - 8, middle.y as i32 - 2, (middle.z - 8.0) as i32], Geometry::Voxel(Voxel::from(2)), false);
+        initial_world.insert_geometry([start_location.x as i32 - 8, start_location.y as i32, (start_location.z - 8.0) as i32], v33,false);
+        initial_world.insert_geometry([start_location.x as i32 - 8, start_location.y as i32, (start_location.z - 7.0) as i32], v34, false);
+        initial_world.insert_geometry([start_location.x as i32 - 8, start_location.y as i32 - 2, (start_location.z - 8.0) as i32], Geometry::Voxel(Voxel::from(2)), false);
 
         
-        initial_world.insert_subchunk([middle.x as i32, middle.y as i32, (middle.z + 10.0) as i32], v33, 2, false);
-        initial_world.insert_subchunk([middle.x as i32, middle.y as i32, (middle.z) as i32], v34, 2, false);
-        initial_world.insert_subchunk([middle.x as i32, middle.y as i32 - 10, (middle.z) as i32], v35, 2, false);
+        initial_world.insert_subchunk([start_location.x as i32, start_location.y as i32, (start_location.z + 10.0) as i32], v33, 2, false);
+        initial_world.insert_subchunk([start_location.x as i32, start_location.y as i32, (start_location.z) as i32], v34, 2, false);
+        initial_world.insert_subchunk([start_location.x as i32, start_location.y as i32 - 10, (start_location.z) as i32], v35, 2, false);
 
-        initial_world.insert_geometry([middle.x as i32, middle.y as i32 - 20, (middle.z) as i32], Geometry::Voxel(Voxel::from(2)), false);
+        initial_world.insert_geometry([start_location.x as i32, start_location.y as i32 - 20, (start_location.z) as i32], Geometry::Voxel(Voxel::from(2)), false);
 
-
-        println!("{:?}", middle);
 
         // Get Vector World Data
         let flat_world = initial_world.flatten_world();
         let mut voxels = flat_world.1;
         let mut meta_data = flat_world.0;
 
-        println!("len: {} {}", voxels.len(), meta_data.len());
+        println!("World Data Length: {}\nSpatial Index Length: {}", voxels.len(), meta_data.len());
 
         // Resize
         voxels.resize(500000000, 0);  
@@ -874,6 +872,7 @@ impl App {
             start,
             frame_times,
             render_data,
+            current_world_origin,
         }
     }
 }
@@ -1344,8 +1343,24 @@ impl ApplicationHandler for App {
                 //println!("Checking for messages in RedrawRequested");
                 while let Ok(msg) = self.update_receiver.try_recv() {
                     println!("Received {:?}", msg);
-                    if let WorldUpdateMessage::BufferUpdated(new_buffer_index) = msg {
+                    if let WorldUpdateMessage::BufferUpdated(new_buffer_index, is_shift, axis, dir) = msg {
                         println!("Switching buffer to {}", new_buffer_index);
+
+                        if is_shift == true {
+                            if axis == 0 {
+                                self.camera_location.location.x += (-dir as f64) * 64.0;
+                            } 
+                            else if axis == 1 {
+                                self.camera_location.location.y += (-dir as f64) * 64.0;
+                            }
+                            else {
+                                self.camera_location.location.z += (-dir as f64) * 64.0;
+                            }
+                        }
+
+                        println!("{:?}", self.camera_location.location);
+
+
                         self.last_n_press = false;
                         self.current_voxel_buffer = new_buffer_index;
                     }
@@ -1388,6 +1403,12 @@ impl ApplicationHandler for App {
                 // Calculate camera buffer variables and set them to the buffer
                 let uniform_camera_subbuffer = {
                     let look_from = self.camera_location.location;
+
+                    let world_position_1 = Vec3 {
+                        x: look_from.x.floor(),
+                        y: look_from.y.floor(),
+                        z: look_from.z.floor(),
+                    };
                     
                     // Update world when exiting the centre octree
                     let curr_pos_chunk = (look_from / 64.0).floor();
@@ -1397,6 +1418,7 @@ impl ApplicationHandler for App {
 
 
                     if PAUSE_GENERATION == false {
+
                         if diff.x != 0.0 {
                             //println!("axis: {}, dir: {}", 0, diff.x);
                             self.world_updater.request_update(Update::Shift(0, diff.x as i32));
@@ -1409,7 +1431,7 @@ impl ApplicationHandler for App {
                     }
 
                     let look_distance = 1.0;
-                    let look_at = self.camera_location.location + self.camera_location.direction * look_distance;
+                    let look_at = look_from + self.camera_location.direction * look_distance;
                     self.camera_location.old_loc = look_from;
 
 
@@ -1432,31 +1454,16 @@ impl ApplicationHandler for App {
 
                     let viewport_upper_left = look_from - (w * focal_length) - viewport_u/2.0 - viewport_v/2.0;
                     let pixel00_loc = viewport_upper_left + (pixel_delta_u + pixel_delta_v) * 0.5;
+                    
+                    // println!("look from{:?}", look_from);
+                    // println!("look orei{:?}", pixel00_loc);
 
-
-                    // Caculate world positions at different scales
-                    let world_position_1 = Vec3 {
-                        x: look_from.x.floor(),
-                        y: look_from.y.floor(),
-                        z: look_from.z.floor(),
-                    };
 
                     let t = self.start.elapsed().as_secs_f32();
-                    let period = 2.0;
-
-                    let normalized_t = (t % period) / period;
-    
-                    let s = if normalized_t < 0.5 {
-                        normalized_t * 2.0
-                    } else {
-                        2.0 - normalized_t * 2.0
-                    };
-
-
                     let time = [
                         t,
                         t.fract(),
-                        s,
+                        1.0,
                         1.0, // Extra Number
                     ];
 
@@ -1469,8 +1476,6 @@ impl ApplicationHandler for App {
                         sun_position: [self.camera_location.sun_loc.x as f32, self.camera_location.sun_loc.y as f32, self.camera_location.sun_loc.z as f32, 1.0],
                         time: time,
                     };
-
-                    //println!("{:?}", look_from);
                     
 
                     let subbuffer = self.camera_buffer.allocate_sized().unwrap();
