@@ -139,7 +139,7 @@ bool isInWorld(vec3 pos, vec3 world_min, vec3 world_max) {
     if (pos.z < world_min.z || pos.z > world_max.z)
         return false;
         
-    if (pos.y < world_min.y || pos.y > 100000)
+    if (pos.y < world_min.y || pos.y > world_max.y)
         return false;
 
     return true;
@@ -223,15 +223,15 @@ vec3 get_surface_colour(vec3 hit_pos, int transparent_hits, vec3 transparent_mas
     vec3 hit_colour = vec3(0,0,0);
 
     if (hit_pos.y > 10308) {
-        hit_colour = grass(hit_pos) * pow(((hit_pos.y - 9000) / 1374), 5);
+        hit_colour = grass(hit_pos) * pow(((hit_pos.y - 9000) / 1389), 5);
     }
     else if (hit_pos.y < 10304) {
-        hit_colour = sand(hit_pos) * pow(((hit_pos.y - 9000) / 1374), 5);
+        hit_colour = sand(hit_pos) * pow(((hit_pos.y - 9000) / 1389), 5);
     }
     else {
         float ratio = (hit_pos.y - 10304) / 4;
 
-        hit_colour = sand(hit_pos) * (1 - ratio) + (grass(hit_pos) * pow(((hit_pos.y - 9000) / 1374), 5) ) * ratio;  
+        hit_colour = sand(hit_pos) * (1 - ratio) + (grass(hit_pos) * pow(((hit_pos.y - 9000) / 1389), 5) ) * ratio;  
     }
 
     if (transparent_hits > 0) {

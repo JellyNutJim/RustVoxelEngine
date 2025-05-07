@@ -288,25 +288,58 @@ impl GenPipeLine {
 // Height map application functions, combines different height levels to produce more varies terrain
 impl GenPipeLine {
 
-    // Populates the biome map, and the heightmap for sized 8 voxels (1/4 of the total biome and height data)
-    fn res_8_map_gen(&mut self, x_pos: u32, z_pos: u32, map_coords: (usize, usize), axis: usize) {
+    fn res_8_map_gen_line(&mut self, x_pos: u32, z_pos: u32, map_coords: (usize, usize), axis: usize) {
         let map_coords_2 = (map_coords.0 * 2, map_coords.1 * 2);
 
-        let max: (u32,u32) = if axis == 0 {
-            (9, 8)
-        } 
-        else if axis == 1 {
-            (8, 9)
-        }
-        else if axis == 2 {
-            (9,9)
-        }
-        else {
-            (8,8)
-        };
+        // let row = if axis == 2 {
+        //     ((0, 8), (7, 8))
+        // } else {
+        //     ((7, 8), (0, 8))
+        // };
 
-        for x in 0..max.0 {
-            for z in 0..max.1 {
+        let row = ((0, 8), (0, 8));
+
+        for x in row.0.0..row.0.1 {
+            for z in row.1.0..row.1.1 {
+                // World position
+                let x_adj = (x_pos + x * 8) as f64;
+                let z_adj = (z_pos + z * 8) as f64;
+
+                let x_usize = x as usize;
+                let z_usize = z as usize;
+
+                // Biome mapping
+                let map_x = map_coords.0 + x_usize * 8;
+                let map_z = map_coords.1 + z_usize * 8;
+
+                // Heightmap mapping
+                let height_map_x = map_coords_2.0 + x_usize * 16;
+                let height_map_z = map_coords_2.1 + z_usize * 16;
+
+                let height = self.get_landmass_noise(x_adj, z_adj);
+
+                self.height_map.set(
+                    height_map_x,
+                    height_map_z,
+                    height,
+                );
+
+                // Insert new biome data -> determined after base heightmap gen so it can be used for biome processing
+                self.biome_map.set(map_x, map_z, self.get_biome_at(x_adj, z_adj, height));
+
+                // Update height to represent biome type
+                self.apply_full_biome_height(x_adj, z_adj, (height_map_x, height_map_z), (map_x, map_z));
+            }
+        }
+
+    }
+
+    // Populates the biome map, and the heightmap for sized 8 voxels (1/4 of the total biome and height data)
+    fn res_8_map_gen(&mut self, x_pos: u32, z_pos: u32, map_coords: (usize, usize)) {
+        let map_coords_2 = (map_coords.0 * 2, map_coords.1 * 2);
+
+        for x in 0..8 {
+            for z in 0..8 {
 
                 // World position
                 let x_adj = (x_pos + x * 8) as f64;
@@ -424,9 +457,15 @@ static POSITIONS_EXLCUDING: [(usize, usize); 3] = [(0, 1), (1, 0), (1, 1)];
 
 // Visible API, 
 
-pub fn generate_res_8_maps(world: &mut OctreeGrid, x_pos: u32, z_pos: u32, axis: usize)  {
+pub fn gen_res_8_map_line(world: &mut OctreeGrid, x_pos: u32, z_pos: u32, axis: usize) {
     let map_c = world.generator.get_map_coords(x_pos, z_pos, world.origin);
-    world.generator.res_8_map_gen(x_pos, z_pos, map_c, axis);
+
+    world.generator.res_8_map_gen_line(x_pos, z_pos, map_c, axis);
+}
+
+pub fn generate_res_8_maps(world: &mut OctreeGrid, x_pos: u32, z_pos: u32) {
+    let map_c = world.generator.get_map_coords(x_pos, z_pos, world.origin);
+    world.generator.res_8_map_gen(x_pos, z_pos, map_c);
 }
 
 // Intialises the base heightmap, intialises the base biome map, inserts 16x16 voxels
@@ -447,7 +486,7 @@ pub fn generate_res_8(world: &mut OctreeGrid, x_pos: u32, z_pos: u32) {
             let c1 = map_c.1 + (z * 16) as usize;
 
             if c0 == 41072 || c1 == 41072 {
-                continue;
+                continue
             }
 
             let geometry = generate_four_height_surfaces(world, 8, 8.0, 8, sea_height, (c0, c1));

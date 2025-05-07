@@ -42,10 +42,13 @@ use vulkano::{
     Validated, Version, VulkanError, VulkanLibrary,
 };
 use winit::{
-    application::ApplicationHandler, dpi::PhysicalPosition, event::{MouseButton, WindowEvent}, event_loop::{ActiveEventLoop, EventLoop}, keyboard::{KeyCode, PhysicalKey}, window::{CursorGrabMode, Fullscreen, Window, WindowId}
+    application::ApplicationHandler, dpi::PhysicalPosition, event::{MouseButton, WindowEvent}, event_loop::{ActiveEventLoop, EventLoop}, keyboard::{Key, KeyCode, PhysicalKey}, window::{CursorGrabMode, Fullscreen, Window, WindowId}
 
 };
 
+
+#[global_allocator]
+static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 use vulkano::command_buffer::CopyBufferToImageInfo;
 use vulkano::format::Format;
@@ -66,7 +69,7 @@ mod testing;
 
 use rendering::{ WorldUpdateMessage, WorldUpdater, Update, CameraBufferData, CameraLocation };
 use world::{get_grid_from_seed, get_empty_grid, create_octree_map, Octree, OctreeGrid};
-use testing::test;
+use testing::*;
 
 use types::{Vec3, Geometry, Voxel, FourHeightSurface, SteepFourHeightSurface, TextureInfo};
 use noise_gen::PerlinNoise; 
@@ -75,17 +78,17 @@ use noise_gen::PerlinNoise;
 const CONFINE_CURSOR: bool = false;
 const ORIENTATION_MOVEMENT: bool = true;
 const POSTIONAL_MOVEMENT: bool = true;
-const WORLD_INTERACTION: bool = true;
+const WORLD_INTERACTION: bool = false;
 const AUTO_MOVE_FORWARDS: bool = false;
-const STARTING_ORIENTATION: (f64, f64) = (PI, 0.0);
-const INITIAL_SPEED_MULTILIER: f64 = 40.0;
+const STARTING_ORIENTATION: (f64, f64) = (PI/2.0, 0.0);
+const INITIAL_SPEED_MULTILIER: f64 = 50.0;
 
 // Testing constants
 const MEASURE_FRAME_TIMES: bool = false;
 const MEASURE_MARCH_DATA: bool = false; // frame times must also be true + Atomic add uncommented in shaders
 const PRINT_FRAME_STATS: bool = false;
 const EARLY_EXIT: bool = false;
-const PAUSE_GENERATION: bool = false;
+const PAUSE_GENERATION: bool = true;
 
 // Render Options
 const USE_BEAM_OPTIMISATION: bool = true;
@@ -101,7 +104,7 @@ const USE_EMPTY_GRID: bool = false;
 fn main() -> Result<(), impl Error> {
 
     // Demonstration of memory
-    test();
+    //intial_world_generation_test();
 
     let event_loop = EventLoop::new().unwrap();
     let mut app = App::new(&event_loop);
@@ -1200,15 +1203,47 @@ impl ApplicationHandler for App {
                     PhysicalKey::Code(KeyCode::KeyD) => { self.camera_location.location = self.camera_location.location + (self.camera_location.direction.cross(up)) * dis }
                     PhysicalKey::Code(KeyCode::Space) => { self.camera_location.location += Vec3::from(0.0, 0.25, 0.0)  }
                     PhysicalKey::Code(KeyCode::ControlLeft) => { self.camera_location.location += Vec3::from(0.0, -0.25, 0.0)  }
-                    PhysicalKey::Code(KeyCode::ArrowRight) => { self.camera_location.sun_loc -= Vec3::from(100.0, 0.0, 0.0) }
-                    PhysicalKey::Code(KeyCode::ArrowLeft) => { self.camera_location.sun_loc += Vec3::from(100.0, 0.0, 0.0) }
-                    PhysicalKey::Code(KeyCode::ArrowUp) => { self.camera_location.sun_loc += Vec3::from(0.0, 100.0, 0.0) }
-                    PhysicalKey::Code(KeyCode::ArrowDown) => { self.camera_location.sun_loc -= Vec3::from(0.0, 100.0, 0.0) }
+                    // PhysicalKey::Code(KeyCode::ArrowRight) => { self.camera_location.sun_loc -= Vec3::from(100.0, 0.0, 0.0) }
+                    // PhysicalKey::Code(KeyCode::ArrowLeft) => { self.camera_location.sun_loc += Vec3::from(100.0, 0.0, 0.0) }
+                    // PhysicalKey::Code(KeyCode::ArrowUp) => { self.camera_location.sun_loc += Vec3::from(0.0, 100.0, 0.0) }
+                    // PhysicalKey::Code(KeyCode::ArrowDown) => { self.camera_location.sun_loc -= Vec3::from(0.0, 100.0, 0.0) }
 
                     PhysicalKey::Code(KeyCode::KeyP) => { 
                         let now = Instant::now();
                         if self.last_n_press == false {
+                            self.shift_world(0, 1);
+                            //self.last_n_press = true;
+                        }
+                    }
+
+                    PhysicalKey::Code(KeyCode::ArrowUp) => {
+                        let now = Instant::now();
+                        if self.last_n_press == false {
+                            self.shift_world(0, -1);
+                            //self.last_n_press = true;
+                        }
+                    }
+
+                    PhysicalKey::Code(KeyCode::ArrowDown) => {
+                        let now = Instant::now();
+                        if self.last_n_press == false {
+                            self.shift_world(2, 1);
+                            //self.last_n_press = true;
+                        }
+                    }
+
+                    PhysicalKey::Code(KeyCode::ArrowLeft) => {
+                        let now = Instant::now();
+                        if self.last_n_press == false {
                             self.shift_world(2, -1);
+                            //self.last_n_press = true;
+                        }
+                    }
+
+                    PhysicalKey::Code(KeyCode::ArrowRight) => {
+                        let now = Instant::now();
+                        if self.last_n_press == false {
+                            self.shift_world(2, 1);
                             //self.last_n_press = true;
                         }
                     }
@@ -1349,12 +1384,15 @@ impl ApplicationHandler for App {
                         if is_shift == true {
                             if axis == 0 {
                                 self.camera_location.location.x += (-dir as f64) * 64.0;
+                                self.camera_location.old_loc.x += (-dir as f64) * 64.0;
                             } 
                             else if axis == 1 {
                                 self.camera_location.location.y += (-dir as f64) * 64.0;
+                                self.camera_location.old_loc.y += (-dir as f64) * 64.0;
                             }
                             else {
                                 self.camera_location.location.z += (-dir as f64) * 64.0;
+                                self.camera_location.old_loc.z += (-dir as f64) * 64.0;
                             }
                         }
 

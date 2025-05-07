@@ -371,9 +371,37 @@ impl OctreeGrid {
         }
 
         let mut update_chunk_copy = update_chunk.clone();
+        let mut behind_chunk_copy = update_chunk.clone();
+        behind_chunk_copy[axis] -= 64;
+
         for _i in 0..self.width as usize {
-            generate_res_8_maps(self, update_chunk_copy[0] as u32, update_chunk_copy[2] as u32, 4);
+            generate_res_8_maps(self, update_chunk_copy[0] as u32, update_chunk_copy[2] as u32);
+            if dir == 1 {
+                gen_res_8_map_line(self, behind_chunk_copy[0] as u32, behind_chunk_copy[2] as u32, axis);
+                behind_chunk_copy[alt_axis] += 64;
+            }
+
             update_chunk_copy[alt_axis] += 64;
+        }
+
+        // Generte absent line
+        if dir == 1 {
+            let mut behind_chunk_copy = update_chunk.clone();
+            behind_chunk_copy[axis] -= 64;
+
+            for _i in 0..self.width as usize {
+                generate_res_8(self, behind_chunk_copy[0] as u32, behind_chunk_copy[2] as u32);
+
+                let c_ind = self.get_chunk_pos(&behind_chunk_copy);
+
+                for j in 0..self.width {
+                    let grid_index = c_ind[0] as u32 + (c_ind[1] as u32 + j)  * self.width + c_ind[2] as u32 * self.width.pow(2);
+                    let index = self.spatial_map[grid_index as usize] as usize;
+                    self.flat_chunks[index] = self.trees[index].flatten().1;
+                }
+
+                behind_chunk_copy[alt_axis] += 64;
+            }
         }
 
         // Populate moved chunks with new data, loops through the row of chunks to be generated

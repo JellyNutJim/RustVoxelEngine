@@ -259,11 +259,7 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
     vec3 true_origin = c.origin;
     vec3 world_origin = vec3(0,0,0);
 
-    float y_max = 41 << 6;
-
     vec3 world_max = world_origin + VOXEL_WIDTH;
-    world_max.y = y_max;
-
 
     while(isInWorld(world_pos, world_origin, world_max)) {
         // Go through chunks

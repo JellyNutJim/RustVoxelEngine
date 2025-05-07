@@ -125,7 +125,7 @@ fn create_res_8_land(world: &mut OctreeGrid) {
         for z in 0..world.width {
             let c_x = x * 64 + world.origin[0] as u32;
             let c_z = z * 64 + world.origin[2] as u32;
-            generate_res_8_maps(world, c_x, c_z, 4);
+            generate_res_8_maps(world, c_x, c_z);
         }
     }
 

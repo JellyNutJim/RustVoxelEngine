@@ -254,8 +254,6 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
     vec3 world_origin = vec3(0,0,0);
 
     vec3 world_max = world_origin + VOXEL_WIDTH;
-    float y_max = 41 << 6;
-    world_max.y = y_max;
 
     //vec3 u_world_origin = world_origin / 64; 
         
