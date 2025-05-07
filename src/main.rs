@@ -88,7 +88,7 @@ const EARLY_EXIT: bool = false;
 const PAUSE_GENERATION: bool = false;
 
 // Render Options
-const USE_BEAM_OPTIMISATION: bool = false;
+const USE_BEAM_OPTIMISATION: bool = true;
 const RESIZEABLE_WINDOW: bool = true;
 const USE_VSYNC: bool = false;
 const USE_FULLSCREEN: bool = false;
@@ -404,7 +404,7 @@ impl App {
 
 
 
-        let mut start_location = Vec3::from(17700.0, 10272.0, 10560.0);
+        let mut start_location = Vec3::from(17700.0, 10272.0, 100560.0);
 
         // Original Testing Coordinates
         // let mut x = 17700.0;

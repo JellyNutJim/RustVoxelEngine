@@ -239,123 +239,10 @@ uvec3 get_depth(vec3 pos, inout int multiplier, inout float multiplier_div) {
     return get_geom(v_buf.voxels[index], index);
 }
 
-void take_step(ivec3 step, vec3 t_delta, inout vec3 t_max, inout uint hit_axis, inout vec3 world_pos, int multiplier, vec3 dir, inout float curr_distance, vec3 true_origin, float multiplier_div) {
-    if (multiplier > 4) {
-        float minT = 1e10;
-
-        vec3 origin = true_origin + dir * curr_distance;
-
-        const float adjust = 0.0001 * multiplier;
-        bool is_near_edge;
-
-        for (uint i = 0; i < 3; i++) {
-            if (dir[i] == 0) {
-                continue;
-            }
-
-            // Way to keep track of current chunk so this calculation can be avoided?
-            float current_chunk = floor(origin[i] * multiplier_div) * multiplier;
-
-            if (step[i] == 1) {
-                current_chunk += multiplier;
-            }
-            else {
-                if ((origin[i] - current_chunk) <= adjust) {
-                    current_chunk -= multiplier;
-                } 
-            }
-            
-            // -> pre calc non abs t_delta?
-            float t = abs((origin[i] - current_chunk) * t_delta[i]); 
-            
-            if ( t < minT) {
-                minT = t;
-                hit_axis = i;
-            }
-        }
-
-        curr_distance += minT;
-
-        if (step[hit_axis] == -1) {
-            curr_distance -= 0.00045;  //15
-        }
-        
-        vec3 temp = floor(c.origin + (dir) * curr_distance);
-
-        if (dir[hit_axis] < 0.0) {
-            temp[hit_axis] += step[hit_axis];
-        }
-
-        t_max += (abs(temp - world_pos)) * t_delta;
-        
-        world_pos = temp;
-        return;
-    }
-
-    if(t_max.x < t_max.y) {
-        if(t_max.x < t_max.z) {
-            world_pos.x += step.x;
-            curr_distance = t_max.x;
-            t_max.x += t_delta.x;
-            hit_axis = 0;
-        } else {
-            world_pos.z += step.z;
-            curr_distance = t_max.z;
-            t_max.z += t_delta.z;
-            hit_axis = 2;
-        }
-    } 
-    else {
-        if(t_max.y < t_max.z) {
-            world_pos.y += step.y;
-            curr_distance = t_max.y;
-            t_max.y += t_delta.y;
-            hit_axis = 1;
-        } else {
-            world_pos.z += step.z;
-            curr_distance = t_max.z;
-            t_max.z += t_delta.z;
-            hit_axis = 2;
-        }
-    }
-}
-
 vec3 grass2(vec3 hit_pos) {
     vec2 uv = hit_pos.xz * 0.01;
     
     return texture(grassTexture, uv).rgb * 10.0;
-}
-
-// Triangle intercept
-bool intersection_test(vec3 origin, vec3 dir, vec3 v0, vec3 v1, vec3 v2, inout float t) {
-    vec3 v0v1 = v1 - v0;
-    vec3 v0v2 = v2 - v0;
-    vec3 pvec = cross(dir, v0v2);
-    float det = dot(v0v1, pvec);
-
-    if (abs(det) < 0.0001) { return false; }
-
-    float invDet = 1 / det;
-
-    vec3 tvec = origin - v0;
-    float u = dot(tvec, pvec) * invDet;
-    if (u < 0 || u > 1) { return false; }
-
-    vec3 qvec = cross(tvec, v0v1);
-    float v = dot(dir, qvec) * invDet;
-    if (v < 0 || u + v > 1) { return false; }
-
-    vec3 barycentricCoords;
-    
-    t = dot(v0v2, qvec) * invDet;
-    
-    // Ray intersection
-    if (t > 0.0001) {
-        barycentricCoords = vec3(1.0 - u - v, u, v);
-        return true;
-    }
-
-    return false;
 }
 
 bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_delta, ivec3 step, vec3 dir, inout vec3 hit_colour, inout float curr_distance, inout uint steps) {
@@ -468,29 +355,7 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
 
                 curr_distance = t;
 
-                if (hit_pos.y > 10308) {
-                    hit_colour = grass(hit_pos) * pow(((hit_pos.y - 9000) / 1374), 5);
-                }
-                else if (hit_pos.y < 10304) {
-                    hit_colour = sand(hit_pos) * pow(((hit_pos.y - 9000) / 1374), 5);
-                }
-                else {
-                    float ratio = (hit_pos.y - 10304) / 4;
-
-                    hit_colour = sand(hit_pos) * (1 - ratio) + (grass(hit_pos) * pow(((hit_pos.y - 9000) / 1374), 5)) * ratio;  
-                }
-
-
-                if (transparent_hits > 0) {
-                    if (dis > 50) { 
-                        hit_colour = tansparent_mask;
-                        return true;
-                    }
-
-                    float t_per = (dis / 164);
-
-                    hit_colour = (hit_colour * (0.3 - t_per) + tansparent_mask * (0.7 + t_per));
-                }
+                hit_colour = get_surface_colour(hit_pos, transparent_hits, tansparent_mask, dis);
 
                 return true;
             }
@@ -550,29 +415,7 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
 
                 curr_distance = t;
 
-                if (hit_pos.y > 10308) {
-                    hit_colour = grass(hit_pos) * pow(((hit_pos.y - 9000) / 1374), 5);
-                }
-                else if (hit_pos.y < 10304) {
-                    hit_colour = sand(hit_pos) * pow(((hit_pos.y - 9000) / 1374), 5);
-                }
-                else {
-                    float ratio = (hit_pos.y - 10304) / 4;
-
-                    hit_colour = sand(hit_pos) * (1 - ratio) + (grass(hit_pos) * pow(((hit_pos.y - 9000) / 1374), 5) ) * ratio;  
-                }
-
-                if (transparent_hits > 0) {
-                    //dis = curr_distance - transparent_distance;
-                    if (dis > 50) { 
-                        hit_colour = tansparent_mask;
-                        return true;
-                    }
-
-                    float t_per = (dis / 164);
-
-                    hit_colour = (hit_colour * (0.3 - t_per) + tansparent_mask * (0.7 + t_per));
-                }
+                hit_colour = get_surface_colour(hit_pos, transparent_hits, tansparent_mask, dis);
 
                 return true;
             }
