@@ -435,12 +435,18 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
             if (intersection_test(c.origin, dir, v0, v1, v2, t) == true || intersection_test(c.origin, dir, v1, v2, v3, t) == true) {
                 vec3 hit_pos = c.origin + dir * t;
 
-                if (point_in_octant(hit_pos, world_pos, scale) == false) {
-                    if (multiplier != 8) {
+                if (multiplier > 4) {
+                    vec3 rel_pos = floor(world_pos / scale) * scale;   
+                    if (point_in_octant(hit_pos, rel_pos, scale) == false) {
                         steps += 1;
                         take_step(step, t_delta, t_max, hit_axis, world_pos, multiplier, dir, curr_distance, true_origin, multiplier_div);
                         continue;
-                    } 
+                    }
+                }
+                else if (point_in_octant(hit_pos, world_pos, scale) == false) {
+                    steps += 1;
+                    take_step(step, t_delta, t_max, hit_axis, world_pos, multiplier, dir, curr_distance, true_origin, multiplier_div);
+                    continue;
                 } 
 
                 curr_distance = t;

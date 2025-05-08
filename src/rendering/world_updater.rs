@@ -116,6 +116,11 @@ impl WorldUpdater {
                         let mut world = thread_world.lock().unwrap();
                         // Get next buffer index
                         let next_buffer = (current_buffer + 1) % 2;
+
+                        // let gen_time;
+                        // let stage_time;
+                        // let flatten_time;
+                        // let copy_time;
                         
                         let i = Instant::now();
                         match update {
@@ -128,15 +133,16 @@ impl WorldUpdater {
                             }
                             Update::SwitchSeed(seed) => {
                                 // DOES NOT CURRENTLY WORK NEEDS PLAYER LOCATION
-                                *world = get_grid_from_seed(seed, 201, [0, 0,0]);
+                                *world = get_grid_from_seed(seed, 321, [(321*64)/2, (321*64)/2,(321*64)/2]);
                                 world.flatten_world();
                             }
                             Update::Shift(axis, dir) => {
                                 // Shift origin
-                                println!("ORIGIN BEFORE: {:?}", world.origin);
-                                println!("axis: {axis} {dir}");
+
+                                let i = Instant::now();
                                 world.shift(axis, dir);
-                                println!("ORIGIN AFTER: {:?}", world.origin);
+                                println!("Generation Time {}", i.elapsed().as_millis());
+
                             }
                         };
                         println!("Shift time: {}", i.elapsed().as_millis());
@@ -146,13 +152,6 @@ impl WorldUpdater {
 
                         let flat_world = world.get_flat_world();
                         //let i = Instant::now();
-
-                        // for (i, v) in flat_world.1.iter().enumerate() {
-                        //     persistent_buffer[i] = *v;
-                        // }
-
-                        //w.resize(150000000, 0);
-                        //println!("resize time: {}", i.elapsed().as_millis());
 
                         println!("LENGTH: {}", flat_world.1.len());
                         
@@ -167,7 +166,7 @@ impl WorldUpdater {
                             mapped_meta[..flat_world.0.len()].copy_from_slice(&flat_world.0);
                         }
 
-                        println!("initial transfer {}", i.elapsed().as_millis());
+                        println!("Insert Buffer time {}", i.elapsed().as_millis());
 
                         let i = Instant::now();
 
@@ -190,31 +189,21 @@ impl WorldUpdater {
                             .unwrap();
                 
                         let command_buffer = builder.build().unwrap();
+
                             
                         // Execute and wait for completion
                         command_buffer.execute(transfer_queue.clone())
                             .unwrap()
                             .then_signal_fence_and_flush()
                             .unwrap()
-                            .wait(None /* timeout */)
+                            .wait(None )
                             .unwrap();
 
-                        
-                        // let future = sync::now(device.clone())
-                        //     .then_execute(queue.clone(), command_buffer)
-                        //     .unwrap()
-                        //     .then_signal_fence_and_flush()
-                        //     .unwrap();
-
-                        //let _ = future;
-
-    
+                        println!("Stage to actual buffer time {}", i.elapsed().as_millis());
+                            
                         // Update current buffer and notify main thread
                         current_buffer = next_buffer;
-                        println!("Updated Buffer");
 
-                        println!("Copy Time {}", i.elapsed().as_millis());
-                        
                         if let Err(_e) = update_tx.send(
                             match update {
                                 Update::Shift(axis, dir) => { WorldUpdateMessage::BufferUpdated(next_buffer, true, axis, dir) },
