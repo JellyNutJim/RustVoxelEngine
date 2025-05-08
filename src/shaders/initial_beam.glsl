@@ -36,6 +36,9 @@ layout(set = 0, binding = 5) buffer StatBuffer {
     uint march_total;
     uint hit_total;
     uint miss_total;
+    uint min_steps;
+    uint max_steps;
+    uint check;
 } stat_buf;
 
 layout(set = 0, binding = 6) readonly buffer OctantMapBuffer {
@@ -485,10 +488,17 @@ void main() {
 
     bool hit = get_intersect(pixel_coords, world_pos, t_max, t_delta, step, dir, hit_colour, curr_distance, transparent_distance, steps);
 
-    //atmoicAdd(stat_buf.march_total, steps);
+    // if (stat_buf.check == 1) {
+    //     atomicAdd(stat_buf.march_total, steps);
+    //     atomicMin(stat_buf.min_steps, steps);
+    //     atomicMax(stat_buf.max_steps, steps);
+    // }
 
     if (hit == true) {
-        //atmoicAdd(stat_buf.hit_total, 1);
+
+        // if (stat_buf.check == 1) {
+        //     atomicAdd(stat_buf.hit_total, 1);
+        // }
 
         if (transparent_distance != 0) { curr_distance = transparent_distance; }
 
@@ -501,7 +511,10 @@ void main() {
 
     // infinity represents a world miss
     r_buf.ray_distances[pixel_coords.x][pixel_coords.y] = 1.0/0.0;
-    //atmoicAdd(stat_buf.miss_total, 1);
+    
+    // if (stat_buf.check == 1) {
+    //     atomicAdd(stat_buf.miss_total, 1);
+    // }
 
     if ( RENDER_OUT_OF_WORLD_FEATURES == false ) {
         float k = (normalize(dir).y + 1.0) * 0.5;

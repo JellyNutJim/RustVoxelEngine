@@ -37,6 +37,9 @@ layout(set = 0, binding = 5) buffer StatBuffer {
     uint march_total;
     uint hit_total;
     uint miss_total;
+    uint min_steps;
+    uint max_steps;
+    uint check;
 } stat_buf;
 
 layout(set = 0, binding = 6) buffer OctantMapBuffer {
@@ -608,49 +611,16 @@ void main() {
 
         hit = get_intersect(pixel_coords, world_pos, t_max, t_delta, step, dir, hit_colour, curr_distance, steps);
 
-        //atmoicAdd(stat_buf.march_total, steps);
+        // if (stat_buf.check == 1) {
+        //     atomicAdd(stat_buf.march_total, steps);
+        //     //atomicMin(stat_buf.min_steps, steps);
+        //     atomicMax(stat_buf.max_steps, steps);
+        // }
 
         if (hit == true) {
-
-            //atmoicAdd(stat_buf.hit_total, 1);
-
-            // Get lighting
-            vec3 hit_pos = c.origin + dir * (curr_distance - 0.001);
-            world_pos = floor(hit_pos);
-            dir = normalize((c.sun_loc - hit_pos));
-
-            t_delta = abs(vec3(1.0)/dir);
-
-            if (dir.x < 0.0) {
-                step.x = -1;
-                t_max.x = ((world_pos.x) - hit_pos.x);
-            }
-            else {
-                step.x = 1;
-                t_max.x = ((world_pos.x + 1.0) - hit_pos.x);
-            }
-
-            if (dir.y < 0.0) {
-                step.y = -1;
-                t_max.y = ((world_pos.y) - hit_pos.y);
-            }
-            else {
-                step.y = 1;
-                t_max.y = ((world_pos.y + 1.0) - hit_pos.y);
-            }
-
-            if (dir.z < 0.0) {
-                step.z = -1;
-                t_max.z = ((world_pos.z) - hit_pos.z);
-            }
-            else {
-                step.z = 1;
-                t_max.z = ((world_pos.z + 1.0) - hit_pos.z);
-            }
-
-            t_max /= dir;
-
-            //apply_shadow(world_pos, hit_pos, t_max, t_delta, step, dir, hit_colour, curr_distance);
+            // if (stat_buf.check == 1) {
+            //     atomicAdd(stat_buf.hit_total, 1);
+            // }
 
             imageStore(storageImage, pixel_coords, vec4(hit_colour, 1.0));
 
@@ -658,7 +628,9 @@ void main() {
         }
     }
 
-    //atmoicAdd(stat_buf.miss_total, 1);
+    // if (stat_buf.check == 1) {
+    //     atomicAdd(stat_buf.miss_total, 1);
+    // }
 
     if ( RENDER_OUT_OF_WORLD_FEATURES == false ) {
         float k = (normalize(dir).y + 1.0) * 0.5;

@@ -33,6 +33,8 @@ layout(set = 0, binding = 5) buffer StatBuffer {
     uint march_total;
     uint hit_total;
     uint miss_total;
+    uint min_steps;
+    uint max_steps;
 } stat_buf;
 
 layout(set = 0, binding = 6) readonly buffer OctantMapBuffer {
@@ -483,15 +485,24 @@ void main() {
 
     hit = get_intersect(pixel_coords, world_pos, t_max, t_delta, step, dir, hit_colour, curr_distance, steps);
 
-    //atomicAdd(stat_buf.march_total, steps);
+    //if (stat_buf.check == 1) {
+    // atomicAdd(stat_buf.march_total, steps);
+    // atomicMin(stat_buf.min_steps, steps);
+    // atomicMax(stat_buf.max_steps, steps);
+    // }
 
     if (hit == true) {
+        //if (stat_buf.check == 1) {
+        //atomicAdd(stat_buf.hit_total, 1);
+        //}
 
         imageStore(storageImage, pixel_coords, vec4(hit_colour, 1.0));
         return;
     }
     
+    //if (stat_buf.check == 1) {
     //atomicAdd(stat_buf.miss_total, 1);
+    //}
 
     if ( RENDER_OUT_OF_WORLD_FEATURES == false ) {
         float k = (normalize(dir).y + 1.0) * 0.5;

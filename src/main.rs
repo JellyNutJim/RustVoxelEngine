@@ -80,26 +80,34 @@ const ORIENTATION_MOVEMENT: bool = true;
 const POSTIONAL_MOVEMENT: bool = true;
 const WORLD_INTERACTION: bool = false;
 const AUTO_MOVE_FORWARDS: bool = false;
-const STARTING_ORIENTATION: (f64, f64) = (PI/2.0, 0.0);
-const INITIAL_SPEED_MULTILIER: f64 = 50.0;
+
+//const WORLD_STARTING_LOCATION: (f64, f64, f64) = (18128.0, 10350.0, 10860.0); // Stationary Scenario 2
+
+const MOVE_TO_LANDMASS: bool = false;
+const INITIAL_SPEED_MULTILIER: f64 = 30.0;
 
 // Testing constants
 const MEASURE_FRAME_TIMES: bool = false;
 const MEASURE_MARCH_DATA: bool = false; // frame times must also be true + Atomic add uncommented in shaders
 const PRINT_FRAME_STATS: bool = false;
 const EARLY_EXIT: bool = false;
-const PAUSE_GENERATION: bool = true;
+const PAUSE_GENERATION: bool = false;
 
 // Render Options
 const USE_BEAM_OPTIMISATION: bool = true;
-const RESIZEABLE_WINDOW: bool = true;
+const RESIZEABLE_WINDOW: bool = false;
 const USE_VSYNC: bool = false;
 const USE_FULLSCREEN: bool = false;
-const RESOLUTION: (u32, u32) = (800, 800);
+const RESOLUTION: (u32, u32) = (1000, 800);
 
 // Sarting conditions
-const SEED: u64 = 42;
+const SEED: u64 = 43;
 const USE_EMPTY_GRID: bool = false;
+const STARTING_ORIENTATION: (f64, f64) = (PI/2.0, 0.0);
+const WORLD_STARTING_LOCATION: (f64, f64, f64) = (35538.0, 10356.0, 100560.0); 
+
+static DATA: [u32; 6] = [0,0,0,2000,1,1];
+
 
 fn main() -> Result<(), impl Error> {
 
@@ -142,12 +150,15 @@ struct App {
 
     last_n_press: bool,
     last_frame_time: Instant,
+    generic_timer: Instant,
+    last_axis: (usize, i32),
+    record_data: bool,
+
     texture_map: HashMap<String, Arc<ImageView>>,
 
     start: Instant,
     frame_times: Vec<f64>,
-    render_data: Vec<(u32, u32, u32)>,
-    current_world_origin: [i32; 3],
+    render_data: Vec<(u32, u32, u32, u32, u32)>,
 }
 
 struct RenderContext {
@@ -163,13 +174,13 @@ struct RenderContext {
 }
 
 impl App {
-    fn update_world(&mut self) {
+    fn update_world(&self) {
         let mut rng = rand::rng();
 
         self.world_updater.request_update(Update::SwitchSeed(rng.random_range(1..99999)));
     }
 
-    fn place_voxel(&mut self, u: Update) {
+    fn place_voxel(&self, u: Update) {
         if let Update::AddVoxel(_, _, _, _) = u {
             self.world_updater.request_update(u);
         }
@@ -178,7 +189,7 @@ impl App {
         }
     }
 
-    fn shift_world(&mut self, axis: usize, dir: i32) {
+    fn shift_world(&self, axis: usize, dir: i32) {
         self.world_updater.request_update(Update::Shift(axis, dir));
     }   
 
@@ -203,15 +214,15 @@ impl App {
         
         // Save frame times and march data if true
         if MEASURE_MARCH_DATA {
-            if let Err(e) = writeln!(file, "frame_number,frame_time_ms,total_steps,rays_hit,rays_missed") {
+            if let Err(e) = writeln!(file, "frame_number,frame_time_ms,total_steps,rays_hit,rays_missed,min_steps,max_steps") {
                 println!("{}", e);
                 return;
             }
             
             for (i, (&time, &march_data)) in self.frame_times.iter().zip(self.render_data.iter()).enumerate() {
-                let (total_steps, rays_hit, rays_missed) = march_data;
-                if let Err(e) = writeln!(file, "{},{:.4},{},{},{}", 
-                                         i+1, time * 1000.0, total_steps, rays_hit, rays_missed) {
+                let (total_steps, rays_hit, rays_missed, min_steps, max_steps) = march_data;
+                if let Err(e) = writeln!(file, "{},{:.4},{},{},{},{},{}", 
+                                         i+1, time * 1000.0, total_steps, rays_hit, rays_missed, min_steps, max_steps) {
                     println!("failed to write data: {}", e);
                     return;
                 }
@@ -407,7 +418,7 @@ impl App {
 
 
 
-        let mut start_location = Vec3::from(17700.0, 10272.0, 100560.0);
+        let mut start_location = Vec3::from(WORLD_STARTING_LOCATION.0, 10272.1, WORLD_STARTING_LOCATION.2);
 
         // Original Testing Coordinates
         // let mut x = 17700.0;
@@ -420,13 +431,16 @@ impl App {
         let mut found = false;
         
         // Ensures camera always starts on land
-        while !found {
-            if temp.get_noise_at_point(start_location.x, start_location.z) > 0.05 {
-                found = true;
-            } else {
-                    start_location.x += 1.0;
+        if MOVE_TO_LANDMASS {
+            while !found {
+                if temp.get_noise_at_point(start_location.x, start_location.z) > 0.05 {
+                    found = true;
+                } else {
+                        start_location.x += 1.0;
+                }
             }
         }
+
 
         let h_angle: f64 = STARTING_ORIENTATION.0;
         let v_angle: f64 = STARTING_ORIENTATION.1;
@@ -438,9 +452,9 @@ impl App {
         };
 
         let camera_location = CameraLocation { 
-            location: Vec3::from(width * 31.0, 10356.0, width * 31.0),
+            location: Vec3::from(width * 31.0, WORLD_STARTING_LOCATION.1, width * 31.0),
             direction: initial_direction, 
-            old_loc: Vec3::from(width * 31.0, 10356.0, width * 31.0), 
+            old_loc: Vec3::from(width * 31.0, WORLD_STARTING_LOCATION.1, width * 31.0), 
             h_angle: h_angle, 
             v_angle: v_angle, 
             sun_loc: Vec3::from(0.0, 3000.0, 0.0)
@@ -591,7 +605,7 @@ impl App {
 
         // Stores every other pixel, supports up to 8k resolution screen size
         let ray_distance_buffer_size = ( 7680.0 * 4320.0 ) as i32 + 15;
-        let stat_buffer_size = 3;
+        let stat_buffer_size = 6;
 
         let ray_distance_buffer = Buffer::new_slice::<f32>(
             memory_allocator.clone(),
@@ -847,9 +861,12 @@ impl App {
         let rcx = None;
         let last_n_press = false;
         let last_frame_time = Instant::now();
+        let generic_timer = Instant::now();
         let start = Instant::now();
+        let last_axis = (0, 1);
         let frame_times: Vec<f64> = Vec::new();
-        let render_data: Vec<(u32, u32, u32)> = Vec::new();
+        let render_data: Vec<(u32, u32, u32, u32, u32)> = Vec::new();
+        let record_data = false;
 
         App {
             instance,
@@ -871,11 +888,13 @@ impl App {
             update_receiver,
             last_n_press,
             last_frame_time,
+            generic_timer,
+            last_axis,
             texture_map,
             start,
             frame_times,
             render_data,
-            current_world_origin,
+            record_data,
         }
     }
 }
@@ -1208,16 +1227,7 @@ impl ApplicationHandler for App {
                     // PhysicalKey::Code(KeyCode::ArrowUp) => { self.camera_location.sun_loc += Vec3::from(0.0, 100.0, 0.0) }
                     // PhysicalKey::Code(KeyCode::ArrowDown) => { self.camera_location.sun_loc -= Vec3::from(0.0, 100.0, 0.0) }
 
-                    PhysicalKey::Code(KeyCode::KeyP) => { 
-                        let now = Instant::now();
-                        if self.last_n_press == false {
-                            self.shift_world(0, 1);
-                            //self.last_n_press = true;
-                        }
-                    }
-
                     PhysicalKey::Code(KeyCode::ArrowUp) => {
-                        let now = Instant::now();
                         if self.last_n_press == false {
                             self.shift_world(0, -1);
                             //self.last_n_press = true;
@@ -1225,15 +1235,13 @@ impl ApplicationHandler for App {
                     }
 
                     PhysicalKey::Code(KeyCode::ArrowDown) => {
-                        let now = Instant::now();
                         if self.last_n_press == false {
-                            self.shift_world(2, 1);
+                            self.shift_world(0, 1);
                             //self.last_n_press = true;
                         }
                     }
 
                     PhysicalKey::Code(KeyCode::ArrowLeft) => {
-                        let now = Instant::now();
                         if self.last_n_press == false {
                             self.shift_world(2, -1);
                             //self.last_n_press = true;
@@ -1241,7 +1249,6 @@ impl ApplicationHandler for App {
                     }
 
                     PhysicalKey::Code(KeyCode::ArrowRight) => {
-                        let now = Instant::now();
                         if self.last_n_press == false {
                             self.shift_world(2, 1);
                             //self.last_n_press = true;
@@ -1249,7 +1256,6 @@ impl ApplicationHandler for App {
                     }
 
                     PhysicalKey::Code(KeyCode::KeyN) => {
-                        let now = Instant::now();
                         if self.last_n_press == false {
                             self.last_n_press = true;
                             self.update_world();
@@ -1359,27 +1365,11 @@ impl ApplicationHandler for App {
                     future.cleanup_finished();
                     rcx.previous_frame_end = Some(sync::now(self.device.clone()).boxed());
                 }
-
-                if MEASURE_MARCH_DATA == true {
-                    let stats = self.stat_buffer.read().unwrap();
-                    let total_steps = stats[0]; // Total steps 
-                    let rays_cast = stats[1];   // Total rays that hit some geometry
-                    let rays_missed = stats[2];
-                    
-                    self.render_data.push((total_steps, rays_cast, rays_missed));
-
-                    if PRINT_FRAME_STATS == true {
-                        println!("Frame stats - Total steps: {}, Ray Hits: {}, Rays Missed: {}", 
-                            total_steps, rays_cast, rays_missed);
-                    }
-                }
-
-                            
+           
                 //println!("Checking for messages in RedrawRequested");
                 while let Ok(msg) = self.update_receiver.try_recv() {
-                    println!("Received {:?}", msg);
+                    println!("Main event loop received buffer switch update: {:?}", msg);
                     if let WorldUpdateMessage::BufferUpdated(new_buffer_index, is_shift, axis, dir) = msg {
-                        println!("Switching buffer to {}", new_buffer_index);
 
                         if is_shift == true {
                             if axis == 0 {
@@ -1437,6 +1427,33 @@ impl ApplicationHandler for App {
                     rcx.viewport.extent = window_size.into();
                     rcx.recreate_swapchain = false;
                 }
+
+                if MEASURE_MARCH_DATA == true { 
+                    if self.record_data == true {
+                        let stats = self.stat_buffer.read().unwrap();
+                        let total_steps = stats[0]; // Total steps 
+                        let rays_cast = stats[1];   // Total rays that hit some geometry
+                        let rays_missed = stats[2];
+                        let min_steps = stats[3];
+                        let max_steps = stats[4];
+                        
+                        self.render_data.push((total_steps, rays_cast, rays_missed, min_steps, max_steps));
+
+                        if PRINT_FRAME_STATS == true {
+                            println!("Frame stats - Total steps: {}, Ray Hits: {}, Rays Missed: {}, Min Steps: {}, Max Steps: {}", 
+                                total_steps, rays_cast, rays_missed, min_steps, max_steps);
+                        }
+
+                        self.record_data = false;
+                    }
+
+                    if self.generic_timer.elapsed().as_millis() > 500 {
+                        self.record_data = true;
+                        self.generic_timer = Instant::now();
+                    }
+                }
+
+
 
                 // Calculate camera buffer variables and set them to the buffer
                 let uniform_camera_subbuffer = {
@@ -1521,7 +1538,8 @@ impl ApplicationHandler for App {
                     subbuffer
 
                 };
-                
+
+            
                 // Aquire next sqapchain image
                 let (image_index, suboptimal, acquire_future) = match acquire_next_image(
                     rcx.swapchain.clone(),
@@ -1603,7 +1621,15 @@ impl ApplicationHandler for App {
                 )
                 .unwrap();
 
-                builder.fill_buffer(self.stat_buffer.clone(), 0).unwrap();
+                if MEASURE_FRAME_TIMES {
+
+                    if self.record_data == true{
+                        builder.update_buffer(self.stat_buffer.clone(), &DATA[..]).unwrap();
+                        self.generic_timer = Instant::now();
+                    } else {
+                        builder.fill_buffer(self.stat_buffer.clone(), 1).unwrap();
+                    }
+                }
 
                 if USE_BEAM_OPTIMISATION == true {
                     builder
@@ -1683,13 +1709,34 @@ impl ApplicationHandler for App {
                 }
                 
                 if MEASURE_FRAME_TIMES == true {
-                    let frame_time = frame_start.elapsed();
-                    self.frame_times.push(frame_time.as_secs_f64());
+
+                    if self.record_data == true {
+                        let frame_time = frame_start.elapsed();
+                        self.frame_times.push(frame_time.as_secs_f64());
+                        
+                        if PRINT_FRAME_STATS == true {
+                            println!("Frame time: {:?}, FPS: {}", frame_time, 1.0 / frame_time.as_secs_f32());
+                        } 
+                    }
                     
-                    if PRINT_FRAME_STATS == true {
-                        println!("Frame time: {:?}, FPS: {}", frame_time, 1.0 / frame_time.as_secs_f32());
-                    } 
                 }
+                
+                // Insertion effect on performance test
+                // let time = self.generic_timer.elapsed();
+                // if time.as_millis() > 1000 {
+                //     self.generic_timer = Instant::now();
+                //     self.shift_world(self.last_axis.0, self.last_axis.1);
+                //     let temp = &mut self.last_axis;
+
+                //     *temp = match temp {
+                //         (0, 1) => (2, 1),
+                //         (2, 1) => (0, -1),
+                //         (0, -1) => (2, -1),
+                //         (2, -1) => (0, 1),
+                //         _ => (0, 0) // Will crash as this should never be reached
+                //     }
+                // }
+
             }
             _ => {}
         }

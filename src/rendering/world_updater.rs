@@ -1,6 +1,6 @@
-
-use std::{sync::{Arc, Mutex}, thread, time::Instant};
+use std::{sync::{Arc, Mutex}, thread, time::Instant, fs::{OpenOptions, File}, io::{self, Write}, path::Path};
 use crossbeam_channel::{unbounded, Sender, Receiver};
+use chrono::Local;
 
 use vulkano::{
     buffer::{Buffer, BufferCreateInfo, BufferUsage, Subbuffer},
@@ -145,14 +145,13 @@ impl WorldUpdater {
 
                             }
                         };
-                        println!("Shift time: {}", i.elapsed().as_millis());
+                        
+                        let generation_time = i.elapsed().as_millis();
 
                         // Generate new world data
                         //let mut rng = rand::rng();
 
                         let flat_world = world.get_flat_world();
-                        //let i = Instant::now();
-
                         println!("LENGTH: {}", flat_world.1.len());
                         
                         let i = Instant::now();
@@ -166,7 +165,7 @@ impl WorldUpdater {
                             mapped_meta[..flat_world.0.len()].copy_from_slice(&flat_world.0);
                         }
 
-                        println!("Insert Buffer time {}", i.elapsed().as_millis());
+                        let stage_prep_time = i.elapsed().as_millis();
 
                         let i = Instant::now();
 
@@ -199,10 +198,15 @@ impl WorldUpdater {
                             .wait(None )
                             .unwrap();
 
-                        println!("Stage to actual buffer time {}", i.elapsed().as_millis());
+                        let copy_time = i.elapsed().as_millis();
                             
                         // Update current buffer and notify main thread
                         current_buffer = next_buffer;
+
+                        // if let Err(e) = append_to_csv("times.csv", generation_time, stage_prep_time, copy_time) {
+                        //     println!("Failed to write to CSV: {:?}", e);
+                        // }
+
 
                         if let Err(_e) = update_tx.send(
                             match update {
@@ -261,4 +265,23 @@ impl Drop for WorldUpdater {
             handle.join().unwrap();
         }
     }
+}
+
+fn append_to_csv(filename: &str, gen_time: u128, stage_time: u128, copy_time: u128) -> io::Result<()> {
+    let timestamp = Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+    
+    let file_exists = Path::new(filename).exists();
+    let mut file = OpenOptions::new()
+        .write(true)
+        .create(true)
+        .append(true)
+        .open(filename)?;
+    
+    if !file_exists {
+        writeln!(file, "timestamp,gen_time,stage_time,copy_time")?;
+    }
+    
+    writeln!(file, "{},{},{},{}", timestamp, gen_time, stage_time, copy_time)?;
+    
+    Ok(())
 }
