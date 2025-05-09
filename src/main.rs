@@ -76,8 +76,8 @@ use noise_gen::PerlinNoise;
 
 // Camera Settings
 const CONFINE_CURSOR: bool = false;
-const ORIENTATION_MOVEMENT: bool = true;
-const POSTIONAL_MOVEMENT: bool = true;
+const ORIENTATION_MOVEMENT: bool = false;
+const POSTIONAL_MOVEMENT: bool = false;
 const WORLD_INTERACTION: bool = false;
 const AUTO_MOVE_FORWARDS: bool = false;
 
@@ -86,25 +86,25 @@ const AUTO_MOVE_FORWARDS: bool = false;
 const MOVE_TO_LANDMASS: bool = false;
 const INITIAL_SPEED_MULTILIER: f64 = 30.0;
 
-// Testing constants
+// Testing constants 
 const MEASURE_FRAME_TIMES: bool = false;
 const MEASURE_MARCH_DATA: bool = false; // frame times must also be true + Atomic add uncommented in shaders
 const PRINT_FRAME_STATS: bool = false;
 const EARLY_EXIT: bool = false;
-const PAUSE_GENERATION: bool = false;
+const PAUSE_GENERATION: bool = true;
 
 // Render Options
 const USE_BEAM_OPTIMISATION: bool = true;
 const RESIZEABLE_WINDOW: bool = false;
 const USE_VSYNC: bool = false;
-const USE_FULLSCREEN: bool = false;
-const RESOLUTION: (u32, u32) = (1000, 800);
+const USE_FULLSCREEN: bool = true;
+const RESOLUTION: (u32, u32) = (2560, 1440);
 
 // Sarting conditions
-const SEED: u64 = 43;
+const SEED: u64 = 42;
 const USE_EMPTY_GRID: bool = false;
 const STARTING_ORIENTATION: (f64, f64) = (PI/2.0, 0.0);
-const WORLD_STARTING_LOCATION: (f64, f64, f64) = (35538.0, 10356.0, 100560.0); 
+const WORLD_STARTING_LOCATION: (f64, f64, f64) = (18128.0, 10400.0, 11260.0); 
 
 static DATA: [u32; 6] = [0,0,0,2000,1,1];
 
@@ -1360,11 +1360,14 @@ impl ApplicationHandler for App {
             
                     self.camera_location.location = self.camera_location.location + movement;
                 }
-                
-                if let Some(future) = &mut rcx.previous_frame_end {
-                    future.cleanup_finished();
-                    rcx.previous_frame_end = Some(sync::now(self.device.clone()).boxed());
+
+                if MEASURE_FRAME_TIMES {
+                    if let Some(future) = &mut rcx.previous_frame_end {
+                        future.cleanup_finished();
+                        rcx.previous_frame_end = Some(sync::now(self.device.clone()).boxed());
+                    }
                 }
+
            
                 //println!("Checking for messages in RedrawRequested");
                 while let Ok(msg) = self.update_receiver.try_recv() {
@@ -1406,6 +1409,7 @@ impl ApplicationHandler for App {
 
                 // Recreate everything upon screen resize
                 if rcx.recreate_swapchain {
+                    println!("RECREATE");
                     let present_mode = if USE_VSYNC == true {
                         vulkano::swapchain::PresentMode::Fifo
                     } else {
