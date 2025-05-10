@@ -278,10 +278,10 @@ fn append_to_csv(filename: &str, gen_time: u128, stage_time: u128, copy_time: u1
         .open(filename)?;
     
     if !file_exists {
-        writeln!(file, "timestamp,gen_time,stage_time,copy_time")?;
+        writeln!(file, "timestamp,seed,gen_time,stage_time,copy_time")?;
     }
     
-    writeln!(file, "{},{},{},{}", timestamp, gen_time, stage_time, copy_time)?;
+    writeln!(file, "{},{},{},{},{}", timestamp, 1330, gen_time, stage_time, copy_time)?;
     
     Ok(())
 }

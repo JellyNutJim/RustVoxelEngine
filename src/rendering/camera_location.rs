@@ -7,4 +7,5 @@ pub struct CameraLocation {
     pub v_angle: f64,
     pub direction: Vec3,
     pub sun_loc: Vec3,
+    pub v_direction: f64,
 }

@@ -565,8 +565,8 @@ void main() {
         t_delta.z = (abs(dir.z) < limit) ? 1e30 : abs(1.0 / dir.z);
 
         // If distance gain is small, just use normal marching
-        if (initial_distance > 66) {
-            world_pos = floor(origin + dir * (initial_distance - 59.9));
+        if (initial_distance > 128) {
+            world_pos = floor(origin + dir * floor(initial_distance - 128.0));            
         }
 
         if (dir.x < 0.0) {
@@ -611,26 +611,30 @@ void main() {
 
         hit = get_intersect(pixel_coords, world_pos, t_max, t_delta, step, dir, hit_colour, curr_distance, steps);
 
-        // if (stat_buf.check == 1) {
-        //     atomicAdd(stat_buf.march_total, steps);
-        //     //atomicMin(stat_buf.min_steps, steps);
-        //     atomicMax(stat_buf.max_steps, steps);
-        // }
+        if (stat_buf.check == 1) {
+            atomicAdd(stat_buf.march_total, steps);
+            atomicMax(stat_buf.max_steps, steps);
+        }
 
         if (hit == true) {
-            // if (stat_buf.check == 1) {
-            //     atomicAdd(stat_buf.hit_total, 1);
-            // }
+            if (stat_buf.check == 1) {
+                atomicAdd(stat_buf.hit_total, 1);
+            }
 
             imageStore(storageImage, pixel_coords, vec4(hit_colour, 1.0));
 
             return;
         }
-    }
-
-    // if (stat_buf.check == 1) {
-    //     atomicAdd(stat_buf.miss_total, 1);
+    } 
+    // else {
+    //     vec4 hit_colour = vec4(0,0,0,1);
+    //     imageStore(storageImage, pixel_coords, hit_colour);
+    //     return;
     // }
+
+    if (stat_buf.check == 1) {
+        atomicAdd(stat_buf.miss_total, 1);
+    }
 
     if ( RENDER_OUT_OF_WORLD_FEATURES == false ) {
         float k = (normalize(dir).y + 1.0) * 0.5;

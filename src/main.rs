@@ -74,24 +74,36 @@ use testing::*;
 use types::{Vec3, Geometry, Voxel, FourHeightSurface, SteepFourHeightSurface, TextureInfo};
 use noise_gen::PerlinNoise; 
 
+// STATIONARY SCENARIOS
+//
+//
+//
+// 4: (35538.0, 10400.0, 100560.0) (0.0,  PI/2.1)
+// 5: (37000.0, 10335.0, 100060.0) (0.0, -PI/2)
+
+// MOVEMENT SCENARIOS
+// 1: (35538.0, 10600.0, 100560.0) (PI/2.0,  0.0)
+// 2: (37000.0, 10380.0, 100060.0) (PI*1.3,  0.0)
+// 3: (37000.0, 10330.0, 100060.0) (0.0,  -PI/2.1)
+
 // Camera Settings
 const CONFINE_CURSOR: bool = false;
-const ORIENTATION_MOVEMENT: bool = false;
-const POSTIONAL_MOVEMENT: bool = false;
+const ORIENTATION_MOVEMENT: bool = true;
+const POSTIONAL_MOVEMENT: bool = true;
 const WORLD_INTERACTION: bool = false;
-const AUTO_MOVE_FORWARDS: bool = false;
+const AUTO_MOVE: bool = false;
+const AUTO_MOVE_FORWARDS: bool = false; //forwards/backwards
 
-//const WORLD_STARTING_LOCATION: (f64, f64, f64) = (18128.0, 10350.0, 10860.0); // Stationary Scenario 2
-
-const MOVE_TO_LANDMASS: bool = false;
-const INITIAL_SPEED_MULTILIER: f64 = 30.0;
+const MOVE_TO_LANDMASS: bool = true; // at start
+const INITIAL_SPEED_MULTILIER: f64 = 6.05;
 
 // Testing constants 
-const MEASURE_FRAME_TIMES: bool = false;
+const MEASURE_FRAME_TIMES: bool = false; // Press r to save results
 const MEASURE_MARCH_DATA: bool = false; // frame times must also be true + Atomic add uncommented in shaders
 const PRINT_FRAME_STATS: bool = false;
-const EARLY_EXIT: bool = false;
 const PAUSE_GENERATION: bool = true;
+const EARLY_EXIT: bool = false;
+
 
 // Render Options
 const USE_BEAM_OPTIMISATION: bool = true;
@@ -103,9 +115,10 @@ const RESOLUTION: (u32, u32) = (2560, 1440);
 // Sarting conditions
 const SEED: u64 = 42;
 const USE_EMPTY_GRID: bool = false;
-const STARTING_ORIENTATION: (f64, f64) = (PI/2.0, 0.0);
-const WORLD_STARTING_LOCATION: (f64, f64, f64) = (18128.0, 10400.0, 11260.0); 
+const STARTING_ORIENTATION: (f64, f64) = (0.0,  -PI/2.1);
+const WORLD_STARTING_LOCATION: (f64, f64, f64) = (37000.0, 10330.0, 100060.0); 
 
+// Don't change
 static DATA: [u32; 6] = [0,0,0,2000,1,1];
 
 
@@ -159,6 +172,7 @@ struct App {
     start: Instant,
     frame_times: Vec<f64>,
     render_data: Vec<(u32, u32, u32, u32, u32)>,
+    static_dir: Vec3,
 }
 
 struct RenderContext {
@@ -457,7 +471,8 @@ impl App {
             old_loc: Vec3::from(width * 31.0, WORLD_STARTING_LOCATION.1, width * 31.0), 
             h_angle: h_angle, 
             v_angle: v_angle, 
-            sun_loc: Vec3::from(0.0, 3000.0, 0.0)
+            sun_loc: Vec3::from(0.0, 3000.0, 0.0),
+            v_direction: 1.0,
         };
 
         println!("World Position {:?}", start_location);
@@ -465,7 +480,7 @@ impl App {
         let mut initial_world = if USE_EMPTY_GRID {
             get_empty_grid(width as i32, [start_location.x as i32, start_location.y as i32, start_location.z as i32])
         } else {
-            get_grid_from_seed(42, width as i32, [start_location.x as i32, start_location.y as i32, start_location.z as i32])
+            get_grid_from_seed(SEED, width as i32, [start_location.x as i32, start_location.y as i32, start_location.z as i32])
         };
 
         let current_world_origin = initial_world.origin;
@@ -867,6 +882,11 @@ impl App {
         let frame_times: Vec<f64> = Vec::new();
         let render_data: Vec<(u32, u32, u32, u32, u32)> = Vec::new();
         let record_data = false;
+        let static_dir = Vec3 {
+                    x: STARTING_ORIENTATION.0.cos() * STARTING_ORIENTATION.1.cos(),
+                    y: STARTING_ORIENTATION.1.sin(),
+                    z: STARTING_ORIENTATION.0.sin() * STARTING_ORIENTATION.1.cos()
+                };
 
         App {
             instance,
@@ -895,6 +915,7 @@ impl App {
             frame_times,
             render_data,
             record_data,
+            static_dir,
         }
     }
 }
@@ -1204,6 +1225,7 @@ impl ApplicationHandler for App {
 
                 match event.physical_key {
                     PhysicalKey::Code(KeyCode::Escape) => { std::process::exit(0) }
+                    PhysicalKey::Code(KeyCode::KeyI) => {println!("Currently at: {:?}\n Looking at: {} {}", self.camera_location.location, self.camera_location.h_angle, self.camera_location.v_angle)}
                     PhysicalKey::Code(KeyCode::KeyR) => { if MEASURE_FRAME_TIMES == true { self.save_performance_data(); } }
                     _ =>  { } 
                 }
@@ -1269,6 +1291,7 @@ impl ApplicationHandler for App {
                             println!("Set buffer index to {}", self.current_voxel_buffer);
                         }
                     }
+
                     _ =>  { print!("Non-Assigned Key")}
                 }
             }
@@ -1349,14 +1372,41 @@ impl ApplicationHandler for App {
             WindowEvent::RedrawRequested => {
                 let frame_start = std::time::Instant::now();
                 
-                if AUTO_MOVE_FORWARDS {
+                if AUTO_MOVE {
                     let delta_time = frame_start.duration_since(self.last_frame_time);
+                    let speed = INITIAL_SPEED_MULTILIER * if AUTO_MOVE_FORWARDS {1.0} else {-1.0};
 
                     self.last_frame_time = frame_start;
-                    let base_speed = Vec3::from(0.25, 0.25, 0.25) * INITIAL_SPEED_MULTILIER;
+                    let base_speed = Vec3::from(0.25, 0.25, 0.25) * speed;
 
                     let delta_seconds = delta_time.as_secs_f64() + delta_time.subsec_nanos() as f64 / 1_000_000_000.0;
-                    let movement = self.camera_location.direction * base_speed * delta_seconds * 60.0; 
+                    let movement = self.static_dir * base_speed * delta_seconds * 60.0; 
+
+                    // let rotation_speed = 0.1; 
+                    // let time_factor = delta_seconds * rotation_speed;
+
+                    // self.camera_location.h_angle += time_factor;
+
+                    // if self.camera_location.h_angle > PI {
+                    //     self.camera_location.h_angle = -PI;
+                    // } else if self.camera_location.h_angle < -PI {
+                    //     self.camera_location.h_angle = PI;
+                    // }
+
+                    // self.camera_location.v_angle += time_factor * self.camera_location.v_direction;
+                    // if self.camera_location.v_angle > PI / 2.1 {
+                    //     self.camera_location.v_angle = PI / 2.1;
+                    //     self.camera_location.v_direction = -1.0;
+                    // } else if self.camera_location.v_angle < -PI / 2.1 {
+                    //     self.camera_location.v_angle = -PI / 2.1;
+                    //     self.camera_location.v_direction = 1.0;
+                    // }
+
+                    // self.camera_location.direction = Vec3 {
+                    //     x: self.camera_location.h_angle.cos() * self.camera_location.v_angle.cos(),
+                    //     y: self.camera_location.v_angle.sin(),
+                    //     z: self.camera_location.h_angle.sin() * self.camera_location.v_angle.cos()
+                    // };
             
                     self.camera_location.location = self.camera_location.location + movement;
                 }
@@ -1451,7 +1501,7 @@ impl ApplicationHandler for App {
                         self.record_data = false;
                     }
 
-                    if self.generic_timer.elapsed().as_millis() > 500 {
+                    if self.generic_timer.elapsed().as_millis() > 300 {
                         self.record_data = true;
                         self.generic_timer = Instant::now();
                     }
@@ -1626,12 +1676,11 @@ impl ApplicationHandler for App {
                 .unwrap();
 
                 if MEASURE_FRAME_TIMES {
-
                     if self.record_data == true{
                         builder.update_buffer(self.stat_buffer.clone(), &DATA[..]).unwrap();
                         self.generic_timer = Instant::now();
                     } else {
-                        builder.fill_buffer(self.stat_buffer.clone(), 1).unwrap();
+                        builder.fill_buffer(self.stat_buffer.clone(), 0).unwrap();
                     }
                 }
 
@@ -1725,7 +1774,7 @@ impl ApplicationHandler for App {
                     
                 }
                 
-                // Insertion effect on performance test
+                //Insertion effect on performance test
                 // let time = self.generic_timer.elapsed();
                 // if time.as_millis() > 1000 {
                 //     self.generic_timer = Instant::now();
