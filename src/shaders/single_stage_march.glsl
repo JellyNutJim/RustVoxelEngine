@@ -339,21 +339,26 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
             float scale = float(multiplier);
 
             // Dodgey temp fix until stepping is sorted out to what it should be
-            vec3 octant = floor(world_pos / scale) * scale;
+            vec3 scaled_pos = floor(world_pos / scale) * scale;
 
             // Traingles verticies
-            vec3 v0 = octant + vec3(0,     h0 * scale, 0);
-            vec3 v1 = octant + vec3(scale, h1 * scale, 0);
-            vec3 v2 = octant + vec3(0,     h2 * scale, scale);
-            vec3 v3 = octant + vec3(scale, h3 * scale, scale);
+            vec3 v0 = scaled_pos + vec3(-0.01,     h0 * scale, -0.01);
+
+            vec3 v1a = scaled_pos + vec3(scale + 0.02, h1 * scale, -0.01);
+            vec3 v2a = scaled_pos + vec3(-0.01,     h2 * scale, scale + 0.02);
+
+            vec3 v1b = scaled_pos + vec3(scale + 0.01, h1 * scale, -0.02);
+            vec3 v2b = scaled_pos + vec3(-0.02,     h2 * scale, scale + 0.01);
+
+            vec3 v3 = scaled_pos + vec3(scale + 0.01, h3 * scale, scale + 0.01);
 
             float t = 0.0;
-            if (intersection_test(c.origin, dir, v0, v1, v2, t) == true || intersection_test(c.origin, dir, v1, v2, v3, t) == true) {
+            if (intersection_test(c.origin, dir, v0, v1a, v2a, t) == true || intersection_test(c.origin, dir, v1b, v2b, v3, t) == true) {
                 vec3 hit_pos = c.origin + dir * t;
 
                 curr_distance = t;
 
-                hit_colour = get_surface_colour(hit_pos, transparent_hits, tansparent_mask, dis);
+                hit_colour = get_surface_colour(hit_pos, transparent_hits, tansparent_mask, dis, multiplier);
 
                 return true;
             }
@@ -391,29 +396,37 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
             float h3 = (height_3 / 255.0) - rel_pos;
 
             float scale = float(multiplier);
-            vec3 octant = floor(world_pos / scale) * scale;
+            vec3 scaled_pos = floor(world_pos / scale) * scale;
 
             // Traingles verticies
-            vec3 v0 = octant + vec3(0,     h0 * scale, 0);
-            vec3 v1 = octant + vec3(scale, h1 * scale, 0);
-            vec3 v2 = octant + vec3(0,     h2 * scale, scale);
-            vec3 v3 = octant + vec3(scale, h3 * scale, scale);
+            vec3 v0 = scaled_pos + vec3(-0.01,     h0 * scale, -0.01);
+
+            vec3 v1 = scaled_pos + vec3(scale + 0.01, h1 * scale, -0.01);
+            vec3 v2 = scaled_pos + vec3(-0.01,     h2 * scale, scale + 0.01);
+
+            vec3 v3 = scaled_pos + vec3(scale + 0.01, h3 * scale, scale + 0.01);
 
             float t = 0.0;
             if (intersection_test(c.origin, dir, v0, v1, v2, t) == true || intersection_test(c.origin, dir, v1, v2, v3, t) == true) {
                 vec3 hit_pos = c.origin + dir * t;
 
-                if (point_in_octant(hit_pos, world_pos, scale) == false) {
-                    if (multiplier != 8) {
+                if (multiplier > 4) {
+                    vec3 rel_pos = floor(world_pos / scale) * scale;   
+                    if (point_in_octant(hit_pos, rel_pos, scale) == false) {
                         steps += 1;
                         take_step(step, t_delta, t_max, hit_axis, world_pos, multiplier, dir, curr_distance, true_origin, multiplier_div);
                         continue;
-                    } 
+                    }
+                }
+                else if (point_in_octant(hit_pos, (world_pos - 0.01), (scale + 0.01)) == false) {
+                    steps += 1;
+                    take_step(step, t_delta, t_max, hit_axis, world_pos, multiplier, dir, curr_distance, true_origin, multiplier_div);
+                    continue;
                 } 
 
                 curr_distance = t;
 
-                hit_colour = get_surface_colour(hit_pos, transparent_hits, tansparent_mask, dis);
+                hit_colour = get_surface_colour(hit_pos, transparent_hits, tansparent_mask, dis, multiplier);
 
                 return true;
             }
@@ -484,6 +497,23 @@ void main() {
     uint steps = 0;
 
     hit = get_intersect(pixel_coords, world_pos, t_max, t_delta, step, dir, hit_colour, curr_distance, steps);
+
+
+    float t;
+    if (steps <= 500.0) {
+        t = clamp(steps / 500.0, 0.0, 1.0);
+        if (t < 0.5) {
+            hit_colour = mix(vec3(0.0, 0.0, 0.3), vec3(0.4, 0.25, 0.8), t * 2.0);
+        } else {
+            hit_colour = mix(vec3(0.4, 0.25, 0.8), vec3(1.0, 0.0, 0.0), (t - 0.5) * 2.0);
+        }
+    } else {
+        t = clamp((steps - 500.0) / 500.0, 0.0, 1.0);
+        hit_colour = mix(vec3(1.0, 0.0, 0.0), vec3(0.6, 0.1, 0.0), t);
+    }
+
+    imageStore(storageImage, pixel_coords, vec4(hit_colour, 1.0));
+    return;
 
     //if (stat_buf.check == 1) {
     // atomicAdd(stat_buf.march_total, steps);

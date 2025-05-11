@@ -12,7 +12,7 @@ Triangle createTriangle(vec3 vertex0, vec3 vertex1, vec3 vertex2) {
     return tri;
 }
 
-// Triangle intercept
+// Triangle intercept https://en.wikipedia.org/wiki/M%C3%B6ller%E2%80%93Trumbore_intersection_algorithm
 bool intersection_test(vec3 origin, vec3 dir, vec3 v0, vec3 v1, vec3 v2, inout float t) {
 
     vec3 v0v1 = v1 - v0;
@@ -51,13 +51,18 @@ void take_step(ivec3 step, vec3 t_delta, inout vec3 t_max, inout uint hit_axis, 
 
         vec3 origin = true_origin + dir * curr_distance;
 
-        const float adjust = 0.0001 * multiplier;
+        const float adjust = 0.001 * float(multiplier); // 0.0001
+        const float neg_ajust = float(multiplier) - adjust;
+        uint edge_count = 0;
+        bool pre_near_edge;
         bool is_near_edge;
 
         for (uint i = 0; i < 3; i++) {
             if (dir[i] == 0) {
                 continue;
             }
+
+            pre_near_edge = false;
 
             // Way to keep track of current chunk so this calculation can be avoided?
             float current_chunk = floor(origin[i] * multiplier_div) * multiplier;
@@ -66,31 +71,40 @@ void take_step(ivec3 step, vec3 t_delta, inout vec3 t_max, inout uint hit_axis, 
                 current_chunk += multiplier;
             }
             else {
-                if ((origin[i] - current_chunk) <= adjust) {
-                    current_chunk -= multiplier;
-                } 
+
             }
             
-            // -> pre calc non abs t_delta?
             float t = abs((origin[i] - current_chunk) * t_delta[i]); 
             
             if ( t < minT) {
                 minT = t;
                 hit_axis = i;
+                //is_near_edge = pre_near_edge;
             }
+        }
+
+        // if (edge_count >= 2 && hit_axis == 1) {
+        //     world_pos[hit_axis] += step[hit_axis];
+        //     t_max[hit_axis] += t_delta[hit_axis];
+        //     curr_distance = t_max[hit_axis];
+        //     return;
+        // } 
+
+        if (step[hit_axis] == -1.0) {
+            minT += adjust;
         }
 
         curr_distance += minT;
 
-        if (step[hit_axis] == -1) {
-            curr_distance -= 0.0001;  //15 45
-        }
-        
         vec3 temp = floor(c.origin + (dir) * curr_distance);
 
-        if (dir[hit_axis] < 0.0) {
-            temp[hit_axis] += step[hit_axis];
-        }
+
+        // if (is_near_edge == false && edge_count < 2 && step[hit_axis] == -1.0) {
+        //     temp[hit_axis] += step[hit_axis];
+        // }
+
+        if (is_near_edge == false )
+        
 
         t_max += (abs(temp - world_pos)) * t_delta;
         
@@ -218,7 +232,23 @@ vec3 sand(vec3 hit_pos) {
 }
 
 
-vec3 get_surface_colour(vec3 hit_pos, int transparent_hits, vec3 transparent_mask, float dis) {
+vec3 get_surface_colour(vec3 hit_pos, int transparent_hits, vec3 transparent_mask, float dis, int multiplier) {
+    // if (transparent_hits == 1) {
+    //     return vec3(0,0,0);
+    // }
+    // if (multiplier == 1) {
+    //     return vec3(1,0,0);
+    // }
+    // if (multiplier == 2) {
+    //     return vec3(0,1,0);
+    // }
+    // if (multiplier == 4) {
+    //     return vec3(0,0,1);
+    // }
+    // if (multiplier == 8) {
+    //     return vec3(0,1,1);
+    // }
+
 
     vec3 hit_colour = vec3(0,0,0);
 

@@ -84,18 +84,18 @@ use noise_gen::PerlinNoise;
 // MOVEMENT SCENARIOS
 // 1: (35538.0, 10600.0, 100560.0) (PI/2.0,  0.0)
 // 2: (37000.0, 10380.0, 100060.0) (PI*1.3,  0.0)
-// 3: (37000.0, 10330.0, 100060.0) (0.0,  -PI/2.1)
+// 3: (37000.0, 10320.0, 100060.0) (0.0,  -PI/2.1)
 
 // Camera Settings
 const CONFINE_CURSOR: bool = false;
-const ORIENTATION_MOVEMENT: bool = true;
+const ORIENTATION_MOVEMENT: bool = false;
 const POSTIONAL_MOVEMENT: bool = true;
 const WORLD_INTERACTION: bool = false;
 const AUTO_MOVE: bool = false;
 const AUTO_MOVE_FORWARDS: bool = false; //forwards/backwards
 
 const MOVE_TO_LANDMASS: bool = true; // at start
-const INITIAL_SPEED_MULTILIER: f64 = 6.05;
+const INITIAL_SPEED_MULTILIER: f64 = 15.0;
 
 // Testing constants 
 const MEASURE_FRAME_TIMES: bool = false; // Press r to save results
@@ -107,16 +107,16 @@ const EARLY_EXIT: bool = false;
 
 // Render Options
 const USE_BEAM_OPTIMISATION: bool = true;
-const RESIZEABLE_WINDOW: bool = false;
+const RESIZEABLE_WINDOW: bool = true;
 const USE_VSYNC: bool = false;
-const USE_FULLSCREEN: bool = true;
-const RESOLUTION: (u32, u32) = (2560, 1440);
+const USE_FULLSCREEN: bool = false;
+const RESOLUTION: (u32, u32) = (1920, 1080);
 
 // Sarting conditions
 const SEED: u64 = 42;
 const USE_EMPTY_GRID: bool = false;
-const STARTING_ORIENTATION: (f64, f64) = (0.0,  -PI/2.1);
-const WORLD_STARTING_LOCATION: (f64, f64, f64) = (37000.0, 10330.0, 100060.0); 
+const STARTING_ORIENTATION: (f64, f64) = (PI*1.5,  0.0);
+const WORLD_STARTING_LOCATION: (f64, f64, f64) = (35538.0, 10400.0, 100560.0); 
 
 // Don't change
 static DATA: [u32; 6] = [0,0,0,2000,1,1];
@@ -167,7 +167,7 @@ struct App {
     last_axis: (usize, i32),
     record_data: bool,
 
-    texture_map: HashMap<String, Arc<ImageView>>,
+    //texture_map: HashMap<String, Arc<ImageView>>,
 
     start: Instant,
     frame_times: Vec<f64>,
@@ -350,7 +350,6 @@ impl App {
             })
             .expect("no suitable physical device found");
 
-        // Some little debug infos.
         println!(
             "Using device: {} (type: {:?})",
             physical_device.properties().device_name,
@@ -427,8 +426,8 @@ impl App {
 
         let width = 321.0;
 
-        let mid = u32::max_value() as f64 / 100.0;  // Basically i32 mid untio
-        println!("{}", mid); 
+        //let mid = u32::max_value() as f64 / 100.0;  // Basically i32 mid untio
+        //println!("{}", mid); 
 
 
 
@@ -484,7 +483,7 @@ impl App {
         };
 
         let current_world_origin = initial_world.origin;
-        println!("INITIAL ORIGIN: {:?}", current_world_origin);
+        //println!("INITIAL ORIGIN: {:?}", current_world_origin);
         //For testing
 
         let v33 = Geometry::FourHeightSurface(FourHeightSurface::from(
@@ -761,62 +760,62 @@ impl App {
 
         // Load and Store textures ------------------------------------------------------------------------------------
         
-        let mut staging_buffers = Vec::new();
-        let mut texture_images = Vec::new();
+        // let mut staging_buffers = Vec::new();
+        // let mut texture_images = Vec::new();
   
-        for texture_info in TEXTURES {
-            // Load the PNG file
-            let image = image::open(texture_info.path).expect("Image not found");
-            let image = match image {
-                image::DynamicImage::ImageRgba8(img) => img,
-                img => img.to_rgba8(),
-            };
+        // for texture_info in TEXTURES {
+        //     // Load the PNG file
+        //     let image = image::open(texture_info.path).expect("Image not found");
+        //     let image = match image {
+        //         image::DynamicImage::ImageRgba8(img) => img,
+        //         img => img.to_rgba8(),
+        //     };
             
-            let (width, height) = image.dimensions();
-            let image_data = image.into_raw();
+        //     let (width, height) = image.dimensions();
+        //     let image_data = image.into_raw();
 
-            let mip_levels = (width.max(height) as f32).log2().floor() as u32 + 1;
+        //     let mip_levels = (width.max(height) as f32).log2().floor() as u32 + 1;
             
-            // Create texture image
-            let texture = Image::new(
-                memory_allocator.clone(),
-                ImageCreateInfo {
-                    image_type: ImageType::Dim2d,
-                    format: Format::R8G8B8A8_SRGB,
-                    mip_levels: mip_levels,
-                    extent: [width, height, 1],
-                    usage: ImageUsage::TRANSFER_DST | ImageUsage::SAMPLED,
-                    ..Default::default()
-                },
-                AllocationCreateInfo::default(),
-            ).unwrap();
+        //     // Create texture image
+        //     let texture = Image::new(
+        //         memory_allocator.clone(),
+        //         ImageCreateInfo {
+        //             image_type: ImageType::Dim2d,
+        //             format: Format::R8G8B8A8_SRGB,
+        //             mip_levels: mip_levels,
+        //             extent: [width, height, 1],
+        //             usage: ImageUsage::TRANSFER_DST | ImageUsage::SAMPLED,
+        //             ..Default::default()
+        //         },
+        //         AllocationCreateInfo::default(),
+        //     ).unwrap();
 
-            // Create staging buffer
-            let staging_buffer = Buffer::from_iter(
-                memory_allocator.clone(),
-                BufferCreateInfo {
-                    usage: BufferUsage::TRANSFER_SRC,
-                        ..Default::default()
-                    },
-                    AllocationCreateInfo {
-                        memory_type_filter: MemoryTypeFilter::PREFER_HOST
-                            | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
-                        ..Default::default()
-                },
-                image_data,
-            ).unwrap();
+        //     // Create staging buffer
+        //     let staging_buffer = Buffer::from_iter(
+        //         memory_allocator.clone(),
+        //         BufferCreateInfo {
+        //             usage: BufferUsage::TRANSFER_SRC,
+        //                 ..Default::default()
+        //             },
+        //             AllocationCreateInfo {
+        //                 memory_type_filter: MemoryTypeFilter::PREFER_HOST
+        //                     | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+        //                 ..Default::default()
+        //         },
+        //         image_data,
+        //     ).unwrap();
 
             
             
-            // Add copy command to the batch
-            cbb.copy_buffer_to_image(CopyBufferToImageInfo::buffer_image(
-                staging_buffer.clone(),
-                texture.clone(),
-            )).unwrap();
+        //     // Add copy command to the batch
+        //     cbb.copy_buffer_to_image(CopyBufferToImageInfo::buffer_image(
+        //         staging_buffer.clone(),
+        //         texture.clone(),
+        //     )).unwrap();
             
-            staging_buffers.push(staging_buffer);
-            texture_images.push((texture_info.name.to_string(), texture));
-        }
+        //     staging_buffers.push(staging_buffer);
+        //     texture_images.push((texture_info.name.to_string(), texture));
+        // }
   
 
         cbb.copy_buffer(CopyBufferInfo::buffers(
@@ -867,11 +866,11 @@ impl App {
         );
 
         // save images to hashmap
-        let mut texture_map = HashMap::new();
-        for (name, texture) in texture_images {
-            let texture_view = ImageView::new_default(texture).unwrap();
-            texture_map.insert(name, texture_view);
-        }
+        // let mut texture_map = HashMap::new();
+        // for (name, texture) in texture_images {
+        //     let texture_view = ImageView::new_default(texture).unwrap();
+        //     texture_map.insert(name, texture_view);
+        // }
 
         let rcx = None;
         let last_n_press = false;
@@ -910,7 +909,7 @@ impl App {
             last_frame_time,
             generic_timer,
             last_axis,
-            texture_map,
+            //texture_map,
             start,
             frame_times,
             render_data,
@@ -1411,11 +1410,16 @@ impl ApplicationHandler for App {
                     self.camera_location.location = self.camera_location.location + movement;
                 }
 
-                if MEASURE_FRAME_TIMES {
-                    if let Some(future) = &mut rcx.previous_frame_end {
-                        future.cleanup_finished();
-                        rcx.previous_frame_end = Some(sync::now(self.device.clone()).boxed());
-                    }
+                // if MEASURE_FRAME_TIMES {
+                //     if let Some(future) = &mut rcx.previous_frame_end {
+                //         future.cleanup_finished();
+                //         rcx.previous_frame_end = Some(sync::now(self.device.clone()).boxed());
+                //     }
+                // }
+
+                if let Some(future) = &mut rcx.previous_frame_end {
+                    future.cleanup_finished();
+                    rcx.previous_frame_end = Some(sync::now(self.device.clone()).boxed());
                 }
 
            
@@ -1459,7 +1463,7 @@ impl ApplicationHandler for App {
 
                 // Recreate everything upon screen resize
                 if rcx.recreate_swapchain {
-                    println!("RECREATE");
+                    //println!("RECREATE");
                     let present_mode = if USE_VSYNC == true {
                         vulkano::swapchain::PresentMode::Fifo
                     } else {
@@ -1642,7 +1646,7 @@ impl ApplicationHandler for App {
                         WriteDescriptorSet::buffer(5, self.stat_buffer.clone()), 
                         WriteDescriptorSet::buffer(6, self.octant_map_buffer.clone()), 
                         WriteDescriptorSet::image_view(7, rcx.attachment_image_views[image_index as usize].clone()), // output image
-                        WriteDescriptorSet::image_view_sampler(8, self.texture_map["Grass"].clone(), sampler.clone())
+                        //WriteDescriptorSet::image_view_sampler(8, self.texture_map["Grass"].clone(), sampler.clone())
                     ],
                     [],
                 )
