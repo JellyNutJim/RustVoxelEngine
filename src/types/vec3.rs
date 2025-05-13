@@ -108,6 +108,10 @@ impl Vec3 {
         Vec3 { x, y, z }
     }
 
+    pub fn from_i32_3(origin: [i32; 3]) -> Self {
+        Vec3 {x: origin[0] as f64, y: origin[1] as f64, z: origin[2] as f64}
+    }
+
     pub fn floor(mut self) -> Self{
         self.x = self.x.floor();
         self.y = self.y.floor();

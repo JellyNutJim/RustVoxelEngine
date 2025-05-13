@@ -22,7 +22,7 @@ use crate::{get_grid_from_seed, types::Geometry, OctreeGrid, Voxel};
 #[derive(Debug)]
 pub enum WorldUpdateMessage {
     UpdateWorld(Update),
-    BufferUpdated(usize, bool, usize, i32),
+    BufferUpdated(usize, [i32; 3], bool, usize, i32),
     Shutdown,
 }
 
@@ -210,8 +210,8 @@ impl WorldUpdater {
 
                         if let Err(_e) = update_tx.send(
                             match update {
-                                Update::Shift(axis, dir) => { WorldUpdateMessage::BufferUpdated(next_buffer, true, axis, dir) },
-                                _ => { WorldUpdateMessage::BufferUpdated(next_buffer, false, 0, 0) }
+                                Update::Shift(axis, dir) => { WorldUpdateMessage::BufferUpdated(next_buffer, world.origin, true, axis, dir) },
+                                _ => { WorldUpdateMessage::BufferUpdated(next_buffer, world.origin, false, 0, 0) }
                             }
 
                             ) {

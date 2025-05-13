@@ -88,14 +88,14 @@ use noise_gen::PerlinNoise;
 
 // Camera Settings
 const CONFINE_CURSOR: bool = false;
-const ORIENTATION_MOVEMENT: bool = false;
+const ORIENTATION_MOVEMENT: bool = true;
 const POSTIONAL_MOVEMENT: bool = true;
-const WORLD_INTERACTION: bool = false;
+const WORLD_INTERACTION: bool = true;
 const AUTO_MOVE: bool = false;
 const AUTO_MOVE_FORWARDS: bool = false; //forwards/backwards
 
 const MOVE_TO_LANDMASS: bool = true; // at start
-const INITIAL_SPEED_MULTILIER: f64 = 15.0;
+const INITIAL_SPEED_MULTILIER: f64 = 15.0; // 
 
 // Testing constants 
 const MEASURE_FRAME_TIMES: bool = false; // Press r to save results
@@ -173,6 +173,7 @@ struct App {
     frame_times: Vec<f64>,
     render_data: Vec<(u32, u32, u32, u32, u32)>,
     static_dir: Vec3,
+    grid_origin: [i32; 3],
 }
 
 struct RenderContext {
@@ -855,6 +856,8 @@ impl App {
             .unwrap();
 
 
+        let grid_origin = initial_world.origin;
+
         // Create world updater thread
         let (world_updater, update_receiver) = WorldUpdater::new(
             device.clone(),
@@ -915,6 +918,7 @@ impl App {
             render_data,
             record_data,
             static_dir,
+            grid_origin,
         }
     }
 }
@@ -1312,7 +1316,7 @@ impl ApplicationHandler for App {
 
                 match button {
                     MouseButton::Left => {
-                        let voxel_loc = self.camera_location.location + self.camera_location.direction * 2.0;
+                        let voxel_loc = (self.camera_location.location + self.camera_location.direction * 2.0) + Vec3::from_i32_3(self.grid_origin);
                         let u = Update::AddVoxel(voxel_loc.x as i32, voxel_loc.y as i32, voxel_loc.z as i32, 3);
 
                         let now = Instant::now();
@@ -1322,7 +1326,7 @@ impl ApplicationHandler for App {
                         }
                     }
                     MouseButton::Right => {
-                        let voxel_loc = self.camera_location.location + self.camera_location.direction * 2.0;
+                        let voxel_loc = (self.camera_location.location + self.camera_location.direction * 2.0) + Vec3::from_i32_3(self.grid_origin);
                         let u = Update::AddVoxel(voxel_loc.x as i32, voxel_loc.y as i32, voxel_loc.z as i32, 0);
 
                         let now = Instant::now();
@@ -1426,8 +1430,9 @@ impl ApplicationHandler for App {
                 //println!("Checking for messages in RedrawRequested");
                 while let Ok(msg) = self.update_receiver.try_recv() {
                     println!("Main event loop received buffer switch update: {:?}", msg);
-                    if let WorldUpdateMessage::BufferUpdated(new_buffer_index, is_shift, axis, dir) = msg {
-
+                    if let WorldUpdateMessage::BufferUpdated(new_buffer_index, new_origin, is_shift, axis, dir) = msg {
+                        self.grid_origin = new_origin;
+                        
                         if is_shift == true {
                             if axis == 0 {
                                 self.camera_location.location.x += (-dir as f64) * 64.0;
