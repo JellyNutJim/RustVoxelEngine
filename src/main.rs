@@ -95,7 +95,7 @@ const AUTO_MOVE: bool = false;
 const AUTO_MOVE_FORWARDS: bool = false; //forwards/backwards
 
 const MOVE_TO_LANDMASS: bool = true; // at start
-const INITIAL_SPEED_MULTILIER: f64 = 15.0; // 
+const INITIAL_SPEED_MULTILIER: f64 = 100.0; // 
 
 // Testing constants 
 const MEASURE_FRAME_TIMES: bool = false; // Press r to save results

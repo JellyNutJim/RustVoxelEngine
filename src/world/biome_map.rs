@@ -8,7 +8,8 @@ pub struct BiomeMap {
 #[derive(Debug, Clone, Copy)]
 pub enum Biome {
     Single(u8),
-    Double(u8, u8, f64)
+    Double(u8, u8, f64),
+    Triple(u8, u8, u8, f64, f64)
 }
 
 #[allow(unused)]

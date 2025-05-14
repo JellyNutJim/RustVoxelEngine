@@ -75,6 +75,8 @@ impl GenPipeLine {
     // 3.0 -> Mountain
     // 4.0 -> River
 
+    // This system is jank. Ideally biome would've been able to store a varaible amount of biomes per data entry, allowing for a simpler data
+    // structure that could've allowed for more terain varieties. I never got the chance to fix this
     fn get_biome_at(&self, x: f64, z: f64, y: f64) -> Biome {
         let temp = self.temperature.get_noise_at_point(x, z).abs() * 256.0;
         let humid = self.humidity.get_noise_at_point(x, z).abs() * 256.0;
@@ -82,22 +84,48 @@ impl GenPipeLine {
         //println!("{} {}", temp, y);
 
         //return 1.0;
+        // Flat Lands
 
-        if temp > 60.0 && y > 700.0 {
-            let t;
+        if y < 10360.0 {
+            if temp > 60.0 {
+                let t = temp - 60.1;
+            
+                let elevation_factor = if y < 10330.0 {
+                    1.0
+                } else {
+                    ((10360.0 - y) as f64) / 30.0
+                };
 
-            // if temp > 79.8 {
-            //     t = 20.0;
-            // } else {
-            //     t = temp - 60.0;
-            // }
-            t = temp - 60.0;
-            let dif = t / 20.0;
-            Biome::Double(1, 2, dif)
-
-        } else {
-            Biome::Single(1)
+                let t_adjusted = t * elevation_factor.clamp(0.0, 1.0);
+                
+                let dif = t_adjusted / 20.0;
+                Biome::Double(1, 2, dif)
+            } else {
+                Biome::Single(1)         
+            }
         }
+        else {
+            if y < 10420.0 {
+
+                    let t;
+                    t = y - 10360.1;
+                    let dif = t / 60.0;
+                    Biome::Double(1, 3, dif)
+            }
+            else {
+                if temp > 60.0 {
+                    let t;
+                    t = temp - 60.1;
+                    let dif = t / 20.0;
+
+                    Biome::Double(2, 3, dif)
+                }
+                else {
+                    Biome::Single(3)
+                }
+            }
+        }
+
     }
 }
 
@@ -181,7 +209,7 @@ impl GenPipeLine {
         let distance = distance.abs();
         let scaling = 1.0 - (-distance.powf(2.0) / fall_off.powf(2.0)).exp();
 
-        let updated_height = *height + change * scaling;
+        let updated_height = *height + change * scaling; 
 
         if update == true {
             *height = updated_height;
@@ -195,42 +223,18 @@ impl GenPipeLine {
     }      
 
     fn generate_mountains (&mut self, x: f64, z: f64, map_coords: (usize, usize), update: bool) -> (u32, f64) {
-        let change  = self.get_mountain_noise(x, z);
+
+        let change  = self.get_mountain_noise(x, z).abs();
         let height = self.height_map.get_mut(map_coords.0, map_coords.1);
-        let original = *height;
 
-        if *height + change < self.sea_level {
-            let uh = *height * 0.7 + change * 0.3;
-            if update == true {
-                *height = uh;
-            }
-
-            return (4, uh)
-        }
-
-        let distance = self.sea_level + 16.0 - *height;
-
-        let mut fall_off: f64 = 3.5;
-        if original > self.sea_level && change < 0.0{
-            fall_off = 6.0;
-        }
-
-        if original < self.sea_level + 15.0 {
-            fall_off = 10.0;
-        }
-
-
-        let distance = distance.abs();
+        let distance = (change - *height).abs();
+        let fall_off: f64 = 0.1;
         let scaling = 1.0 - (-distance.powf(2.0) / fall_off.powf(2.0)).exp();
 
-        let updated_height = *height + change * scaling;
-        
+        let updated_height = *height + change; 
+
         if update == true {
             *height = updated_height;
-        }
-
-        if *height < 16.6 + self.sea_level || original < self.sea_level + 16.0{
-            return (4, updated_height)
         }
 
         (1, updated_height)
@@ -248,9 +252,10 @@ impl GenPipeLine {
 
     fn get_biome_height(&mut self, biome_id: u8, x: f64, z: f64, map_coords: (usize, usize), update: bool) -> (u32, f64) {
         match biome_id {
-            1 => { self.generate_beach(x, z, map_coords, true) }
-            2 => { self.generate_hills(x, z, map_coords, true) }
-            _ => { self.generate_beach(x, z, map_coords, true) }
+            1 => { self.generate_beach(x, z, map_coords, update) }
+            2 => { self.generate_hills(x, z, map_coords, update) }
+            3 => { self.generate_mountains(x, z, map_coords, update) }
+            _ => { self.generate_beach(x, z, map_coords, update) }
         } 
     }
 
@@ -264,17 +269,27 @@ impl GenPipeLine {
             Biome::Single(b) => {
                 res = self.get_biome_height(b, x_pos, z_pos, height_map_coord, true);
             }
-            Biome::Double(b1, b2, p) => {
-                //res = self.get_biome_height(b1, x_pos, z_pos, height_map_coord, true);
+            Biome::Double(b1, b2, mut p) => {
 
                 let h1 =  self.get_biome_height(b1, x_pos, z_pos, height_map_coord, true);
                 let h2 =  self.get_biome_height(b2, x_pos, z_pos, height_map_coord, true);
-
 
                 let height = h1.1 * (1.0 - p) + h2.1 * p;
 
                 // let cubic_p = p * p * (3.0 - 2.0 * p);
                 // let height = h1.1 * (1.0 - cubic_p) + h2.1 * cubic_p;                
+
+                self.height_map.set(height_map_coord.0, height_map_coord.1, height);
+                res = (h1.0, height);
+            }
+            Biome::Triple(b1, b2, b3, p1, p2) => {
+                let h1 =  self.get_biome_height(b1, x_pos, z_pos, height_map_coord, true);
+                let h2 =  self.get_biome_height(b2, x_pos, z_pos, height_map_coord, true);
+                let h3 =  self.get_biome_height(b3, x_pos, z_pos, height_map_coord, true);
+
+
+                let height = h1.1 * (1.0 - p1) + h2.1 * p1;
+                let height = height * (1.0 - p2) + h3.1 * p2;
 
                 self.height_map.set(height_map_coord.0, height_map_coord.1, height);
                 res = (h1.0, height);

@@ -231,8 +231,6 @@ vec3 sand(vec3 hit_pos) {
     return hit_colour;
 }
 
-
-vec3 get_surface_colour(vec3 hit_pos, int transparent_hits, vec3 transparent_mask, float dis, int multiplier) {
     // if (transparent_hits == 1) {
     //     return vec3(0,0,0);
     // }
@@ -249,6 +247,8 @@ vec3 get_surface_colour(vec3 hit_pos, int transparent_hits, vec3 transparent_mas
     //     return vec3(0,1,1);
     // }
 
+
+vec3 get_surface_colour(vec3 hit_pos, int transparent_hits, vec3 transparent_mask, float dis, int multiplier) {
 
     vec3 hit_colour = vec3(0,0,0);
 
