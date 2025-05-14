@@ -349,17 +349,23 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
             vec3 v3 = scaled_pos + vec3(scale + 0.01, h3 * scale, scale + 0.01);
 
             float t = 0.0;
-            if (intersection_test(c.origin, dir, v0, v1a, v2a, t) == true || intersection_test(c.origin, dir, v1b, v2b, v3, t) == true) {
+            if (intersection_test(c.origin, dir, v0, v1a, v2a, t) == true) {
                 vec3 hit_pos = c.origin + dir * t;
 
-                // if (scale != 1) {
-                //     hit_pos.y += scale;
-                // }
+                float min_h = min(v0.y, min(v1a.y, v2a.y));
+                float max_h = max(v0.y, max(v1a.y, v2a.y));
 
-                curr_distance = t;
+                hit_colour = get_surface_colour(hit_pos, transparent_hits, tansparent_mask, dis, multiplier, min_h, max_h);
+                return true;
+            }
 
-                hit_colour = get_surface_colour(hit_pos, transparent_hits, tansparent_mask, dis, multiplier);
+            if (intersection_test(c.origin, dir, v1b, v2b, v3, t) == true) {
+                vec3 hit_pos = c.origin + dir * t;
 
+                float min_h = min(v1b.y, min(v2b.y, v3.y));
+                float max_h = max(v1b.y, max(v2b.y, v3.y));
+
+                hit_colour = get_surface_colour(hit_pos, transparent_hits, tansparent_mask, dis, multiplier, min_h, max_h);
                 return true;
             }
         }
@@ -408,7 +414,7 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
             vec3 v3 = scaled_pos + vec3(scale + 0.01, h3 * scale, scale + 0.01);
 
             float t = 0.0;
-            if (intersection_test(c.origin, dir, v0, v1, v2, t) == true || intersection_test(c.origin, dir, v1, v2, v3, t) == true) {
+            if (intersection_test(c.origin, dir, v0, v1, v2, t) == true) {
                 vec3 hit_pos = c.origin + dir * t;
 
                 if (multiplier > 4) {
@@ -425,10 +431,38 @@ bool get_intersect(ivec2 pixel_coords, vec3 world_pos, inout vec3 t_max, vec3 t_
                     continue;
                 } 
 
+                float min_h = min(v0.y, min(v1.y, v2.y));
+                float max_h = max(v0.y, max(v1.y, v2.y));
+
                 curr_distance = t;
 
-                hit_colour = get_surface_colour(hit_pos, transparent_hits, tansparent_mask, dis, multiplier);
+                hit_colour = get_surface_colour(hit_pos, transparent_hits, tansparent_mask, dis, multiplier, min_h, max_h);
+                return true;
+            }
 
+            if (intersection_test(c.origin, dir, v1, v2, v3, t) == true) {
+                vec3 hit_pos = c.origin + dir * t;
+
+                if (multiplier > 4) {
+                    vec3 rel_pos = floor(world_pos / scale) * scale;   
+                    if (point_in_octant(hit_pos, rel_pos, scale) == false) {
+                        steps += 1;
+                        take_step(step, t_delta, t_max, hit_axis, world_pos, multiplier, dir, curr_distance, true_origin, multiplier_div);
+                        continue;
+                    }
+                }
+                else if (point_in_octant(hit_pos, (world_pos - 0.01), (scale + 0.01)) == false) {
+                    steps += 1;
+                    take_step(step, t_delta, t_max, hit_axis, world_pos, multiplier, dir, curr_distance, true_origin, multiplier_div);
+                    continue;
+                } 
+
+                float min_h = min(v1.y, min(v2.y, v3.y));
+                float max_h = max(v1.y, max(v2.y, v3.y));
+
+                curr_distance = t;
+
+                hit_colour = get_surface_colour(hit_pos, transparent_hits, tansparent_mask, dis, multiplier, min_h, max_h);
                 return true;
             }
         }

@@ -1,4 +1,4 @@
-use std::u8;
+use std::{f64::consts::PI, u8};
 
 use crate::types::SteepFourHeightSurface;
 
@@ -274,12 +274,36 @@ impl GenPipeLine {
                 let h1 =  self.get_biome_height(b1, x_pos, z_pos, height_map_coord, true);
                 let h2 =  self.get_biome_height(b2, x_pos, z_pos, height_map_coord, true);
 
-                let height = h1.1 * (1.0 - p) + h2.1 * p;
 
+                let mut height = h1.1;
+
+
+                if b2 == 3 {
+                    if p > 2.0 {
+                        p = 1.0
+                    }
+                }
+                
+                if p > 1.0 {
+                    p = 1.0;
+                }
+
+                // Linear
+                //let height = h1.1 * (1.0 - p) + h2.1 * p;
+
+                // Smooth step
+                //let height = h1.1 * (1.0 - (p * p * (3.0 - 2.0 * p))) + h2.1 * (p * p * (3.0 - 2.0 * p));
+
+                // Cosine 
+                let height = h1.1 * (1.0 - ((1.0 - (p * PI).cos()) * 0.5)) + h2.1 * ((1.0 - (p * PI).cos()) * 0.5);
+
+                // Cubic
                 // let cubic_p = p * p * (3.0 - 2.0 * p);
                 // let height = h1.1 * (1.0 - cubic_p) + h2.1 * cubic_p;                
 
                 self.height_map.set(height_map_coord.0, height_map_coord.1, height);
+                
+                //let height = self.height_map.get(height_map_coord.0, height_map_coord.1);
                 res = (h1.0, height);
             }
             Biome::Triple(b1, b2, b3, p1, p2) => {

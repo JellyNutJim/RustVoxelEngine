@@ -95,7 +95,7 @@ const AUTO_MOVE: bool = false;
 const AUTO_MOVE_FORWARDS: bool = false; //forwards/backwards
 
 const MOVE_TO_LANDMASS: bool = true; // at start
-const INITIAL_SPEED_MULTILIER: f64 = 100.0; // 
+const INITIAL_SPEED_MULTILIER: f64 = 50.0; // 
 
 // Testing constants 
 const MEASURE_FRAME_TIMES: bool = false; // Press r to save results
@@ -106,7 +106,7 @@ const EARLY_EXIT: bool = false;
 
 
 // Render Options
-const USE_BEAM_OPTIMISATION: bool = true;
+const USE_BEAM_OPTIMISATION: bool = false;
 const RESIZEABLE_WINDOW: bool = true;
 const USE_VSYNC: bool = false;
 const USE_FULLSCREEN: bool = false;
@@ -124,14 +124,12 @@ static DATA: [u32; 6] = [0,0,0,2000,1,1];
 
 fn main() -> Result<(), impl Error> {
 
-    // Demonstration of memory
-    //intial_world_generation_test();
-
     let event_loop = EventLoop::new().unwrap();
     let mut app = App::new(&event_loop);
     event_loop.run_app(&mut app)
 }
 
+// Not used in final version
 static TEXTURES: [TextureInfo; 1] = 
 [
     TextureInfo { path: "assets\\Grass008_4K-PNG_Color.png", name: "Grass" }
@@ -483,20 +481,19 @@ impl App {
             get_grid_from_seed(SEED, width as i32, [start_location.x as i32, start_location.y as i32, start_location.z as i32])
         };
 
-        let current_world_origin = initial_world.origin;
         //println!("INITIAL ORIGIN: {:?}", current_world_origin);
         //For testing
 
         let v33 = Geometry::FourHeightSurface(FourHeightSurface::from(
             [
+                0b1000_0100,
+                0b1111_1111,
                 0b0000_0100,
-                0b0000_0100,
-                0b0000_0100,
-                0b0000_0100,
+                0b0100_0100,
             ],
         ));
 
-        let v34 = Geometry::SteepFourHeightSurface(SteepFourHeightSurface::from(
+                let v34 = Geometry::SteepFourHeightSurface(SteepFourHeightSurface::from(
             [
                 0b00_0001_0000_0011,
                 0b00_0000_0000_0011,
@@ -508,29 +505,18 @@ impl App {
 
         let v35 = Geometry::SteepFourHeightSurface(SteepFourHeightSurface::from(
             [
-                0b00_0001_0000_0011,
                 0b00_0000_0000_0011,
-                0b00_0001_0000_0011,
-                0b00_0001_0000_0011,
+                0b00_0000_0000_0011,
+                0b00_0001_1000_0011,
+                0b00_0000_0000_0011,
             ],
             0
         ));
 
 
 
-
-        initial_world.insert_geometry([start_location.x as i32 - 8, start_location.y as i32, (start_location.z - 8.0) as i32], v33,false);
-        initial_world.insert_geometry([start_location.x as i32 - 8, start_location.y as i32, (start_location.z - 7.0) as i32], v34, false);
-        initial_world.insert_geometry([start_location.x as i32 - 8, start_location.y as i32 - 2, (start_location.z - 8.0) as i32], Geometry::Voxel(Voxel::from(2)), false);
-
+        //initial_world.insert_geometry([35232 ,10400, 100253], v35,false);
         
-        initial_world.insert_subchunk([start_location.x as i32, start_location.y as i32, (start_location.z + 10.0) as i32], v33, 2, false);
-        initial_world.insert_subchunk([start_location.x as i32, start_location.y as i32, (start_location.z) as i32], v34, 2, false);
-        initial_world.insert_subchunk([start_location.x as i32, start_location.y as i32 - 10, (start_location.z) as i32], v35, 2, false);
-
-        initial_world.insert_geometry([start_location.x as i32, start_location.y as i32 - 20, (start_location.z) as i32], Geometry::Voxel(Voxel::from(2)), false);
-
-
         // Get Vector World Data
         let flat_world = initial_world.flatten_world();
         let mut voxels = flat_world.1;

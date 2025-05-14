@@ -194,7 +194,7 @@ vec3 old_grass(uint hit_axis, ivec3 step, vec3 hit_pos) {
 
 vec3 grass(vec3 hit_pos) {
 
-    vec3 hit_colour = vec3(0.2, 0.94, 0.2);
+    vec3 hit_colour = vec3(0.2, 0.94, 0.2) * 0.90;
 
     if (fract(hit_pos.x) > 0.5) {
         hit_colour *= 0.94;
@@ -246,22 +246,37 @@ vec3 sand(vec3 hit_pos) {
     // if (multiplier == 8) {
     //     return vec3(0,1,1);
     // }
+    // float base_value = (hit_pos.y - 9000) / 1400;
+    // float brightness = pow(base_value, 4);
+
+    // // slow down
+    // if (brightness > 0.9) {
+    //     float excess = brightness - 0.9;
+    //     brightness = 0.9 + excess / (1.0 + excess * 20); 
+    // }
 
 
-vec3 get_surface_colour(vec3 hit_pos, int transparent_hits, vec3 transparent_mask, float dis, int multiplier) {
+vec3 get_surface_colour(vec3 hit_pos, int transparent_hits, vec3 transparent_mask, float dis, int multiplier, float min_h, float max_h) {
 
     vec3 hit_colour = vec3(0,0,0);
+    float slope = (max_h - min_h) / float(multiplier);
+    
+    // Cap slope at tan(30°) ≈ 0.577 (beyond this, darkness doesn't increase)
+    slope = min(slope, 0.677);
+    
+    // Keep the original gentle response (0.3 multiplier, 0.5 max darkness)
+    float brightness = 1.0 - clamp(slope * 0.3, 0.0, 0.5);
 
     if (hit_pos.y > 10308) {
-        hit_colour = grass(hit_pos) * pow(((hit_pos.y - 9000) / 1389), 5);
+        hit_colour = grass(hit_pos) * brightness;
     }
     else if (hit_pos.y < 10304) {
-        hit_colour = sand(hit_pos) * pow(((hit_pos.y - 9000) / 1389), 5);
+        hit_colour = sand(hit_pos) * brightness;
     }
     else {
         float ratio = (hit_pos.y - 10304) / 4;
 
-        hit_colour = sand(hit_pos) * (1 - ratio) + (grass(hit_pos) * pow(((hit_pos.y - 9000) / 1389), 5) ) * ratio;  
+        hit_colour = sand(hit_pos) * (1 - ratio) + (grass(hit_pos) * brightness ) * ratio;  
     }
 
     if (transparent_hits > 0) {
@@ -447,6 +462,68 @@ vec3 get_surface_colour(vec3 hit_pos, int transparent_hits, vec3 transparent_mas
         //         if (multiplier == 16) {
         //             b = 1.0;
         //         }
+        //         hit_colour = vec3(r, g, b);
+        //         return true;
+        //     }
+        // }
+        // {
+
+        //     vec3 position = c.origin + dir * curr_distance;
+        //     vec3 octant_relative = mod(position, multiplier);
+            
+        //     // bit jank for now but its fine
+
+        //     float threshold = 1.0;
+        //     bool near_x = octant_relative.x < threshold || octant_relative.x > multiplier - threshold;
+        //     bool near_y = octant_relative.y < threshold || octant_relative.y > multiplier - threshold;
+        //     bool near_z = octant_relative.z < threshold || octant_relative.z > multiplier - threshold;
+            
+        //     int boundary_count = 0;
+        //     if (near_x) boundary_count++;
+        //     if (near_y) boundary_count++;
+        //     if (near_z) boundary_count++;
+            
+        //     if (boundary_count >= 0) {
+        //         float r = 0.0;
+        //         float g = 0.0;
+        //         float b = 0.0;
+
+        //         if (multiplier == 64) {
+        //             r = 1.0;
+        //             g = 0.0;
+        //             b = 0.0;  
+        //         }
+        //         if (multiplier == 32) {
+        //             r = 1.0;
+        //             g = 0.5;
+        //             b = 0.0;  
+        //         }
+        //         if (multiplier == 16) {
+        //             r = 1.0;
+        //             g = 1.0;
+        //             b = 0.0;  
+        //         }
+        //         if (multiplier == 8) {
+        //             r = 0.0;
+        //             g = 1.0;
+        //             b = 0.0;  
+        //         }
+        //         if (multiplier == 4) {
+        //             r = 0.0;
+        //             g = 0.6;
+        //             b = 0.6; 
+        //         }
+        //         if (multiplier == 2) {
+        //             r = 0.0;
+        //             g = 0.0;
+        //             b = 0.8;  
+        //         }
+        //         if (multiplier == 1) {
+        //             r = 0.7;
+        //             g = 0.0;
+        //             b = 0.7; 
+        //         }
+
         //         hit_colour = vec3(r, g, b);
         //         return true;
         //     }
